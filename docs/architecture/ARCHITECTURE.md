@@ -33,6 +33,7 @@ graph TD
     subgraph Infrastructure
         Persistence[Persistence Adapters]
         TokenService[Token Service]
+        SessionStore[Session Store]
         EventBus[Event Bus]
     end
 
@@ -46,6 +47,8 @@ graph TD
     Commands --> RepoInterfaces
     RepoInterfaces -. implemented by .-> Persistence
     Persistence --> DB
+    HTTPPort -. session .-> SessionStore
+    SessionStore --> Redis
     EventBus --> Redis
     Commands --> EventBus
 ```
@@ -80,7 +83,8 @@ internal/{context}/
 │   └── query/
 ├── infrastructure/   # Implementations (DB, external services)
 │   ├── persistence/
-│   └── token/
+│   ├── token/
+│   └── session/
 └── ports/            # Entry points (HTTP, gRPC, CLI)
     └── http/
 ```
