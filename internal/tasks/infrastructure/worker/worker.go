@@ -1,3 +1,5 @@
+// Package worker provides background worker implementations for the tasks domain.
+// This package contains the task worker that processes pending and scheduled tasks.
 package worker
 
 import (
@@ -9,6 +11,8 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// Worker processes pending tasks concurrently.
+// It runs as a background worker, polling for tasks to execute.
 type Worker struct {
 	taskRepo        domain.TaskRepository
 	deadLetterRepo  domain.DeadLetterRepository
@@ -23,6 +27,7 @@ type Worker struct {
 	wg        sync.WaitGroup
 }
 
+// NewWorker creates a new task worker with the provided dependencies and configuration.
 func NewWorker(
 	taskRepo domain.TaskRepository,
 	deadLetterRepo domain.DeadLetterRepository,
@@ -45,6 +50,8 @@ func NewWorker(
 	}
 }
 
+// Start begins the worker's main processing loop.
+// It continuously polls for tasks to execute until the context is cancelled.
 func (w *Worker) Start(ctx context.Context) error {
 	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
@@ -61,11 +68,13 @@ func (w *Worker) Start(ctx context.Context) error {
 	}
 }
 
+// Stop gracefully stops the worker and waits for all running tasks to complete.
 func (w *Worker) Stop() {
 	close(w.stopChan)
 	w.wg.Wait()
 }
 
+// processPendingTasks retrieves and executes pending tasks concurrently.
 func (w *Worker) processPendingTasks(ctx context.Context) {
 	tasks, err := w.taskRepo.GetPendingTasks(ctx, w.maxConcurrent)
 	if err != nil {
@@ -87,6 +96,7 @@ func (w *Worker) processPendingTasks(ctx context.Context) {
 	}
 }
 
+// executeTask executes a single task with timeout handling.
 func (w *Worker) executeTask(ctx context.Context, task *domain.Task) {
 	if err := task.Start(); err != nil {
 		return
@@ -130,6 +140,7 @@ func (w *Worker) executeTask(ctx context.Context, task *domain.Task) {
 	))
 }
 
+// handleTaskFailure handles task execution failures, either scheduling retry or moving to dead letter.
 func (w *Worker) handleTaskFailure(ctx context.Context, task *domain.Task, taskErr error) {
 	task.IncrementAttempts()
 

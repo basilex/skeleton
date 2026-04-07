@@ -1,9 +1,13 @@
+// Package domain provides domain entities and value objects for the notifications module.
+// This package contains the core business logic types for notification management,
+// including preferences, templates, and domain events.
 package domain
 
 import (
 	"fmt"
 )
 
+// Notifications domain error definitions.
 var (
 	ErrNotificationNotFound      = fmt.Errorf("notification not found")
 	ErrTemplateNotFound          = fmt.Errorf("template not found")
@@ -22,14 +26,17 @@ var (
 	errCannotSendInQuietHours    = fmt.Errorf("cannot send during quiet hours")
 )
 
+// NewErrChannelDisabled creates an error indicating the specified channel is disabled.
 func NewErrChannelDisabled(channel Channel) error {
 	return fmt.Errorf("%w: %s", ErrChannelDisabled, channel)
 }
 
+// NewErrTemplateVariableMissing creates an error indicating a required template variable is missing.
 func NewErrTemplateVariableMissing(variable string) error {
 	return fmt.Errorf("%w: %s", ErrTemplateVariableMissing, variable)
 }
 
+// NewErrMaxAttemptsExceeded creates an error indicating the maximum retry attempts have been exceeded.
 func NewErrMaxAttemptsExceeded(attempts, maxAttempts int) error {
 	return fmt.Errorf("%w: attempts=%d, max=%d", ErrMaxAttemptsExceeded, attempts, maxAttempts)
 }

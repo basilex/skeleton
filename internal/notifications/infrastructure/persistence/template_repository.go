@@ -10,10 +10,13 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// TemplateRepository implements the notification template repository interface
+// using SQL database storage.
 type TemplateRepository struct {
 	db *sqlx.DB
 }
 
+// NewTemplateRepository creates a new template repository with the provided database connection.
 func NewTemplateRepository(db *sqlx.DB) *TemplateRepository {
 	return &TemplateRepository{db: db}
 }
@@ -31,6 +34,7 @@ type templateRow struct {
 	UpdatedAt string         `db:"updated_at"`
 }
 
+// Create persists a new notification template to the database.
 func (r *TemplateRepository) Create(ctx context.Context, template *domain.NotificationTemplate) error {
 	variablesJSON, err := json.Marshal(template.Variables())
 	if err != nil {
@@ -65,6 +69,7 @@ func (r *TemplateRepository) Create(ctx context.Context, template *domain.Notifi
 	return nil
 }
 
+// Update modifies an existing notification template in the database.
 func (r *TemplateRepository) Update(ctx context.Context, template *domain.NotificationTemplate) error {
 	variablesJSON, err := json.Marshal(template.Variables())
 	if err != nil {
@@ -103,6 +108,8 @@ func (r *TemplateRepository) Update(ctx context.Context, template *domain.Notifi
 	return nil
 }
 
+// GetByID retrieves a notification template by its unique identifier.
+// Returns domain.ErrTemplateNotFound if no matching template exists.
 func (r *TemplateRepository) GetByID(ctx context.Context, id domain.TemplateID) (*domain.NotificationTemplate, error) {
 	var row templateRow
 	err := r.db.GetContext(ctx, &row, `
@@ -121,6 +128,8 @@ func (r *TemplateRepository) GetByID(ctx context.Context, id domain.TemplateID) 
 	return r.scanTemplate(row)
 }
 
+// GetByName retrieves a notification template by its unique name.
+// Returns domain.ErrTemplateNotFound if no matching template exists.
 func (r *TemplateRepository) GetByName(ctx context.Context, name string) (*domain.NotificationTemplate, error) {
 	var row templateRow
 	err := r.db.GetContext(ctx, &row, `
@@ -139,6 +148,7 @@ func (r *TemplateRepository) GetByName(ctx context.Context, name string) (*domai
 	return r.scanTemplate(row)
 }
 
+// List retrieves all templates, optionally filtered by channel.
 func (r *TemplateRepository) List(ctx context.Context, channel *domain.Channel) ([]*domain.NotificationTemplate, error) {
 	var rows []templateRow
 	var err error
@@ -174,6 +184,7 @@ func (r *TemplateRepository) List(ctx context.Context, channel *domain.Channel) 
 	return templates, nil
 }
 
+// Delete removes a notification template from the database.
 func (r *TemplateRepository) Delete(ctx context.Context, id domain.TemplateID) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM notification_templates WHERE id = ?`, id.String())
 	if err != nil {
@@ -182,6 +193,7 @@ func (r *TemplateRepository) Delete(ctx context.Context, id domain.TemplateID) e
 	return nil
 }
 
+// scanTemplate converts a database row into a domain NotificationTemplate entity.
 func (r *TemplateRepository) scanTemplate(row templateRow) (*domain.NotificationTemplate, error) {
 	channel, err := domain.ParseChannel(row.Channel)
 	if err != nil {
@@ -219,6 +231,7 @@ func (r *TemplateRepository) scanTemplate(row templateRow) (*domain.Notification
 	return template, nil
 }
 
+// boolToInt converts a boolean to an integer for database storage.
 func boolToInt(b bool) int {
 	if b {
 		return 1

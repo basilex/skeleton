@@ -1,3 +1,5 @@
+// Package persistence provides database repository implementations for the audit domain.
+// This package contains SQLite-based repositories for audit records.
 package persistence
 
 import (
@@ -10,14 +12,18 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// AuditRepository implements the audit record repository interface using SQL database storage.
+// It handles persistence and querying of audit trail records.
 type AuditRepository struct {
 	db *sqlx.DB
 }
 
+// NewAuditRepository creates a new audit repository with the provided database connection.
 func NewAuditRepository(db *sqlx.DB) *AuditRepository {
 	return &AuditRepository{db: db}
 }
 
+// Save persists an audit record to the database.
 func (r *AuditRepository) Save(ctx context.Context, record *domain.Record) error {
 	query := `
 		INSERT INTO audit_records (id, actor_id, actor_type, action, resource, resource_id, metadata, ip, user_agent, status, created_at)
@@ -42,6 +48,8 @@ func (r *AuditRepository) Save(ctx context.Context, record *domain.Record) error
 	return nil
 }
 
+// FindAll retrieves audit records with optional filtering and pagination.
+// Supports filtering by actor, resource, action, date range, and cursor-based pagination.
 func (r *AuditRepository) FindAll(ctx context.Context, filter domain.RecordFilter) (pagination.PageResult[*domain.Record], error) {
 	query := `SELECT id, actor_id, actor_type, action, resource, resource_id, metadata, ip, user_agent, status, created_at FROM audit_records`
 	args := make([]interface{}, 0)
@@ -114,6 +122,8 @@ func (r *AuditRepository) FindAll(ctx context.Context, filter domain.RecordFilte
 	return pagination.NewPageResult(records, limit), nil
 }
 
+// FindByActorID retrieves audit records for a specific actor with optional filtering.
+// Returns records ordered by creation date descending.
 func (r *AuditRepository) FindByActorID(ctx context.Context, actorID string, filter domain.RecordFilter) (pagination.PageResult[*domain.Record], error) {
 	query := `SELECT id, actor_id, actor_type, action, resource, resource_id, metadata, ip, user_agent, status, created_at FROM audit_records WHERE actor_id = ?`
 	args := []interface{}{actorID}
@@ -182,6 +192,8 @@ func (r *AuditRepository) FindByActorID(ctx context.Context, actorID string, fil
 	return pagination.NewPageResult(records, limit), nil
 }
 
+// DeleteBefore removes audit records older than the specified time.
+// Returns the number of records deleted.
 func (r *AuditRepository) DeleteBefore(ctx context.Context, before time.Time) (int, error) {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM audit_records WHERE created_at < ?`, before.Format(time.RFC3339))
 	if err != nil {
@@ -194,6 +206,7 @@ func (r *AuditRepository) DeleteBefore(ctx context.Context, before time.Time) (i
 	return int(affected), nil
 }
 
+// scanRecord converts a database row into a domain Record entity.
 func (r *AuditRepository) scanRecord(row struct {
 	ID         string `db:"id"`
 	ActorID    string `db:"actor_id"`
@@ -228,6 +241,7 @@ func (r *AuditRepository) scanRecord(row struct {
 	return record, nil
 }
 
+// joinConditions concatenates multiple SQL conditions with AND operators.
 func joinConditions(conditions []string) string {
 	result := ""
 	for i, c := range conditions {

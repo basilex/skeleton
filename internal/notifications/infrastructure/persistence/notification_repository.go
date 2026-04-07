@@ -12,10 +12,13 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// NotificationRepository implements the notification repository interface
+// using SQL database storage.
 type NotificationRepository struct {
 	db *sqlx.DB
 }
 
+// NewNotificationRepository creates a new notification repository with the provided database connection.
 func NewNotificationRepository(db *sqlx.DB) *NotificationRepository {
 	return &NotificationRepository{db: db}
 }
@@ -44,6 +47,7 @@ type notificationRow struct {
 	UpdatedAt     string         `db:"updated_at"`
 }
 
+// Create persists a new notification to the database.
 func (r *NotificationRepository) Create(ctx context.Context, notification *domain.Notification) error {
 	metadataJSON, err := json.Marshal(notification.Metadata())
 	if err != nil {
@@ -87,6 +91,7 @@ func (r *NotificationRepository) Create(ctx context.Context, notification *domai
 	return nil
 }
 
+// Update modifies an existing notification in the database.
 func (r *NotificationRepository) Update(ctx context.Context, notification *domain.Notification) error {
 	metadataJSON, err := json.Marshal(notification.Metadata())
 	if err != nil {
@@ -127,6 +132,8 @@ func (r *NotificationRepository) Update(ctx context.Context, notification *domai
 	return nil
 }
 
+// GetByID retrieves a notification by its unique identifier.
+// Returns domain.ErrNotificationNotFound if no matching notification exists.
 func (r *NotificationRepository) GetByID(ctx context.Context, id domain.NotificationID) (*domain.Notification, error) {
 	var row notificationRow
 	err := r.db.GetContext(ctx, &row, `
@@ -146,6 +153,7 @@ func (r *NotificationRepository) GetByID(ctx context.Context, id domain.Notifica
 	return r.scanNotification(row)
 }
 
+// GetByStatus retrieves notifications by status with a limit, ordered by priority and creation time.
 func (r *NotificationRepository) GetByStatus(ctx context.Context, status domain.Status, limit int) ([]*domain.Notification, error) {
 	var rows []notificationRow
 	err := r.db.SelectContext(ctx, &rows, `
@@ -174,6 +182,7 @@ func (r *NotificationRepository) GetByStatus(ctx context.Context, status domain.
 	return notifications, nil
 }
 
+// GetPendingByUser retrieves all pending, queued, or sending notifications for a user.
 func (r *NotificationRepository) GetPendingByUser(ctx context.Context, userID string) ([]*domain.Notification, error) {
 	var rows []notificationRow
 	err := r.db.SelectContext(ctx, &rows, `
@@ -201,6 +210,7 @@ func (r *NotificationRepository) GetPendingByUser(ctx context.Context, userID st
 	return notifications, nil
 }
 
+// GetScheduled retrieves scheduled notifications ready to be sent.
 func (r *NotificationRepository) GetScheduled(ctx context.Context, before time.Time, limit int) ([]*domain.Notification, error) {
 	var rows []notificationRow
 	err := r.db.SelectContext(ctx, &rows, `
@@ -229,6 +239,7 @@ func (r *NotificationRepository) GetScheduled(ctx context.Context, before time.T
 	return notifications, nil
 }
 
+// GetStalled retrieves notifications stuck in sending status for too long.
 func (r *NotificationRepository) GetStalled(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Notification, error) {
 	cutoff := time.Now().Add(-olderThan)
 	var rows []notificationRow
@@ -258,6 +269,7 @@ func (r *NotificationRepository) GetStalled(ctx context.Context, olderThan time.
 	return notifications, nil
 }
 
+// Delete removes a notification from the database.
 func (r *NotificationRepository) Delete(ctx context.Context, id domain.NotificationID) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM notifications WHERE id = ?`, id.String())
 	if err != nil {
@@ -266,6 +278,8 @@ func (r *NotificationRepository) Delete(ctx context.Context, id domain.Notificat
 	return nil
 }
 
+// DeleteCompleted removes completed (delivered or failed) notifications older than the specified duration.
+// Returns the number of notifications deleted.
 func (r *NotificationRepository) DeleteCompleted(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
 	result, err := r.db.ExecContext(ctx, `
@@ -284,6 +298,7 @@ func (r *NotificationRepository) DeleteCompleted(ctx context.Context, olderThan 
 	return affected, nil
 }
 
+// scanNotification converts a database row into a domain Notification entity.
 func (r *NotificationRepository) scanNotification(row notificationRow) (*domain.Notification, error) {
 	recipient := domain.Recipient{}
 	if row.UserID.Valid {
@@ -391,6 +406,7 @@ func (r *NotificationRepository) scanNotification(row notificationRow) (*domain.
 	return notification, nil
 }
 
+// nullString converts a string to a sql.NullString for database storage.
 func nullString(s string) sql.NullString {
 	if s == "" {
 		return sql.NullString{Valid: false}
@@ -398,6 +414,7 @@ func nullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
 }
 
+// nullStringFromUserID converts a user ID pointer to a sql.NullString for database storage.
 func nullStringFromUserID(userID *identityDomain.UserID) sql.NullString {
 	if userID == nil {
 		return sql.NullString{Valid: false}
@@ -405,6 +422,7 @@ func nullStringFromUserID(userID *identityDomain.UserID) sql.NullString {
 	return sql.NullString{String: string(*userID), Valid: true}
 }
 
+// nullTime converts a time pointer to a sql.NullString for database storage.
 func nullTime(t *time.Time) sql.NullString {
 	if t == nil {
 		return sql.NullString{Valid: false}

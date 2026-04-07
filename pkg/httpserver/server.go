@@ -1,3 +1,5 @@
+// Package httpserver provides HTTP server utilities with graceful shutdown support.
+// It wraps the Gin router with lifecycle management and signal handling.
 package httpserver
 
 import (
@@ -13,12 +15,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Server wraps a Gin router with HTTP server lifecycle management.
+// It provides graceful startup and shutdown capabilities.
 type Server struct {
 	router *gin.Engine
 	port   string
 	srv    *http.Server
 }
 
+// New creates a new HTTP server with the given Gin router and port.
+// The server is not started until Start is called.
 func New(router *gin.Engine, port string) *Server {
 	return &Server{
 		router: router,
@@ -26,6 +32,8 @@ func New(router *gin.Engine, port string) *Server {
 	}
 }
 
+// Start launches the HTTP server in a background goroutine.
+// It returns immediately and logs if the server fails after startup.
 func (s *Server) Start() error {
 	s.srv = &http.Server{
 		Addr:    ":" + s.port,
@@ -43,6 +51,8 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Shutdown gracefully stops the HTTP server with a 10-second timeout.
+// It waits for active connections to complete before returning.
 func (s *Server) Shutdown(ctx context.Context) error {
 	if s.srv == nil {
 		return nil
@@ -56,6 +66,8 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+// WaitForShutdown blocks until an interrupt or termination signal is received.
+// It returns a channel that is closed when shutdown should begin.
 func WaitForShutdown(ctx context.Context) <-chan struct{} {
 	done := make(chan struct{})
 	go func() {

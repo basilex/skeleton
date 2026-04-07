@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying identity state.
+// This package implements the command side of CQRS for user-related operations,
+// handling write requests that modify user and role assignments.
 package command
 
 import (
@@ -8,12 +11,15 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// RevokeRoleHandler handles commands to revoke a role from a user.
+// It validates the user and role exist, removes the role assignment, and publishes domain events.
 type RevokeRoleHandler struct {
 	users domain.UserRepository
 	roles domain.RoleRepository
 	bus   eventbus.Bus
 }
 
+// NewRevokeRoleHandler creates a new RevokeRoleHandler with the required dependencies.
 func NewRevokeRoleHandler(
 	users domain.UserRepository,
 	roles domain.RoleRepository,
@@ -26,11 +32,14 @@ func NewRevokeRoleHandler(
 	}
 }
 
+// RevokeRoleCommand represents a command to revoke a role from a user.
 type RevokeRoleCommand struct {
 	UserID string
 	RoleID string
 }
 
+// Handle executes the RevokeRoleCommand to remove a role assignment from a user.
+// It validates IDs, finds the user, revokes the role, persists changes, and publishes events.
 func (h *RevokeRoleHandler) Handle(ctx context.Context, cmd RevokeRoleCommand) error {
 	userID, err := domain.ParseUserID(cmd.UserID)
 	if err != nil {

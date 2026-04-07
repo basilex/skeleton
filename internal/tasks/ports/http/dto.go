@@ -1,3 +1,6 @@
+// Package http provides HTTP request/response DTOs for the tasks service.
+// This package contains data transfer objects used by HTTP handlers for serialization
+// and validation of task, schedule, and dead letter queue requests.
 package http
 
 import (
@@ -6,6 +9,8 @@ import (
 	"github.com/basilex/skeleton/internal/tasks/domain"
 )
 
+// CreateTaskRequest represents a request to create a new background task.
+// Tasks are processed asynchronously by the task worker system.
 type CreateTaskRequest struct {
 	TaskType    string                 `json:"task_type"`
 	Payload     map[string]interface{} `json:"payload"`
@@ -14,10 +19,13 @@ type CreateTaskRequest struct {
 	MaxAttempts *int                   `json:"max_attempts"`
 }
 
+// CreateTaskResponse represents the response after successfully creating a task.
 type CreateTaskResponse struct {
 	TaskID string `json:"task_id"`
 }
 
+// TaskResponse represents a task in API responses.
+// Contains all task details including status, result, and error information.
 type TaskResponse struct {
 	ID          string                 `json:"id"`
 	TaskType    string                 `json:"task_type"`
@@ -35,18 +43,22 @@ type TaskResponse struct {
 	UpdatedAt   string                 `json:"updated_at"`
 }
 
+// TaskResultResponse represents the result of a successfully completed task.
 type TaskResultResponse struct {
 	Data       map[string]interface{} `json:"data,omitempty"`
 	OutputPath string                 `json:"output_path,omitempty"`
 	DurationMs int64                  `json:"duration_ms"`
 }
 
+// TaskErrorResponse represents error details for a failed task.
 type TaskErrorResponse struct {
 	Code    string            `json:"code,omitempty"`
 	Message string            `json:"message"`
 	Details map[string]string `json:"details,omitempty"`
 }
 
+// CreateScheduleRequest represents a request to create a scheduled task.
+// Scheduled tasks run repeatedly based on a cron expression.
 type CreateScheduleRequest struct {
 	Name     string                 `json:"name"`
 	TaskType string                 `json:"task_type"`
@@ -55,10 +67,13 @@ type CreateScheduleRequest struct {
 	Timezone string                 `json:"timezone"`
 }
 
+// CreateScheduleResponse represents the response after successfully creating a schedule.
 type CreateScheduleResponse struct {
 	ScheduleID string `json:"schedule_id"`
 }
 
+// ScheduleResponse represents a task schedule in API responses.
+// Contains schedule configuration and timing information.
 type ScheduleResponse struct {
 	ID        string                 `json:"id"`
 	Name      string                 `json:"name"`
@@ -73,6 +88,8 @@ type ScheduleResponse struct {
 	UpdatedAt string                 `json:"updated_at"`
 }
 
+// DeadLetterResponse represents a failed task in the dead letter queue.
+// Dead letters are tasks that failed after exceeding max retry attempts.
 type DeadLetterResponse struct {
 	ID           string       `json:"id"`
 	OriginalTask TaskResponse `json:"original_task"`
@@ -85,10 +102,13 @@ type DeadLetterResponse struct {
 	CreatedAt    string       `json:"created_at"`
 }
 
+// ErrorResponse represents a generic error response.
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// taskToResponse converts a domain Task to the response DTO.
+// It maps all fields including optional values like result and error details.
 func taskToResponse(task *domain.Task) TaskResponse {
 	var startedAt, completedAt *string
 	if task.StartedAt() != nil {
@@ -136,6 +156,7 @@ func taskToResponse(task *domain.Task) TaskResponse {
 	}
 }
 
+// scheduleToResponse converts a domain TaskSchedule to the response DTO.
 func scheduleToResponse(schedule *domain.TaskSchedule) ScheduleResponse {
 	var lastRunAt, nextRunAt *string
 	if schedule.LastRunAt() != nil {
@@ -162,6 +183,7 @@ func scheduleToResponse(schedule *domain.TaskSchedule) ScheduleResponse {
 	}
 }
 
+// deadLetterToResponse converts a domain DeadLetterTask to the response DTO.
 func deadLetterToResponse(dl *domain.DeadLetterTask) DeadLetterResponse {
 	var reviewedAt, reviewedBy *string
 	if dl.ReviewedAt() != nil {

@@ -10,14 +10,18 @@ import (
 	"github.com/basilex/skeleton/internal/tasks/domain"
 )
 
+// ScheduleRepository implements the task schedule repository interface
+// using SQL database storage.
 type ScheduleRepository struct {
 	db *sql.DB
 }
 
+// NewScheduleRepository creates a new schedule repository with the provided database connection.
 func NewScheduleRepository(db *sql.DB) *ScheduleRepository {
 	return &ScheduleRepository{db: db}
 }
 
+// Create persists a new task schedule to the database.
 func (r *ScheduleRepository) Create(ctx context.Context, schedule *domain.TaskSchedule) error {
 	payload, err := json.Marshal(schedule.Payload())
 	if err != nil {
@@ -59,6 +63,7 @@ func (r *ScheduleRepository) Create(ctx context.Context, schedule *domain.TaskSc
 	return nil
 }
 
+// Update modifies an existing task schedule in the database.
 func (r *ScheduleRepository) Update(ctx context.Context, schedule *domain.TaskSchedule) error {
 	payload, err := json.Marshal(schedule.Payload())
 	if err != nil {
@@ -107,6 +112,8 @@ func (r *ScheduleRepository) Update(ctx context.Context, schedule *domain.TaskSc
 	return nil
 }
 
+// GetByID retrieves a task schedule by its unique identifier.
+// Returns domain.ErrScheduleNotFound if no matching schedule exists.
 func (r *ScheduleRepository) GetByID(ctx context.Context, id domain.ScheduleID) (*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
@@ -118,6 +125,8 @@ func (r *ScheduleRepository) GetByID(ctx context.Context, id domain.ScheduleID) 
 	return r.scanSchedule(row)
 }
 
+// GetByName retrieves a task schedule by its unique name.
+// Returns domain.ErrScheduleNotFound if no matching schedule exists.
 func (r *ScheduleRepository) GetByName(ctx context.Context, name string) (*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
@@ -129,6 +138,7 @@ func (r *ScheduleRepository) GetByName(ctx context.Context, name string) (*domai
 	return r.scanSchedule(row)
 }
 
+// GetActiveSchedules retrieves all active schedules ordered by name.
 func (r *ScheduleRepository) GetActiveSchedules(ctx context.Context) ([]*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
@@ -154,6 +164,7 @@ func (r *ScheduleRepository) GetActiveSchedules(ctx context.Context) ([]*domain.
 	return schedules, nil
 }
 
+// List retrieves all schedules ordered by name.
 func (r *ScheduleRepository) List(ctx context.Context) ([]*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
@@ -178,6 +189,7 @@ func (r *ScheduleRepository) List(ctx context.Context) ([]*domain.TaskSchedule, 
 	return schedules, nil
 }
 
+// Delete removes a task schedule from the database.
 func (r *ScheduleRepository) Delete(ctx context.Context, id domain.ScheduleID) error {
 	query := `DELETE FROM task_schedules WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, id.String())
@@ -187,6 +199,7 @@ func (r *ScheduleRepository) Delete(ctx context.Context, id domain.ScheduleID) e
 	return nil
 }
 
+// scanSchedule converts a database row into a domain TaskSchedule entity.
 func (r *ScheduleRepository) scanSchedule(row *sql.Row) (*domain.TaskSchedule, error) {
 	var id, name, taskType, cron, timezone string
 	var payload []byte
@@ -223,6 +236,7 @@ func (r *ScheduleRepository) scanSchedule(row *sql.Row) (*domain.TaskSchedule, e
 	return schedule, nil
 }
 
+// scanScheduleFromRows converts database rows into a domain TaskSchedule entity.
 func (r *ScheduleRepository) scanScheduleFromRows(rows *sql.Rows) (*domain.TaskSchedule, error) {
 	var id, name, taskType, cron, timezone string
 	var payload []byte

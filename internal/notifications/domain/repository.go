@@ -1,3 +1,6 @@
+// Package domain provides domain entities and value objects for the notifications module.
+// This package contains the core business logic types for notification management,
+// including preferences, templates, and domain events.
 package domain
 
 import (
@@ -5,6 +8,7 @@ import (
 	"time"
 )
 
+// NotificationRepository defines the contract for notification persistence operations.
 type NotificationRepository interface {
 	Create(ctx context.Context, notification *Notification) error
 	Update(ctx context.Context, notification *Notification) error
@@ -17,6 +21,7 @@ type NotificationRepository interface {
 	DeleteCompleted(ctx context.Context, olderThan time.Duration) (int64, error)
 }
 
+// TemplateRepository defines the contract for notification template persistence operations.
 type TemplateRepository interface {
 	Create(ctx context.Context, template *NotificationTemplate) error
 	Update(ctx context.Context, template *NotificationTemplate) error
@@ -26,6 +31,7 @@ type TemplateRepository interface {
 	Delete(ctx context.Context, id TemplateID) error
 }
 
+// PreferencesRepository defines the contract for user notification preference persistence operations.
 type PreferencesRepository interface {
 	GetByUserID(ctx context.Context, userID string) (*NotificationPreferences, error)
 	Upsert(ctx context.Context, preferences *NotificationPreferences) error

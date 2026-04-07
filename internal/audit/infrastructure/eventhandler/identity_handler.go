@@ -1,3 +1,5 @@
+// Package eventhandler provides event handling infrastructure for the audit domain.
+// This package contains handlers that process domain events and create audit records.
 package eventhandler
 
 import (
@@ -9,16 +11,20 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// IdentityEventHandler handles identity-related domain events and creates audit records.
+// It listens for user registration, role assignment, login, and logout events.
 type IdentityEventHandler struct {
 	logEvent *command.LogEventHandler
 }
 
+// NewIdentityEventHandler creates a new identity event handler with the provided log event handler.
 func NewIdentityEventHandler(logEvent *command.LogEventHandler) *IdentityEventHandler {
 	return &IdentityEventHandler{
 		logEvent: logEvent,
 	}
 }
 
+// OnUserRegistered handles user registration events and logs an audit record.
 func (h *IdentityEventHandler) OnUserRegistered(ctx context.Context, event eventbus.Event) error {
 	userRegistered, ok := event.(interface {
 		GetUserID() string
@@ -42,6 +48,7 @@ func (h *IdentityEventHandler) OnUserRegistered(ctx context.Context, event event
 	})
 }
 
+// OnRoleAssigned handles role assignment events and logs an audit record.
 func (h *IdentityEventHandler) OnRoleAssigned(ctx context.Context, event eventbus.Event) error {
 	roleAssigned, ok := event.(interface {
 		GetUserID() string
@@ -64,6 +71,7 @@ func (h *IdentityEventHandler) OnRoleAssigned(ctx context.Context, event eventbu
 	})
 }
 
+// OnRoleRevoked handles role revocation events and logs an audit record.
 func (h *IdentityEventHandler) OnRoleRevoked(ctx context.Context, event eventbus.Event) error {
 	roleRevoked, ok := event.(interface {
 		GetUserID() string
@@ -86,6 +94,7 @@ func (h *IdentityEventHandler) OnRoleRevoked(ctx context.Context, event eventbus
 	})
 }
 
+// OnLogin handles user login events and logs an audit record.
 func (h *IdentityEventHandler) OnLogin(ctx context.Context, event eventbus.Event) error {
 	loginEvent, ok := event.(interface {
 		GetUserID() string
@@ -107,6 +116,7 @@ func (h *IdentityEventHandler) OnLogin(ctx context.Context, event eventbus.Event
 	})
 }
 
+// OnLogout handles user logout events and logs an audit record.
 func (h *IdentityEventHandler) OnLogout(ctx context.Context, event eventbus.Event) error {
 	logoutEvent, ok := event.(interface {
 		GetUserID() string
@@ -128,6 +138,7 @@ func (h *IdentityEventHandler) OnLogout(ctx context.Context, event eventbus.Even
 	})
 }
 
+// Register subscribes the handler to all identity-related events on the event bus.
 func (h *IdentityEventHandler) Register(bus eventbus.Bus) {
 	bus.Subscribe("identity.user_registered", h.OnUserRegistered)
 	bus.Subscribe("identity.role_assigned", h.OnRoleAssigned)

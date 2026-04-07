@@ -11,10 +11,13 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// UserRepository implements the user repository interface using SQL database storage.
+// It handles persistence of user entities with support for filtering and pagination.
 type UserRepository struct {
 	db *sqlx.DB
 }
 
+// NewUserRepository creates a new user repository with the provided database connection.
 func NewUserRepository(db *sqlx.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
@@ -43,6 +46,8 @@ func (r *UserRepository) Save(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
+// FindByID retrieves a user by their unique identifier.
+// Returns domain.ErrUserNotFound if no matching user exists.
 func (r *UserRepository) FindByID(ctx context.Context, id domain.UserID) (*domain.User, error) {
 	var row struct {
 		ID           string `db:"id"`
@@ -62,6 +67,8 @@ func (r *UserRepository) FindByID(ctx context.Context, id domain.UserID) (*domai
 	return r.scanUser(row)
 }
 
+// FindByEmail retrieves a user by their email address.
+// Returns domain.ErrUserNotFound if no matching user exists.
 func (r *UserRepository) FindByEmail(ctx context.Context, email domain.Email) (*domain.User, error) {
 	var row struct {
 		ID           string `db:"id"`
@@ -81,6 +88,8 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email domain.Email) (*
 	return r.scanUser(row)
 }
 
+// FindAll retrieves users with optional filtering and pagination.
+// Supports filtering by search term (email), active status, and cursor-based pagination.
 func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) (pagination.PageResult[*domain.User], error) {
 	query := `SELECT id, email, password_hash, is_active, created_at, updated_at FROM users`
 	args := make([]interface{}, 0)
@@ -136,6 +145,8 @@ func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) 
 	return pagination.NewPageResult(users, limit), nil
 }
 
+// Delete removes a user from the database by ID.
+// Returns domain.ErrUserNotFound if no matching user exists.
 func (r *UserRepository) Delete(ctx context.Context, id domain.UserID) error {
 	result, err := r.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, string(id))
 	if err != nil {
@@ -151,6 +162,7 @@ func (r *UserRepository) Delete(ctx context.Context, id domain.UserID) error {
 	return nil
 }
 
+// scanUser converts a database row into a domain User entity.
 func (r *UserRepository) scanUser(row struct {
 	ID           string `db:"id"`
 	Email        string `db:"email"`
@@ -183,6 +195,7 @@ func (r *UserRepository) scanUser(row struct {
 	return user, nil
 }
 
+// joinConditions concatenates multiple SQL conditions with AND operators.
 func joinConditions(conditions []string) string {
 	result := ""
 	for i, c := range conditions {

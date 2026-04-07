@@ -1,3 +1,6 @@
+// Package eventhandler provides event handlers for processing domain events.
+// This package contains handlers that react to events from other bounded contexts
+// and trigger appropriate notification-related actions.
 package eventhandler
 
 import (
@@ -10,10 +13,14 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// IdentityEventHandler handles identity-related domain events and creates notifications.
+// It listens for events like user registration and password reset requests to trigger
+// the appropriate notification workflows.
 type IdentityEventHandler struct {
 	createNotificationHandler *command.CreateFromTemplateHandler
 }
 
+// NewIdentityEventHandler creates a new IdentityEventHandler with the required command handler.
 func NewIdentityEventHandler(
 	createNotificationHandler *command.CreateFromTemplateHandler,
 ) *IdentityEventHandler {
@@ -22,6 +29,8 @@ func NewIdentityEventHandler(
 	}
 }
 
+// OnUserRegistered handles the user registered event and sends a welcome notification.
+// It creates a welcome email notification from a template using the user's registered email.
 func (h *IdentityEventHandler) OnUserRegistered(ctx context.Context, event eventbus.Event) error {
 	data, ok := event.(interface {
 		GetUserID() string
@@ -51,6 +60,8 @@ func (h *IdentityEventHandler) OnUserRegistered(ctx context.Context, event event
 	return nil
 }
 
+// OnPasswordResetRequested handles the password reset requested event and sends a reset notification.
+// It creates a password reset email notification from a template with the reset token.
 func (h *IdentityEventHandler) OnPasswordResetRequested(ctx context.Context, event eventbus.Event) error {
 	data, ok := event.(interface {
 		GetUserID() string
@@ -82,6 +93,7 @@ func (h *IdentityEventHandler) OnPasswordResetRequested(ctx context.Context, eve
 	return nil
 }
 
+// parseUserID converts a string to a UserID pointer, returning nil for empty strings.
 func parseUserID(s string) *identityDomain.UserID {
 	if s == "" {
 		return nil
@@ -90,6 +102,8 @@ func parseUserID(s string) *identityDomain.UserID {
 	return &id
 }
 
+// Register subscribes this handler to the relevant events on the event bus.
+// It sets up subscriptions for user registration and password reset events.
 func (h *IdentityEventHandler) Register(bus eventbus.Bus) {
 	bus.Subscribe("identity.user_registered", h.OnUserRegistered)
 	bus.Subscribe("identity.password_reset_requested", h.OnPasswordResetRequested)

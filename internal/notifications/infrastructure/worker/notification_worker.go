@@ -1,3 +1,5 @@
+// Package worker provides background worker implementations for the notifications domain.
+// This package contains the notification worker that processes pending and scheduled notifications.
 package worker
 
 import (
@@ -11,6 +13,9 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// NotificationWorker processes pending and scheduled notifications.
+// It runs as a background worker, polling for notifications to send
+// and handling retries for failed deliveries.
 type NotificationWorker struct {
 	notificationRepo domain.NotificationRepository
 	preferencesRepo  domain.PreferencesRepository
@@ -21,12 +26,15 @@ type NotificationWorker struct {
 	stalledTimeout   time.Duration
 }
 
+// WorkerConfig contains configuration for the notification worker.
 type WorkerConfig struct {
 	PollInterval   time.Duration
 	BatchSize      int
 	StalledTimeout time.Duration
 }
 
+// NewNotificationWorker creates a new notification worker with the provided dependencies and configuration.
+// Default values are applied for any zero configuration fields.
 func NewNotificationWorker(
 	notificationRepo domain.NotificationRepository,
 	preferencesRepo domain.PreferencesRepository,
@@ -60,6 +68,8 @@ func NewNotificationWorker(
 	}
 }
 
+// Start begins the worker's main processing loop.
+// It continuously polls for notifications to send until the context is cancelled.
 func (w *NotificationWorker) Start(ctx context.Context) error {
 	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
@@ -85,6 +95,7 @@ func (w *NotificationWorker) Start(ctx context.Context) error {
 	}
 }
 
+// processPending processes notifications in pending status.
 func (w *NotificationWorker) processPending(ctx context.Context) error {
 	notifications, err := w.notificationRepo.GetByStatus(ctx, domain.StatusPending, w.batchSize)
 	if err != nil {
@@ -100,6 +111,7 @@ func (w *NotificationWorker) processPending(ctx context.Context) error {
 	return nil
 }
 
+// processScheduled processes notifications that are scheduled for delivery.
 func (w *NotificationWorker) processScheduled(ctx context.Context) error {
 	notifications, err := w.notificationRepo.GetScheduled(ctx, time.Now(), w.batchSize)
 	if err != nil {
@@ -115,6 +127,7 @@ func (w *NotificationWorker) processScheduled(ctx context.Context) error {
 	return nil
 }
 
+// processStalled processes notifications stuck in sending status.
 func (w *NotificationWorker) processStalled(ctx context.Context) error {
 	notifications, err := w.notificationRepo.GetStalled(ctx, w.stalledTimeout, w.batchSize)
 	if err != nil {
@@ -131,6 +144,7 @@ func (w *NotificationWorker) processStalled(ctx context.Context) error {
 	return nil
 }
 
+// sendNotification attempts to send a notification, handling user preferences and errors.
 func (w *NotificationWorker) sendNotification(ctx context.Context, notification *domain.Notification) error {
 	if notification.Recipient().UserID != nil {
 		preferences, err := w.preferencesRepo.GetByUserID(ctx, string(*notification.Recipient().UserID))
@@ -180,6 +194,8 @@ func (w *NotificationWorker) sendNotification(ctx context.Context, notification 
 	return nil
 }
 
+// handleSendError handles errors that occur during notification sending.
+// It either schedules a retry or marks the notification as permanently failed.
 func (w *NotificationWorker) handleSendError(ctx context.Context, notification *domain.Notification, sendErr error) error {
 	if notification.CanRetry() {
 		delay := notification.NextRetryDelay()

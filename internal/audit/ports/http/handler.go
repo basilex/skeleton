@@ -1,3 +1,6 @@
+// Package http provides HTTP handlers for the audit service.
+// This package implements the HTTP layer (ports) for handling audit log queries
+// and providing access to historical system event records.
 package http
 
 import (
@@ -10,16 +13,22 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Handler provides HTTP handlers for audit-related operations.
+// It orchestrates query handlers to process HTTP requests for audit record retrieval
+// with various filtering options including date ranges, actors, and resources.
 type Handler struct {
 	listRecords *query.ListRecordsHandler
 }
 
+// NewHandler creates a new HTTP handler for audit operations.
 func NewHandler(listRecords *query.ListRecordsHandler) *Handler {
 	return &Handler{
 		listRecords: listRecords,
 	}
 }
 
+// ListRecordsRequest represents query parameters for listing audit records.
+// It provides filtering options by actor, resource, action, and date range.
 type ListRecordsRequest struct {
 	ActorID  string `form:"actor_id"`
 	Resource string `form:"resource"`
@@ -100,6 +109,7 @@ func (h *Handler) ListRecords(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// getRequestID extracts the request ID from the gin context for error tracking.
 func getRequestID(c *gin.Context) string {
 	if id, exists := c.Get("request_id"); exists {
 		return id.(string)

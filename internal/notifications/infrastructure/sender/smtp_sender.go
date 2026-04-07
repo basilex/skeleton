@@ -7,6 +7,7 @@ import (
 	"net/smtp"
 )
 
+// SMTPConfig contains configuration for the SMTP email sender.
 type SMTPConfig struct {
 	Host     string
 	Port     int
@@ -16,14 +17,18 @@ type SMTPConfig struct {
 	UseTLS   bool
 }
 
+// SMTPSender sends emails via SMTP protocol.
 type SMTPSender struct {
 	config SMTPConfig
 }
 
+// NewSMTPSender creates a new SMTP sender with the provided configuration.
 func NewSMTPSender(config SMTPConfig) *SMTPSender {
 	return &SMTPSender{config: config}
 }
 
+// Send sends an email via SMTP with optional HTML body.
+// Supports both plain text and multipart/alternative messages.
 func (s *SMTPSender) Send(ctx context.Context, to, subject, textBody, htmlBody string) error {
 	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.Host)
 
@@ -66,6 +71,7 @@ func (s *SMTPSender) Send(ctx context.Context, to, subject, textBody, htmlBody s
 	return smtp.SendMail(addr, auth, s.config.From, []string{to}, []byte(message))
 }
 
+// sendWithTLS sends an email using STARTTLS for encrypted communication.
 func (s *SMTPSender) sendWithTLS(addr string, auth smtp.Auth, to string, message []byte) error {
 	client, err := smtp.Dial(addr)
 	if err != nil {

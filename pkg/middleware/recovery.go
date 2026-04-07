@@ -6,6 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Recovery returns a Gin middleware that recovers from panics in request handlers.
+// It logs the panic details with the request ID and returns a 500 Internal Server Error response.
 func Recovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {

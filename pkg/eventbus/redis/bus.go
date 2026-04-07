@@ -1,3 +1,5 @@
+// Package redisbus provides a Redis-based implementation of the event bus interface.
+// It uses Redis Pub/Sub for distributed event messaging across multiple service instances.
 package redisbus
 
 import (
@@ -12,6 +14,9 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// Bus implements the eventbus.Bus interface using Redis Pub/Sub.
+// It safely handles concurrent access to handlers and provides automatic
+// message deserialization and dispatch.
 type Bus struct {
 	client   *redis.Client
 	mu       sync.RWMutex
@@ -21,12 +26,15 @@ type Bus struct {
 	cancel   context.CancelFunc
 }
 
+// envelope wraps an event for JSON serialization over Redis.
 type envelope struct {
 	EventName string          `json:"event_name"`
 	Occurred  string          `json:"occurred_at"`
 	Payload   json.RawMessage `json:"payload"`
 }
 
+// New creates a new Redis-based event bus with the given Redis client.
+// It starts a background goroutine to listen for published events.
 func New(client *redis.Client) *Bus {
 	ctx, cancel := context.WithCancel(context.Background())
 	b := &Bus{
@@ -39,6 +47,7 @@ func New(client *redis.Client) *Bus {
 	return b
 }
 
+// Publish serializes the event and publishes it to Redis for distribution to all subscribers.
 func (b *Bus) Publish(ctx context.Context, event eventbus.Event) error {
 	payload, err := json.Marshal(event)
 	if err != nil {
@@ -56,12 +65,16 @@ func (b *Bus) Publish(ctx context.Context, event eventbus.Event) error {
 	return b.client.Publish(ctx, event.EventName(), data).Err()
 }
 
+// Subscribe registers a handler for the specified event name.
+// Multiple handlers can be registered for the same event.
 func (b *Bus) Subscribe(eventName string, handler eventbus.Handler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.handlers[eventName] = append(b.handlers[eventName], handler)
 }
 
+// listen runs in a background goroutine to receive messages from Redis subscriptions
+// and dispatch them to registered handlers.
 func (b *Bus) listen() {
 	b.mu.RLock()
 	channels := make([]string, 0, len(b.handlers))
@@ -120,6 +133,8 @@ func (b *Bus) listen() {
 	}
 }
 
+// Close stops the event bus and releases all Redis subscriptions.
+// It cancels the background listener and closes the PubSub connection.
 func (b *Bus) Close() error {
 	b.cancel()
 	if b.pubsub != nil {
@@ -128,21 +143,25 @@ func (b *Bus) Close() error {
 	return nil
 }
 
+// redisEvent is an unmarshaled event received from Redis.
 type redisEvent struct {
 	name     string
 	occurred string
 	raw      json.RawMessage
 }
 
+// EventName returns the name of the event.
 func (e *redisEvent) EventName() string {
 	return e.name
 }
 
+// OccurredAt returns the timestamp when the event occurred.
 func (e *redisEvent) OccurredAt() time.Time {
 	t, _ := time.Parse(time.RFC3339, e.occurred)
 	return t
 }
 
+// Payload returns the raw JSON payload of the event.
 func (e *redisEvent) Payload() json.RawMessage {
 	return e.raw
 }

@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying notification state.
+// This package implements the command side of CQRS for notification-related operations,
+// handling write requests that create and modify notification entities.
 package command
 
 import (
@@ -8,6 +11,9 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// CreateNotificationCommand represents a command to create a new notification.
+// It contains all the necessary information to create a notification directly
+// without using a template.
 type CreateNotificationCommand struct {
 	Recipient   domain.Recipient
 	Channel     domain.Channel
@@ -19,11 +25,14 @@ type CreateNotificationCommand struct {
 	Metadata    map[string]string
 }
 
+// CreateNotificationHandler handles commands to create new notifications.
+// It creates the notification entity, persists it, and publishes a creation event.
 type CreateNotificationHandler struct {
 	notificationRepo domain.NotificationRepository
 	eventBus         eventbus.Bus
 }
 
+// NewCreateNotificationHandler creates a new CreateNotificationHandler with the required dependencies.
 func NewCreateNotificationHandler(
 	notificationRepo domain.NotificationRepository,
 	eventBus eventbus.Bus,
@@ -34,6 +43,8 @@ func NewCreateNotificationHandler(
 	}
 }
 
+// Handle executes the CreateNotificationCommand to create and persist a new notification.
+// It applies optional configuration, creates the entity, saves it, and publishes an event.
 func (h *CreateNotificationHandler) Handle(ctx context.Context, cmd CreateNotificationCommand) (domain.NotificationID, error) {
 	opts := make([]domain.NotificationOption, 0)
 

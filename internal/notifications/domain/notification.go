@@ -1,3 +1,6 @@
+// Package domain provides domain entities and value objects for the notifications module.
+// This package contains the core business logic types for notification management,
+// including preferences, templates, and domain events.
 package domain
 
 import (
@@ -8,12 +11,15 @@ import (
 	"github.com/basilex/skeleton/pkg/uuid"
 )
 
+// NotificationID is a unique identifier for a notification.
 type NotificationID string
 
+// NewNotificationID generates a new unique NotificationID using UUID v7.
 func NewNotificationID() NotificationID {
 	return NotificationID(uuid.NewV7().String())
 }
 
+// ParseNotificationID validates and converts a string to NotificationID.
 func ParseNotificationID(s string) (NotificationID, error) {
 	if s == "" {
 		return "", fmt.Errorf("notification ID cannot be empty")
@@ -21,12 +27,15 @@ func ParseNotificationID(s string) (NotificationID, error) {
 	return NotificationID(s), nil
 }
 
+// String returns the string representation of NotificationID.
 func (id NotificationID) String() string {
 	return string(id)
 }
 
+// Channel represents a notification delivery channel.
 type Channel string
 
+// Channel type constants.
 const (
 	ChannelEmail Channel = "email"
 	ChannelSMS   Channel = "sms"
@@ -34,10 +43,12 @@ const (
 	ChannelInApp Channel = "in_app"
 )
 
+// String returns the string representation of the channel.
 func (c Channel) String() string {
 	return string(c)
 }
 
+// ParseChannel converts a string to a Channel value.
 func ParseChannel(s string) (Channel, error) {
 	switch s {
 	case string(ChannelEmail):
@@ -53,8 +64,10 @@ func ParseChannel(s string) (Channel, error) {
 	}
 }
 
+// Status represents the lifecycle state of a notification.
 type Status string
 
+// Status type constants.
 const (
 	StatusPending   Status = "pending"
 	StatusQueued    Status = "queued"
@@ -64,10 +77,12 @@ const (
 	StatusFailed    Status = "failed"
 )
 
+// String returns the string representation of the status.
 func (s Status) String() string {
 	return string(s)
 }
 
+// ParseStatus converts a string to a Status value.
 func ParseStatus(s string) (Status, error) {
 	switch s {
 	case string(StatusPending):
@@ -87,8 +102,10 @@ func ParseStatus(s string) (Status, error) {
 	}
 }
 
+// Priority represents the urgency level of a notification.
 type Priority string
 
+// Priority level constants.
 const (
 	PriorityLow      Priority = "low"
 	PriorityNormal   Priority = "normal"
@@ -96,10 +113,13 @@ const (
 	PriorityCritical Priority = "critical"
 )
 
+// String returns the string representation of the priority.
 func (p Priority) String() string {
 	return string(p)
 }
 
+// ParsePriority converts a string to a Priority value.
+// ParsePriority converts a string to a Priority value.
 func ParsePriority(s string) (Priority, error) {
 	switch s {
 	case string(PriorityLow):
@@ -115,6 +135,7 @@ func ParsePriority(s string) (Priority, error) {
 	}
 }
 
+// Recipient contains the delivery information for a notification recipient.
 type Recipient struct {
 	UserID      *domain.UserID
 	Email       string
@@ -122,11 +143,13 @@ type Recipient struct {
 	DeviceToken string
 }
 
+// Content contains the notification message content in different formats.
 type Content struct {
 	Text string
 	HTML string
 }
 
+// Notification represents a notification entity in the domain.
 type Notification struct {
 	id            NotificationID
 	recipient     Recipient
@@ -147,6 +170,8 @@ type Notification struct {
 	updatedAt     time.Time
 }
 
+// NewNotification creates a new notification with the provided details.
+// Optional configuration can be applied via NotificationOption functions.
 func NewNotification(
 	recipient Recipient,
 	channel Channel,
@@ -182,20 +207,24 @@ func NewNotification(
 	return notification, nil
 }
 
+// NotificationOption is a functional option for configuring a Notification.
 type NotificationOption func(*Notification)
 
+// WithScheduledAt sets the scheduled delivery time for the notification.
 func WithScheduledAt(t time.Time) NotificationOption {
 	return func(n *Notification) {
 		n.scheduledAt = &t
 	}
 }
 
+// WithMaxAttempts sets the maximum number of delivery attempts.
 func WithMaxAttempts(max int) NotificationOption {
 	return func(n *Notification) {
 		n.maxAttempts = max
 	}
 }
 
+// WithMetadata adds metadata key-value pairs to the notification.
 func WithMetadata(metadata map[string]string) NotificationOption {
 	return func(n *Notification) {
 		for k, v := range metadata {
@@ -204,6 +233,7 @@ func WithMetadata(metadata map[string]string) NotificationOption {
 	}
 }
 
+// validateNotification validates that the notification has required fields for its channel.
 func validateNotification(recipient Recipient, channel Channel, subject string, content Content) error {
 	if channel == ChannelEmail && recipient.Email == "" && recipient.UserID == nil {
 		return fmt.Errorf("email channel requires recipient email or user ID")
@@ -223,74 +253,93 @@ func validateNotification(recipient Recipient, channel Channel, subject string, 
 	return nil
 }
 
+// ID returns the notification's unique identifier.
 func (n *Notification) ID() NotificationID {
 	return n.id
 }
 
+// Recipient returns the notification recipient information.
 func (n *Notification) Recipient() Recipient {
 	return n.recipient
 }
 
+// Channel returns the notification delivery channel.
 func (n *Notification) Channel() Channel {
 	return n.channel
 }
 
+// Subject returns the notification subject line.
 func (n *Notification) Subject() string {
 	return n.subject
 }
 
+// Content returns the notification content.
 func (n *Notification) Content() Content {
 	return n.content
 }
 
+// Status returns the current notification status.
 func (n *Notification) Status() Status {
 	return n.status
 }
 
+// Priority returns the notification priority level.
 func (n *Notification) Priority() Priority {
 	return n.priority
 }
 
+// ScheduledAt returns the scheduled delivery time, if set.
 func (n *Notification) ScheduledAt() *time.Time {
 	return n.scheduledAt
 }
 
+// SentAt returns when the notification was sent, if applicable.
 func (n *Notification) SentAt() *time.Time {
 	return n.sentAt
 }
 
+// DeliveredAt returns when the notification was delivered, if applicable.
 func (n *Notification) DeliveredAt() *time.Time {
 	return n.deliveredAt
 }
 
+// FailedAt returns when the notification failed, if applicable.
 func (n *Notification) FailedAt() *time.Time {
 	return n.failedAt
 }
 
+// FailureReason returns the error message if the notification failed.
 func (n *Notification) FailureReason() string {
 	return n.failureReason
 }
 
+// Attempts returns the number of delivery attempts made.
 func (n *Notification) Attempts() int {
 	return n.attempts
 }
 
+// MaxAttempts returns the maximum number of delivery attempts allowed.
 func (n *Notification) MaxAttempts() int {
 	return n.maxAttempts
 }
 
+// Metadata returns additional key-value metadata attached to the notification.
 func (n *Notification) Metadata() map[string]string {
 	return n.metadata
 }
 
+// CreatedAt returns when the notification was created.
 func (n *Notification) CreatedAt() time.Time {
 	return n.createdAt
 }
 
+// UpdatedAt returns when the notification was last updated.
 func (n *Notification) UpdatedAt() time.Time {
 	return n.updatedAt
 }
 
+// Queue transitions the notification to queued status.
+// Returns an error if the notification is not in pending status.
 func (n *Notification) Queue() error {
 	if n.status != StatusPending {
 		return fmt.Errorf("cannot queue notification with status %s", n.status)
@@ -300,6 +349,8 @@ func (n *Notification) Queue() error {
 	return nil
 }
 
+// StartSending transitions the notification to sending status.
+// Returns an error if the notification is not in queued or pending status.
 func (n *Notification) StartSending() error {
 	if n.status != StatusQueued && n.status != StatusPending {
 		return fmt.Errorf("cannot start sending notification with status %s", n.status)
@@ -311,6 +362,8 @@ func (n *Notification) StartSending() error {
 	return nil
 }
 
+// MarkSent transitions the notification to sent status.
+// Returns an error if the notification is not in sending status.
 func (n *Notification) MarkSent() error {
 	if n.status != StatusSending {
 		return fmt.Errorf("cannot mark as sent notification with status %s", n.status)
@@ -320,6 +373,8 @@ func (n *Notification) MarkSent() error {
 	return nil
 }
 
+// MarkDelivered transitions the notification to delivered status.
+// Returns an error if the notification is not in sent status.
 func (n *Notification) MarkDelivered() error {
 	if n.status != StatusSent {
 		return fmt.Errorf("cannot mark as delivered notification with status %s", n.status)
@@ -331,6 +386,7 @@ func (n *Notification) MarkDelivered() error {
 	return nil
 }
 
+// MarkFailed transitions the notification to failed status with the given reason.
 func (n *Notification) MarkFailed(reason string) error {
 	n.status = StatusFailed
 	now := time.Now()
@@ -340,15 +396,19 @@ func (n *Notification) MarkFailed(reason string) error {
 	return nil
 }
 
+// CanRetry returns whether the notification can be retried.
 func (n *Notification) CanRetry() bool {
 	return n.attempts < n.maxAttempts && n.status == StatusSending
 }
 
+// IncrementAttempts increments the delivery attempt counter.
 func (n *Notification) IncrementAttempts() {
 	n.attempts++
 	n.updatedAt = time.Now()
 }
 
+// ScheduleRetry schedules the notification for retry after the specified delay.
+// Returns an error if the notification cannot be retried.
 func (n *Notification) ScheduleRetry(delay time.Duration) error {
 	if !n.CanRetry() {
 		return fmt.Errorf("cannot retry notification with status %s and %d attempts", n.status, n.attempts)
@@ -360,18 +420,22 @@ func (n *Notification) ScheduleRetry(delay time.Duration) error {
 	return nil
 }
 
+// IsScheduled returns whether the notification is scheduled for future delivery.
 func (n *Notification) IsScheduled() bool {
 	return n.scheduledAt != nil && n.scheduledAt.After(time.Now())
 }
 
+// IsPending returns whether the notification is in pending status.
 func (n *Notification) IsPending() bool {
 	return n.status == StatusPending
 }
 
+// IsQueued returns whether the notification is in queued status.
 func (n *Notification) IsQueued() bool {
 	return n.status == StatusQueued
 }
 
+// NextRetryDelay calculates the delay before the next retry attempt using exponential backoff.
 func (n *Notification) NextRetryDelay() time.Duration {
 	delays := []time.Duration{
 		1 * time.Second,

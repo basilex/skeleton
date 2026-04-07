@@ -1,3 +1,6 @@
+// Package http provides HTTP handlers for the notifications service.
+// This package implements the HTTP layer (ports) for handling notification management,
+// template operations, and user preference updates using the Gin framework.
 package http
 
 import (
@@ -11,6 +14,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Handler provides HTTP handlers for notification-related operations.
+// It orchestrates command and query handlers to process HTTP requests for
+// notification creation, retrieval, preferences management, and template operations.
 type Handler struct {
 	createNotification *command.CreateNotificationHandler
 	createFromTemplate *command.CreateFromTemplateHandler
@@ -26,6 +32,8 @@ type Handler struct {
 	listTemplates      *query.ListTemplatesHandler
 }
 
+// NewHandler creates a new HTTP handler with the required command and query handlers.
+// All parameters are required for the handler to function correctly.
 func NewHandler(
 	createNotification *command.CreateNotificationHandler,
 	createFromTemplate *command.CreateFromTemplateHandler,
@@ -488,6 +496,8 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// handleNotificationError processes notification domain errors and returns appropriate HTTP responses.
+// It maps domain errors to their corresponding HTTP status codes and error responses.
 func handleNotificationError(c *gin.Context, err error) {
 	switch err {
 	case domain.ErrNotificationNotFound:
@@ -501,6 +511,8 @@ func handleNotificationError(c *gin.Context, err error) {
 	}
 }
 
+// getUserID extracts the authenticated user ID from the gin context.
+// Returns an empty string if no user ID is present.
 func getUserID(c *gin.Context) string {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -509,6 +521,7 @@ func getUserID(c *gin.Context) string {
 	return userID.(string)
 }
 
+// getRequestID extracts the request ID from the gin context for error tracking.
 func getRequestID(c *gin.Context) string {
 	requestID, exists := c.Get("request_id")
 	if !exists {
@@ -517,6 +530,8 @@ func getRequestID(c *gin.Context) string {
 	return requestID.(string)
 }
 
+// parseInt parses a string into an integer.
+// Returns an error if parsing fails.
 func parseInt(s string) (int, error) {
 	var i int
 	_, err := fmt.Sscanf(s, "%d", &i)

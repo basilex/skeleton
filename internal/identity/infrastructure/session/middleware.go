@@ -1,3 +1,6 @@
+// Package session provides session management infrastructure implementations.
+// This package contains in-memory session storage and HTTP middleware for
+// session-based authentication.
 package session
 
 import (
@@ -8,11 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Middleware provides HTTP middleware for session-based authentication.
+// It validates session cookies and injects user context into requests.
 type Middleware struct {
 	store Store
 	cfg   config.SessionConfig
 }
 
+// NewMiddleware creates a new session middleware with the provided store and configuration.
 func NewMiddleware(store Store, cfg config.SessionConfig) *Middleware {
 	return &Middleware{
 		store: store,
@@ -20,6 +26,7 @@ func NewMiddleware(store Store, cfg config.SessionConfig) *Middleware {
 	}
 }
 
+// SetSession sets a session cookie in the HTTP response.
 func (m *Middleware) SetSession(c *gin.Context, sess *Session) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     m.cfg.CookieName,
@@ -33,6 +40,7 @@ func (m *Middleware) SetSession(c *gin.Context, sess *Session) {
 	})
 }
 
+// ClearSession clears the session cookie from the HTTP response.
 func (m *Middleware) ClearSession(c *gin.Context) {
 	http.SetCookie(c.Writer, &http.Cookie{
 		Name:     m.cfg.CookieName,
@@ -46,6 +54,9 @@ func (m *Middleware) ClearSession(c *gin.Context) {
 	})
 }
 
+// Authenticate returns a Gin middleware that validates session cookies.
+// It retrieves the session from the store and injects user context values.
+// Returns 401 Unauthorized if the session is missing or invalid.
 func (m *Middleware) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cookie, err := c.Cookie(m.cfg.CookieName)
@@ -78,6 +89,8 @@ func (m *Middleware) Authenticate() gin.HandlerFunc {
 	}
 }
 
+// GetUserID extracts the user ID from the Gin context.
+// Returns an empty string if not found.
 func GetUserID(c *gin.Context) domain.UserID {
 	v, ok := c.Get("user_id")
 	if !ok {
@@ -86,6 +99,8 @@ func GetUserID(c *gin.Context) domain.UserID {
 	return domain.UserID(v.(string))
 }
 
+// GetSessionID extracts the session ID from the Gin context.
+// Returns an empty string if not found.
 func GetSessionID(c *gin.Context) string {
 	v, ok := c.Get("session_id")
 	if !ok {
@@ -94,6 +109,8 @@ func GetSessionID(c *gin.Context) string {
 	return v.(string)
 }
 
+// GetPermissions extracts the user permissions from the Gin context.
+// Returns nil if not found.
 func GetPermissions(c *gin.Context) []string {
 	v, ok := c.Get("user_permissions")
 	if !ok {

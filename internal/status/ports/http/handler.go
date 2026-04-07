@@ -1,3 +1,6 @@
+// Package http provides HTTP handlers for the status service.
+// This package implements the HTTP layer (ports) for handling system status,
+// health checks, and build information endpoints using the Gin framework.
 package http
 
 import (
@@ -7,10 +10,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Handler provides HTTP handlers for status-related operations.
+// It handles requests for build information, health checks, and readiness probes
+// used by monitoring systems and load balancers.
 type Handler struct {
 	getBuildInfo *query.GetBuildInfoHandler
 }
 
+// NewHandler creates a new HTTP handler for status operations.
 func NewHandler(getBuildInfo *query.GetBuildInfoHandler) *Handler {
 	return &Handler{
 		getBuildInfo: getBuildInfo,

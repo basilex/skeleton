@@ -1,3 +1,6 @@
+// Package query provides query handlers for reading identity data.
+// This package implements the query side of CQRS for user-related operations,
+// handling read-only requests that return data transfer objects without modifying state.
 package query
 
 import (
@@ -8,11 +11,14 @@ import (
 	"github.com/basilex/skeleton/pkg/pagination"
 )
 
+// ListUsersHandler handles queries to retrieve a paginated list of users.
+// It fetches users from the repository and enriches them with role information.
 type ListUsersHandler struct {
 	users domain.UserRepository
 	roles domain.RoleRepository
 }
 
+// NewListUsersHandler creates a new ListUsersHandler with the required repositories.
 func NewListUsersHandler(users domain.UserRepository, roles domain.RoleRepository) *ListUsersHandler {
 	return &ListUsersHandler{
 		users: users,
@@ -20,6 +26,7 @@ func NewListUsersHandler(users domain.UserRepository, roles domain.RoleRepositor
 	}
 }
 
+// ListUsersQuery represents a query to list users with optional filtering and pagination.
 type ListUsersQuery struct {
 	Cursor   string
 	Limit    int
@@ -27,6 +34,8 @@ type ListUsersQuery struct {
 	IsActive *bool
 }
 
+// UserDTO is a data transfer object representing a user for API responses.
+// It contains a flattened view of user data including resolved role names.
 type UserDTO struct {
 	ID        string   `json:"id"`
 	Email     string   `json:"email"`
@@ -36,6 +45,9 @@ type UserDTO struct {
 	UpdatedAt string   `json:"updated_at"`
 }
 
+// Handle executes the ListUsersQuery and returns a paginated result of users.
+// It retrieves users based on the provided filter criteria and resolves role names
+// from the role repository to provide a complete view of each user.
 func (h *ListUsersHandler) Handle(ctx context.Context, q ListUsersQuery) (pagination.PageResult[UserDTO], error) {
 	pq := pagination.PageQuery{
 		Cursor: q.Cursor,

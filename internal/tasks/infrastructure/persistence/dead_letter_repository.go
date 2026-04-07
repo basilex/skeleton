@@ -1,3 +1,5 @@
+// Package persistence provides database repository implementations for the tasks domain.
+// This package contains SQLite-based repositories for tasks, schedules, and dead letters.
 package persistence
 
 import (
@@ -10,14 +12,18 @@ import (
 	"github.com/basilex/skeleton/internal/tasks/domain"
 )
 
+// DeadLetterRepository implements the dead letter repository interface
+// using SQL database storage for failed tasks.
 type DeadLetterRepository struct {
 	db *sql.DB
 }
 
+// NewDeadLetterRepository creates a new dead letter repository with the provided database connection.
 func NewDeadLetterRepository(db *sql.DB) *DeadLetterRepository {
 	return &DeadLetterRepository{db: db}
 }
 
+// Create persists a new dead letter record to the database.
 func (r *DeadLetterRepository) Create(ctx context.Context, deadLetter *domain.DeadLetterTask) error {
 	originalTaskJSON, err := json.Marshal(deadLetter.OriginalTask())
 	if err != nil {
@@ -58,6 +64,8 @@ func (r *DeadLetterRepository) Create(ctx context.Context, deadLetter *domain.De
 	return nil
 }
 
+// GetByID retrieves a dead letter record by its unique identifier.
+// Returns domain.ErrDeadLetterNotFound if no matching record exists.
 func (r *DeadLetterRepository) GetByID(ctx context.Context, id domain.DeadLetterID) (*domain.DeadLetterTask, error) {
 	query := `
 		SELECT id, original_task_id, original_task, failed_at, reason, reviewed, reviewed_at, reviewed_by, action, created_at
@@ -69,6 +77,8 @@ func (r *DeadLetterRepository) GetByID(ctx context.Context, id domain.DeadLetter
 	return r.scanDeadLetter(row)
 }
 
+// List retrieves dead letter records with pagination.
+// Results are ordered by failure time in descending order.
 func (r *DeadLetterRepository) List(ctx context.Context, limit int, offset int) ([]*domain.DeadLetterTask, error) {
 	query := `
 		SELECT id, original_task_id, original_task, failed_at, reason, reviewed, reviewed_at, reviewed_by, action, created_at
@@ -95,6 +105,7 @@ func (r *DeadLetterRepository) List(ctx context.Context, limit int, offset int) 
 	return deadLetters, nil
 }
 
+// MarkReviewed marks a dead letter as reviewed with the specified action.
 func (r *DeadLetterRepository) MarkReviewed(ctx context.Context, id domain.DeadLetterID, action domain.DeadLetterAction, reviewedBy *string) error {
 	query := `
 		UPDATE dead_letters SET
@@ -115,6 +126,7 @@ func (r *DeadLetterRepository) MarkReviewed(ctx context.Context, id domain.DeadL
 	return nil
 }
 
+// Delete removes a dead letter record from the database.
 func (r *DeadLetterRepository) Delete(ctx context.Context, id domain.DeadLetterID) error {
 	query := `DELETE FROM dead_letters WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, id.String())
@@ -124,6 +136,7 @@ func (r *DeadLetterRepository) Delete(ctx context.Context, id domain.DeadLetterI
 	return nil
 }
 
+// scanDeadLetter converts a database row into a domain DeadLetterTask entity.
 func (r *DeadLetterRepository) scanDeadLetter(row *sql.Row) (*domain.DeadLetterTask, error) {
 	var id, originalTaskID, reason, action string
 	var originalTaskJSON []byte
@@ -151,6 +164,7 @@ func (r *DeadLetterRepository) scanDeadLetter(row *sql.Row) (*domain.DeadLetterT
 	return dl, nil
 }
 
+// scanDeadLetterFromRows converts database rows into domain DeadLetterTask entities.
 func (r *DeadLetterRepository) scanDeadLetterFromRows(rows *sql.Rows) (*domain.DeadLetterTask, error) {
 	var id, originalTaskID, reason, action string
 	var originalTaskJSON []byte

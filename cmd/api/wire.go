@@ -1,3 +1,18 @@
+// Package main provides dependency injection wiring for the API server.
+// This file contains the manual dependency injection setup that wires together
+// all application components following the Dependency Inversion Principle.
+//
+// The wiring process creates the complete dependency graph including:
+//   - Domain services (token service, password hasher)
+//   - Repositories (user, role, audit, notification, template, preferences)
+//   - Application handlers (commands and queries for each bounded context)
+//   - HTTP handlers (ports layer)
+//   - Middlewares (session, auth, RBAC)
+//   - Event bus and event handlers
+//   - Background workers (notification worker)
+//
+// All dependencies are centrally managed through the Dependencies struct,
+// making the application configuration explicit and testable.
 package main
 
 import (
@@ -29,44 +44,95 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// Dependencies holds all initialized application components required to run the API server.
+// This struct serves as a container for the complete dependency graph, making dependencies
+// explicit and providing easy access throughout the application lifecycle.
+//
+// Dependencies are organized by domain context:
+//   - Infrastructure: EventBus for domain event propagation
+//   - Identity: Authentication, authorization, and user management
+//   - Status: System health and build information
+//   - Audit: Audit log recording and querying
+//   - Notifications: Notification management and background processing
 type Dependencies struct {
+	// EventBus provides the domain event bus for publishing and subscribing to events.
 	EventBus eventbus.Bus
 
+	// SessionMiddleware handles cookie-based session authentication.
 	SessionMiddleware *session.Middleware
-	AuthMiddleware    *identityHTTP.AuthMiddleware
-	RBACMiddleware    *identityHTTP.RBACMiddleware
+	// AuthMiddleware handles JWT token validation and authentication.
+	AuthMiddleware *identityHTTP.AuthMiddleware
+	// RBACMiddleware enforces role-based access control for protected endpoints.
+	RBACMiddleware *identityHTTP.RBACMiddleware
 
-	IdentityHandler          *identityHTTP.Handler
-	StatusHandler            *statusHTTP.Handler
-	AuditHandler             *auditHTTP.Handler
-	AuditEventHandler        *auditEventHandler.IdentityEventHandler
-	NotificationHandler      *notificationHTTP.Handler
-	NotificationWorker       *worker.NotificationWorker
+	// IdentityHandler handles all HTTP endpoints related to user authentication and management.
+	IdentityHandler *identityHTTP.Handler
+	// StatusHandler handles health check and build information endpoints.
+	StatusHandler *statusHTTP.Handler
+	// AuditHandler handles audit log query endpoints.
+	AuditHandler *auditHTTP.Handler
+	// AuditEventHandler processes identity-related events for audit logging.
+	AuditEventHandler *auditEventHandler.IdentityEventHandler
+	// NotificationHandler handles all notification-related HTTP endpoints.
+	NotificationHandler *notificationHTTP.Handler
+	// NotificationWorker processes notification sending in the background.
+	NotificationWorker *worker.NotificationWorker
+	// NotificationEventHandler processes identity events for automatic notifications.
 	NotificationEventHandler *notificationEventHandler.IdentityEventHandler
 }
 
+// wireDependencies constructs the complete dependency graph for the application.
+// It creates and wires together all repositories, services, handlers, and middlewares
+// following the dependency inversion principle.
+//
+// The wiring process follows this hierarchy:
+//  1. Infrastructure: Event bus for domain events
+//  2. Repositories: Data persistence adapters for each bounded context
+//  3. Domain services: Token service, password hasher
+//  4. Application layer: Command and query handlers for each use case
+//  5. HTTP layer: Request handlers and middlewares
+//  6. Event handlers: Domain event subscribers
+//  7. Background workers: Notification worker
+//
+// Parameters:
+//   - cfg: Application configuration loaded from environment/file
+//   - db: Database connection for SQLite
+//   - version: Application version for status endpoint
+//   - commit: Git commit hash for status endpoint
+//   - buildTime: Build timestamp for status endpoint
+//   - goVersion: Go runtime version for status endpoint
+//
+// Returns a fully initialized Dependencies struct containing all application components.
 func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTime, goVersion string) *Dependencies {
+	// Initialize the in-memory event bus for domain event propagation.
 	bus := membus.New()
 
-	// Identity
+	// Identity Bounded Context
+	// Initialize repositories for the identity context.
 	userRepo := persistence.NewUserRepository(db)
 	roleRepo := persistence.NewRoleRepository(db)
+	// Initialize audit repository (shared across contexts for audit logging).
 	auditRepo := auditPersistence.NewAuditRepository(db)
 
+	// Initialize domain services for authentication and password hashing.
 	tokenService := newTokenService(cfg)
 	passwordHasher := &domain.BcryptHasher{}
 
+	// Initialize session management (cookie-based authentication).
 	sessionStore := newSessionStore(cfg)
 	sessionMiddleware := session.NewMiddleware(sessionStore, cfg.Session)
 
+	// Initialize command handlers for identity use cases.
 	registerHandler := identityCommand.NewRegisterUserHandler(userRepo, roleRepo, bus, passwordHasher)
 	loginHandler := identityCommand.NewLoginUserHandler(userRepo, roleRepo, tokenService, bus)
 	logoutHandler := identityCommand.NewLogoutUserHandler(userRepo, bus)
 	assignRoleHandler := identityCommand.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeRoleHandler := identityCommand.NewRevokeRoleHandler(userRepo, roleRepo, bus)
+	// Initialize query handlers for identity use cases.
 	getUserHandler := identityQuery.NewGetUserHandler(userRepo, roleRepo)
 	listUsersHandler := identityQuery.NewListUsersHandler(userRepo, roleRepo)
 
+	// Initialize HTTP handler for identity endpoints.
 	identityHandler := identityHTTP.NewHandler(
 		registerHandler,
 		loginHandler,
@@ -78,36 +144,45 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 		sessionStore,
 	)
 
+	// Initialize authentication and RBAC middlewares for endpoint protection.
+
 	authMiddleware := identityHTTP.NewAuthMiddleware(tokenService)
 	rbacMiddleware := identityHTTP.NewRBACMiddleware()
 
-	// Status
+	// Status Bounded Context
 	statusHandler := newStatusHandler(version, commit, buildTime, goVersion, cfg.App.Env)
 
-	// Audit
+	// Audit Bounded Context
+	// Initialize audit command and query handlers.
 	logEventHandler := auditCommand.NewLogEventHandler(auditRepo)
 	listRecordsHandler := auditQuery.NewListRecordsHandler(auditRepo)
 	auditHandler := auditHTTP.NewHandler(listRecordsHandler)
+	// Initialize event handler for recording identity events in audit log.
 	auditIdentityEventHandler := auditEventHandler.NewIdentityEventHandler(logEventHandler)
 
-	// Notifications
+	// Notifications Bounded Context
+	// Initialize repositories for notification persistence.
 	notificationRepo := notificationPersistence.NewNotificationRepository(db)
 	templateRepo := notificationPersistence.NewTemplateRepository(db)
 	preferencesRepo := notificationPersistence.NewPreferencesRepository(db)
 
+	// Initialize command handlers for notification use cases.
 	createNotificationHandler := notificationCommand.NewCreateNotificationHandler(notificationRepo, bus)
 	createFromTemplateHandler := notificationCommand.NewCreateFromTemplateHandler(notificationRepo, templateRepo)
 	markDeliveredHandler := notificationCommand.NewMarkDeliveredHandler(notificationRepo)
 	markFailedHandler := notificationCommand.NewMarkFailedHandler(notificationRepo)
 	updatePreferencesHandler := notificationCommand.NewUpdatePreferencesHandler(preferencesRepo)
+	// Initialize query handlers for notification use cases.
 	getNotificationHandler := notificationQuery.NewGetNotificationHandler(notificationRepo)
 	listNotificationsHandler := notificationQuery.NewListNotificationsHandler(notificationRepo)
 	getPreferencesHandler := notificationQuery.NewGetPreferencesHandler(preferencesRepo)
+	// Initialize command and query handlers for template management.
 	createTemplateHandler := notificationCommand.NewCreateTemplateHandler(templateRepo)
 	updateTemplateHandler := notificationCommand.NewUpdateTemplateHandler(templateRepo)
 	getTemplateHandler := notificationQuery.NewGetTemplateHandler(templateRepo)
 	listTemplatesHandler := notificationQuery.NewListTemplatesHandler(templateRepo)
 
+	// Initialize HTTP handler for notification endpoints.
 	notificationHandler := notificationHTTP.NewHandler(
 		createNotificationHandler,
 		createFromTemplateHandler,
@@ -123,12 +198,13 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 		listTemplatesHandler,
 	)
 
+	// Initialize notification sender infrastructure.
 	// Notification sender (console for development - logs to console)
 	// In production, replace with real SMTP/AWS SES/Twilio implementations
 	emailSender := sender.NewConsoleEmailSender()
 	compositeSender := sender.NewCompositeSender(emailSender, nil, nil, nil)
 
-	// Notification worker
+	// Initialize the notification background worker for async processing.
 	notificationWorker := worker.NewNotificationWorker(
 		notificationRepo,
 		preferencesRepo,
@@ -141,13 +217,16 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 		},
 	)
 
-	// Notification event handler (auto-send emails on user registration)
+	// Initialize event handler for automatic notifications on identity events.
 	notificationIdentityEventHandler := notificationEventHandler.NewIdentityEventHandler(createFromTemplateHandler)
 
-	// Register event handlers
+	// Register domain event handlers with the event bus.
+	// Register audit event handler to record identity events.
 	auditIdentityEventHandler.Register(bus)
+	// Register notification event handler to send automatic notifications.
 	notificationIdentityEventHandler.Register(bus)
 
+	// Return the complete dependency graph.
 	return &Dependencies{
 		IdentityHandler:          identityHandler,
 		AuthMiddleware:           authMiddleware,
@@ -163,10 +242,32 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	}
 }
 
+// newSessionStore creates a session store for managing user sessions.
+// Currently uses in-memory storage suitable for development and single-instance deployments.
+// For distributed deployments, consider using Redis-backed session storage.
+//
+// Parameters:
+//   - cfg: Application configuration containing session TTL settings
+//
+// Returns an in-memory session store with the configured TTL.
 func newSessionStore(cfg *config.Config) session.Store {
 	return session.NewInMemoryStore(cfg.Session.TTLMinutes)
 }
 
+// newTokenService creates the token service for JWT generation and validation.
+// In development and test environments, uses a mock token service for simplified testing.
+// In production environments, uses RSA-based JWT tokens loaded from configured key files.
+//
+// The token service supports:
+//   - Access token generation and validation
+//   - Refresh token generation
+//   - Public key verification for token validation
+//
+// Parameters:
+//   - cfg: Application configuration containing auth key paths and TTL settings
+//
+// Returns a TokenService implementation appropriate for the environment.
+// Panics if JWT key loading fails in production mode.
 func newTokenService(cfg *config.Config) domain.TokenService {
 	if cfg.App.Env == "dev" || cfg.App.Env == "test" {
 		return &token.MockTokenService{}
@@ -184,6 +285,19 @@ func newTokenService(cfg *config.Config) domain.TokenService {
 	return ts
 }
 
+// newStatusHandler creates the HTTP handler for status and health check endpoints.
+// Initializes build information with version, commit, build time, and Go version
+// for the status endpoint response.
+//
+// Parameters:
+//   - version: Application version string
+//   - commit: Git commit hash
+//   - buildTime: Build timestamp
+//   - goVersion: Go runtime version
+//   - env: Application environment (dev, test, prod)
+//
+// Returns a status HTTP handler configured with build information.
+// Panics if build info creation fails (which should never occur with valid inputs).
 func newStatusHandler(version, commit, buildTime, goVersion, env string) *statusHTTP.Handler {
 	buildInfo, err := statusDomain.NewBuildInfo(version, commit, buildTime, goVersion, env)
 	if err != nil {

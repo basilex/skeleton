@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Logger returns a Gin middleware that logs HTTP request details including method,
+// path, status code, latency, request ID, and client IP address using structured logging.
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

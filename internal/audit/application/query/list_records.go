@@ -1,3 +1,6 @@
+// Package query provides query handlers for reading audit records.
+// This package implements the query side of CQRS for audit-related operations,
+// handling read-only requests that return audit record data transfer objects.
 package query
 
 import (
@@ -8,16 +11,20 @@ import (
 	"github.com/basilex/skeleton/pkg/pagination"
 )
 
+// ListRecordsHandler handles queries to retrieve a paginated list of audit records.
+// It supports filtering by actor, resource, action, and date range.
 type ListRecordsHandler struct {
 	repo domain.AuditRepository
 }
 
+// NewListRecordsHandler creates a new ListRecordsHandler with the required repository.
 func NewListRecordsHandler(repo domain.AuditRepository) *ListRecordsHandler {
 	return &ListRecordsHandler{
 		repo: repo,
 	}
 }
 
+// ListRecordsQuery represents a query to list audit records with optional filtering.
 type ListRecordsQuery struct {
 	ActorID              string
 	Resource             string
@@ -30,6 +37,8 @@ type ListRecordsQuery struct {
 	RequestedByActorType domain.ActorType
 }
 
+// RecordDTO is a data transfer object representing an audit record for API responses.
+// It contains a flattened view of audit data suitable for external consumption.
 type RecordDTO struct {
 	ID         string `json:"id"`
 	ActorID    string `json:"actor_id"`
@@ -44,6 +53,7 @@ type RecordDTO struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+// ListRecordsResult contains the paginated result of audit records.
 type ListRecordsResult struct {
 	Items      []RecordDTO `json:"items"`
 	NextCursor string      `json:"next_cursor"`
@@ -51,6 +61,9 @@ type ListRecordsResult struct {
 	Limit      int         `json:"limit"`
 }
 
+// Handle executes the ListRecordsQuery and returns a paginated list of audit records.
+// It applies filters based on the query parameters and returns appropriate results
+// based on whether the request is scoped to a specific actor.
 func (h *ListRecordsHandler) Handle(ctx context.Context, query ListRecordsQuery) (ListRecordsResult, error) {
 	filter := domain.RecordFilter{
 		ActorID:  query.ActorID,

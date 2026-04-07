@@ -1,3 +1,6 @@
+// Package http provides HTTP handlers for the identity service.
+// This package implements the HTTP layer (ports) for handling authentication,
+// user management, and role assignment requests using the Gin framework.
 package http
 
 import (
@@ -10,6 +13,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Handler provides HTTP handlers for identity-related operations.
+// It orchestrates command and query handlers to process HTTP requests for
+// user registration, authentication, role management, and user queries.
 type Handler struct {
 	registerUser *command.RegisterUserHandler
 	loginUser    *command.LoginUserHandler
@@ -21,6 +27,8 @@ type Handler struct {
 	sessionStore session.Store
 }
 
+// NewHandler creates a new HTTP handler with the required command and query handlers.
+// All parameters are required for the handler to function correctly.
 func NewHandler(
 	registerUser *command.RegisterUserHandler,
 	loginUser *command.LoginUserHandler,
@@ -302,10 +310,14 @@ func (h *Handler) RevokeRole(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "role revoked"})
 }
 
+// DeactivateUser handles user deactivation requests.
+// Currently returns a placeholder response as functionality is not yet implemented.
 func (h *Handler) DeactivateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "deactivate not yet implemented"})
 }
 
+// handleIdentityError processes identity domain errors and returns appropriate HTTP responses.
+// It maps domain errors to their corresponding HTTP status codes and error responses.
 func handleIdentityError(c *gin.Context, err error) {
 	requestID := getRequestID(c)
 	switch err {
@@ -316,6 +328,7 @@ func handleIdentityError(c *gin.Context, err error) {
 	}
 }
 
+// getRequestID extracts the request ID from the gin context for error tracking.
 func getRequestID(c *gin.Context) string {
 	if id, ok := c.Get("request_id"); ok {
 		if s, ok := id.(string); ok {

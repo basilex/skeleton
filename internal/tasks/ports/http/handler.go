@@ -1,3 +1,6 @@
+// Package http provides HTTP handlers for the tasks service.
+// This package implements the HTTP layer (ports) for handling task management,
+// schedule operations, and dead letter queue queriesusing the standard net/http package.
 package http
 
 import (
@@ -9,6 +12,9 @@ import (
 	"github.com/basilex/skeleton/internal/tasks/domain"
 )
 
+// Handler provides HTTP handlers for task-related operations.
+// It orchestrates command and query handlers to process HTTP requests for
+// task creation, retrieval, scheduling, and dead letter management.
 type Handler struct {
 	createTaskHandler         *command.CreateTaskHandler
 	cancelTaskHandler         *command.CancelTaskHandler
@@ -26,6 +32,8 @@ type Handler struct {
 	listDeadLettersHandler    *query.ListDeadLettersHandler
 }
 
+// NewHandler creates a new HTTP handler with the required command and query handlers.
+// All parameters are required for the handler to function correctly.
 func NewHandler(
 	createTaskHandler *command.CreateTaskHandler,
 	cancelTaskHandler *command.CancelTaskHandler,
@@ -297,12 +305,14 @@ func (h *Handler) ListDeadLetters(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, responses)
 }
 
+// respondWithJSON writes a JSON response with the given status code and payload.
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(payload)
 }
 
+// respondWithError writes an error response with the given status code and message.
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	respondWithJSON(w, code, ErrorResponse{Error: message})
 }

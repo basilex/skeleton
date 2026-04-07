@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying identity state.
+// This package implements the command side of CQRS for user-related operations,
+// handling write requests that modify user and role assignments.
 package command
 
 import (
@@ -8,6 +11,8 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// RegisterUserHandler handles commands to register a new user in the system.
+// It validates the email, checks for duplicates, hashes the password, and creates the user.
 type RegisterUserHandler struct {
 	users  domain.UserRepository
 	roles  domain.RoleRepository
@@ -15,6 +20,7 @@ type RegisterUserHandler struct {
 	hasher domain.PasswordHasher
 }
 
+// NewRegisterUserHandler creates a new RegisterUserHandler with the required dependencies.
 func NewRegisterUserHandler(
 	users domain.UserRepository,
 	roles domain.RoleRepository,
@@ -29,15 +35,20 @@ func NewRegisterUserHandler(
 	}
 }
 
+// RegisterUserCommand represents a command to register a new user.
 type RegisterUserCommand struct {
 	Email    string
 	Password string
 }
 
+// RegisterUserResult contains the result of a successful user registration.
 type RegisterUserResult struct {
 	UserID string
 }
 
+// Handle executes the RegisterUserCommand to create a new user.
+// It validates the email format, ensures uniqueness, hashes the password,
+// creates the user entity, persists it, and publishes domain events.
 func (h *RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUserCommand) (RegisterUserResult, error) {
 	email, err := domain.NewEmail(cmd.Email)
 	if err != nil {

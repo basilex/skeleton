@@ -1,3 +1,5 @@
+// Package persistence provides database repository implementations for the notifications domain.
+// This package contains SQLite-based repositories for notifications, templates, and preferences.
 package persistence
 
 import (
@@ -11,10 +13,13 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// PreferencesRepository implements the notification preferences repository interface
+// using SQL database storage.
 type PreferencesRepository struct {
 	db *sqlx.DB
 }
 
+// NewPreferencesRepository creates a new preferences repository with the provided database connection.
 func NewPreferencesRepository(db *sqlx.DB) *PreferencesRepository {
 	return &PreferencesRepository{db: db}
 }
@@ -27,6 +32,8 @@ type preferencesRow struct {
 	UpdatedAt   string `db:"updated_at"`
 }
 
+// GetByUserID retrieves notification preferences for a specific user.
+// Returns domain.ErrPreferencesNotFound if no preferences exist.
 func (r *PreferencesRepository) GetByUserID(ctx context.Context, userID string) (*domain.NotificationPreferences, error) {
 	var row preferencesRow
 	err := r.db.GetContext(ctx, &row, `
@@ -45,6 +52,7 @@ func (r *PreferencesRepository) GetByUserID(ctx context.Context, userID string) 
 	return r.scanPreferences(row)
 }
 
+// Upsert creates or updates notification preferences for a user.
 func (r *PreferencesRepository) Upsert(ctx context.Context, preferences *domain.NotificationPreferences) error {
 	preferencesJSON, err := r.marshalPreferences(preferences)
 	if err != nil {
@@ -74,6 +82,7 @@ func (r *PreferencesRepository) Upsert(ctx context.Context, preferences *domain.
 	return nil
 }
 
+// Delete removes notification preferences for a user.
 func (r *PreferencesRepository) Delete(ctx context.Context, userID string) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM notification_preferences WHERE user_id = ?`, userID)
 	if err != nil {
@@ -82,6 +91,7 @@ func (r *PreferencesRepository) Delete(ctx context.Context, userID string) error
 	return nil
 }
 
+// scanPreferences converts a database row into a domain NotificationPreferences entity.
 func (r *PreferencesRepository) scanPreferences(row preferencesRow) (*domain.NotificationPreferences, error) {
 	userID := identityDomain.UserID(row.UserID)
 	preferences := domain.NewNotificationPreferences(userID)
@@ -129,6 +139,7 @@ func (r *PreferencesRepository) scanPreferences(row preferencesRow) (*domain.Not
 	return preferences, nil
 }
 
+// marshalPreferences serializes preferences to JSON for storage.
 func (r *PreferencesRepository) marshalPreferences(preferences *domain.NotificationPreferences) (string, error) {
 	data := struct {
 		Channels map[string]struct {

@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying identity state.
+// This package implements the command side of CQRS for user-related operations,
+// handling write requests that modify user and role assignments.
 package command
 
 import (
@@ -8,12 +11,15 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// AssignRoleHandler handles commands to assign a role to a user.
+// It validates the user and role exist, assigns the role, and publishes domain events.
 type AssignRoleHandler struct {
 	users domain.UserRepository
 	roles domain.RoleRepository
 	bus   eventbus.Bus
 }
 
+// NewAssignRoleHandler creates a new AssignRoleHandler with the required dependencies.
 func NewAssignRoleHandler(
 	users domain.UserRepository,
 	roles domain.RoleRepository,
@@ -26,11 +32,15 @@ func NewAssignRoleHandler(
 	}
 }
 
+// AssignRoleCommand represents a command to assign a role to a user.
 type AssignRoleCommand struct {
 	UserID string
 	RoleID string
 }
 
+// Handle executes the AssignRoleCommand to assign a role to a user.
+// It validates IDs, verifies the role exists, assigns the role to the user,
+// persists changes, and publishes events.
 func (h *AssignRoleHandler) Handle(ctx context.Context, cmd AssignRoleCommand) error {
 	userID, err := domain.ParseUserID(cmd.UserID)
 	if err != nil {

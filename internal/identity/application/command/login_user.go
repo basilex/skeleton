@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying identity state.
+// This package implements the command side of CQRS for user-related operations,
+// handling write requests that modify user and role assignments.
 package command
 
 import (
@@ -9,6 +12,8 @@ import (
 	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
+// LoginUserHandler handles commands to authenticate a user and issue tokens.
+// It validates credentials, checks user status, loads roles, and generates access/refresh tokens.
 type LoginUserHandler struct {
 	users        domain.UserRepository
 	roles        domain.RoleRepository
@@ -16,6 +21,7 @@ type LoginUserHandler struct {
 	bus          eventbus.Bus
 }
 
+// NewLoginUserHandler creates a new LoginUserHandler with the required dependencies.
 func NewLoginUserHandler(
 	users domain.UserRepository,
 	roles domain.RoleRepository,
@@ -30,16 +36,21 @@ func NewLoginUserHandler(
 	}
 }
 
+// LoginUserCommand represents a command to authenticate a user with email and password.
 type LoginUserCommand struct {
 	Email    string
 	Password string
 }
 
+// TokenPair contains the access and refresh tokens returned after successful authentication.
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
 
+// Handle executes the LoginUserCommand to authenticate a user.
+// It validates credentials, checks the user is active, loads roles,
+// generates tokens, and publishes a login event.
 func (h *LoginUserHandler) Handle(ctx context.Context, cmd LoginUserCommand) (TokenPair, error) {
 	email, err := domain.NewEmail(cmd.Email)
 	if err != nil {
@@ -90,6 +101,8 @@ func (h *LoginUserHandler) Handle(ctx context.Context, cmd LoginUserCommand) (To
 	}, nil
 }
 
+// loadRoles fetches role entities by their IDs and returns them as a slice.
+// It converts the pointer slice returned by the repository to a value slice.
 func (h *LoginUserHandler) loadRoles(ctx context.Context, ids []domain.RoleID) ([]domain.Role, error) {
 	if len(ids) == 0 {
 		return []domain.Role{}, nil

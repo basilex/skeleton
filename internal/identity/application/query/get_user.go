@@ -1,3 +1,6 @@
+// Package query provides query handlers for reading identity data.
+// This package implements the query side of CQRS for user-related operations,
+// handling read-only requests that return data transfer objects without modifying state.
 package query
 
 import (
@@ -7,11 +10,14 @@ import (
 	"github.com/basilex/skeleton/internal/identity/domain"
 )
 
+// GetUserHandler handles queries to retrieve a single user by ID.
+// It fetches user details and resolves associated role names.
 type GetUserHandler struct {
 	users domain.UserRepository
 	roles domain.RoleRepository
 }
 
+// NewGetUserHandler creates a new GetUserHandler with the required repositories.
 func NewGetUserHandler(users domain.UserRepository, roles domain.RoleRepository) *GetUserHandler {
 	return &GetUserHandler{
 		users: users,
@@ -19,10 +25,14 @@ func NewGetUserHandler(users domain.UserRepository, roles domain.RoleRepository)
 	}
 }
 
+// GetUserQuery represents a query to retrieve a specific user by their ID.
 type GetUserQuery struct {
 	UserID string
 }
 
+// Handle executes the GetUserQuery and returns the user data transfer object.
+// It validates the user ID, retrieves the user from the repository, and resolves
+// role names for a complete user representation.
 func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (UserDTO, error) {
 	userID, err := domain.ParseUserID(q.UserID)
 	if err != nil {
@@ -49,6 +59,8 @@ func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (UserDTO, e
 	}, nil
 }
 
+// loadRoleNames resolves role IDs to their string names.
+// It fetches the role entities from the repository and extracts their names.
 func (h *GetUserHandler) loadRoleNames(ctx context.Context, ids []domain.RoleID) ([]string, error) {
 	if len(ids) == 0 {
 		return []string{}, nil

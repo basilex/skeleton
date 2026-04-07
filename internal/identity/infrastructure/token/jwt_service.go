@@ -1,3 +1,6 @@
+// Package token provides token generation and validation implementations.
+// This package contains infrastructure implementations for JWT token handling
+// and mock token services for testing purposes.
 package token
 
 import (
@@ -11,6 +14,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// JWTService implements token generation and validation using RSA-signed JWTs.
+// It uses RS256 algorithm with separate public and private keys for enhanced security.
 type JWTService struct {
 	privateKey       *rsa.PrivateKey
 	publicKey        *rsa.PublicKey
@@ -18,6 +23,10 @@ type JWTService struct {
 	refreshTTLDays   int
 }
 
+// NewJWTService creates a new JWT token service with the provided key files.
+// The privateKeyPath and publicKeyPath should point to PEM-encoded RSA key files.
+// accessTTLMinutes specifies the access token expiration time in minutes.
+// refreshTTLDays specifies the refresh token expiration time in days (currently unused).
 func NewJWTService(privateKeyPath, publicKeyPath string, accessTTLMinutes, refreshTTLDays int) (*JWTService, error) {
 	privateKeyBytes, err := os.ReadFile(privateKeyPath)
 	if err != nil {
@@ -45,6 +54,8 @@ func NewJWTService(privateKeyPath, publicKeyPath string, accessTTLMinutes, refre
 	}, nil
 }
 
+// claims represents the custom JWT claims structure containing user identity
+// and authorization information.
 type claims struct {
 	jwt.RegisteredClaims
 	UserID      string   `json:"user_id"`
@@ -52,6 +63,8 @@ type claims struct {
 	Permissions []string `json:"permissions"`
 }
 
+// GenerateAccessToken generates a new RSA-signed JWT access token for the specified user.
+// The token includes the user ID, role names, and all permissions aggregated from roles.
 func (s *JWTService) GenerateAccessToken(userID domain.UserID, roles []domain.Role) (string, error) {
 	permissions := make([]string, 0)
 	for _, role := range roles {
@@ -84,10 +97,14 @@ func (s *JWTService) GenerateAccessToken(userID domain.UserID, roles []domain.Ro
 	return signed, nil
 }
 
+// GenerateRefreshToken generates a new refresh token using UUID v7.
+// This token is used to obtain new access tokens without re-authentication.
 func (s *JWTService) GenerateRefreshToken() (string, error) {
 	return uuid.NewV7().String(), nil
 }
 
+// ValidateAccessToken validates an RSA-signed JWT access token and extracts claims.
+// Returns domain.TokenClaims containing user ID, roles, and permissions.
 func (s *JWTService) ValidateAccessToken(tokenString string) (*domain.TokenClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &claims{}, func(t *jwt.Token) (interface{}, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
@@ -116,6 +133,8 @@ func (s *JWTService) ValidateAccessToken(tokenString string) (*domain.TokenClaim
 	}, nil
 }
 
+// ValidateRefreshToken validates a refresh token and returns the associated user ID.
+// Current implementation returns empty user ID and no error (placeholder implementation).
 func (s *JWTService) ValidateRefreshToken(_ string) (domain.UserID, error) {
 	return "", nil
 }

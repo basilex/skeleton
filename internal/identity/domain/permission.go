@@ -1,3 +1,6 @@
+// Package domain provides domain entities and repository interfaces for the identity module.
+// This package contains the core business logic types, value objects, and repository contracts
+// for user management, authentication, and authorization.
 package domain
 
 import (
@@ -5,8 +8,13 @@ import (
 	"strings"
 )
 
+// Permission represents an authorization permission in "resource:action" format.
+// Examples: "users:read", "users:*", "*:*" (super admin).
 type Permission string
 
+// NewPermission creates a Permission from a string in "resource:action" format.
+// Wildcards are supported: "users:*" grants all actions on users resource,
+// "*:*" grants all permissions (super admin).
 func NewPermission(name string) (Permission, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -25,10 +33,13 @@ func NewPermission(name string) (Permission, error) {
 	return Permission(name), nil
 }
 
+// String returns the string representation of the permission.
 func (p Permission) String() string {
 	return string(p)
 }
 
+// Matches checks if this permission grants access to the requested permission.
+// Supports wildcard matching: "users:*" matches "users:read", "*:*" matches everything.
 func (p Permission) Matches(other Permission) bool {
 	if p == "*:*" || other == "*:*" {
 		return true
@@ -50,6 +61,7 @@ func (p Permission) Matches(other Permission) bool {
 	return false
 }
 
+// Resource extracts the resource part from the permission string.
 func (p Permission) Resource() string {
 	parts := strings.SplitN(p.String(), ":", 2)
 	if len(parts) != 2 {
@@ -58,6 +70,7 @@ func (p Permission) Resource() string {
 	return parts[0]
 }
 
+// Action extracts the action part from the permission string.
 func (p Permission) Action() string {
 	parts := strings.SplitN(p.String(), ":", 2)
 	if len(parts) != 2 {

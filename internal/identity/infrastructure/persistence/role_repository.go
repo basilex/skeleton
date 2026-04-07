@@ -1,3 +1,5 @@
+// Package persistence provides database repository implementations for the identity domain.
+// This package contains SQLite-based repositories for users and roles.
 package persistence
 
 import (
@@ -10,14 +12,19 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
+// RoleRepository implements the role repository interface using SQL database storage.
+// It handles persistence of role entities and their associated permissions.
 type RoleRepository struct {
 	db *sqlx.DB
 }
 
+// NewRoleRepository creates a new role repository with the provided database connection.
 func NewRoleRepository(db *sqlx.DB) *RoleRepository {
 	return &RoleRepository{db: db}
 }
 
+// Save persists a role entity to the database. Uses upsert semantics to handle
+// both creation and updates.
 func (r *RoleRepository) Save(ctx context.Context, role *domain.Role) error {
 	query := `
 		INSERT INTO roles (id, name, description, created_at)
@@ -38,6 +45,8 @@ func (r *RoleRepository) Save(ctx context.Context, role *domain.Role) error {
 	return nil
 }
 
+// FindByID retrieves a role by its unique identifier.
+// Returns domain.ErrRoleNotFound if no matching role exists.
 func (r *RoleRepository) FindByID(ctx context.Context, id domain.RoleID) (*domain.Role, error) {
 	var row struct {
 		ID          string `db:"id"`
@@ -55,6 +64,8 @@ func (r *RoleRepository) FindByID(ctx context.Context, id domain.RoleID) (*domai
 	return r.scanRole(ctx, row)
 }
 
+// FindByName retrieves a role by its unique name.
+// Returns domain.ErrRoleNotFound if no matching role exists.
 func (r *RoleRepository) FindByName(ctx context.Context, name string) (*domain.Role, error) {
 	var row struct {
 		ID          string `db:"id"`
@@ -72,6 +83,7 @@ func (r *RoleRepository) FindByName(ctx context.Context, name string) (*domain.R
 	return r.scanRole(ctx, row)
 }
 
+// FindAll retrieves all roles from the database, ordered by name.
 func (r *RoleRepository) FindAll(ctx context.Context) ([]*domain.Role, error) {
 	var rows []struct {
 		ID          string `db:"id"`
@@ -95,6 +107,8 @@ func (r *RoleRepository) FindAll(ctx context.Context) ([]*domain.Role, error) {
 	return roles, nil
 }
 
+// FindByIDs retrieves multiple roles by their identifiers.
+// Returns an empty slice if no IDs are provided.
 func (r *RoleRepository) FindByIDs(ctx context.Context, ids []domain.RoleID) ([]*domain.Role, error) {
 	if len(ids) == 0 {
 		return []*domain.Role{}, nil
@@ -130,6 +144,7 @@ func (r *RoleRepository) FindByIDs(ctx context.Context, ids []domain.RoleID) ([]
 	return roles, nil
 }
 
+// scanRole converts a database row into a domain Role entity with its permissions.
 func (r *RoleRepository) scanRole(ctx context.Context, row struct {
 	ID          string `db:"id"`
 	Name        string `db:"name"`
@@ -147,6 +162,7 @@ func (r *RoleRepository) scanRole(ctx context.Context, row struct {
 	return role, nil
 }
 
+// loadPermissions retrieves all permissions associated with a role from the database.
 func (r *RoleRepository) loadPermissions(ctx context.Context, roleID domain.RoleID) ([]domain.Permission, error) {
 	var rows []struct {
 		Name string `db:"name"`

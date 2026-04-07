@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying notification state.
+// This package implements the command side of CQRS for notification-related operations,
+// handling write requests that create and modify notification entities.
 package command
 
 import (
@@ -8,6 +11,8 @@ import (
 	notificationDomain "github.com/basilex/skeleton/internal/notifications/domain"
 )
 
+// UpdatePreferencesCommand represents a command to update user notification preferences.
+// It allows enabling/disabling channels, setting frequency, and configuring quiet hours.
 type UpdatePreferencesCommand struct {
 	UserID          string
 	Channel         notificationDomain.Channel
@@ -18,10 +23,13 @@ type UpdatePreferencesCommand struct {
 	QuietHoursTZ    *string
 }
 
+// UpdatePreferencesHandler handles commands to update notification preferences.
+// It retrieves existing preferences, applies updates, and persists the changes.
 type UpdatePreferencesHandler struct {
 	preferencesRepo notificationDomain.PreferencesRepository
 }
 
+// NewUpdatePreferencesHandler creates a new UpdatePreferencesHandler with the required repository.
 func NewUpdatePreferencesHandler(
 	preferencesRepo notificationDomain.PreferencesRepository,
 ) *UpdatePreferencesHandler {
@@ -30,6 +38,8 @@ func NewUpdatePreferencesHandler(
 	}
 }
 
+// Handle executes the UpdatePreferencesCommand to update user notification settings.
+// It creates new preferences if none exist, applies channel settings, and handles quiet hours configuration.
 func (h *UpdatePreferencesHandler) Handle(ctx context.Context, cmd UpdatePreferencesCommand) error {
 	prefs, err := h.preferencesRepo.GetByUserID(ctx, cmd.UserID)
 	if err != nil || prefs == nil {

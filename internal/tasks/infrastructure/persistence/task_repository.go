@@ -10,14 +10,17 @@ import (
 	"github.com/basilex/skeleton/internal/tasks/domain"
 )
 
+// TaskRepository implements the task repository interface using SQL database storage.
 type TaskRepository struct {
 	db *sql.DB
 }
 
+// NewTaskRepository creates a new task repository with the provided database connection.
 func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
+// Create persists a new task to the database.
 func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	payload, err := json.Marshal(task.Payload())
 	if err != nil {
@@ -103,6 +106,7 @@ func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	return nil
 }
 
+// Update modifies an existing task in the database.
 func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 	payload, err := json.Marshal(task.Payload())
 	if err != nil {
@@ -187,6 +191,8 @@ func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 	return nil
 }
 
+// GetByID retrieves a task by its unique identifier.
+// Returns domain.ErrTaskNotFound if no matching task exists.
 func (r *TaskRepository) GetByID(ctx context.Context, id domain.TaskID) (*domain.Task, error) {
 	query := `
 		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
@@ -228,6 +234,7 @@ func (r *TaskRepository) GetByID(ctx context.Context, id domain.TaskID) (*domain
 	return task, nil
 }
 
+// GetPendingTasks retrieves tasks that are ready for execution, ordered by priority.
 func (r *TaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*domain.Task, error) {
 	query := `
 		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
@@ -241,6 +248,7 @@ func (r *TaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*dom
 	return r.getTasksByQuery(ctx, query, domain.TaskStatusPending, time.Now().Format(time.RFC3339), limit)
 }
 
+// GetTasksByStatus retrieves tasks by status with a limit.
 func (r *TaskRepository) GetTasksByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
 	query := `
 		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
@@ -254,6 +262,7 @@ func (r *TaskRepository) GetTasksByStatus(ctx context.Context, status domain.Tas
 	return r.getTasksByQuery(ctx, query, status.String(), limit)
 }
 
+// GetTasksByType retrieves tasks by type with a limit.
 func (r *TaskRepository) GetTasksByType(ctx context.Context, taskType domain.TaskType, limit int) ([]*domain.Task, error) {
 	query := `
 		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
@@ -267,6 +276,7 @@ func (r *TaskRepository) GetTasksByType(ctx context.Context, taskType domain.Tas
 	return r.getTasksByQuery(ctx, query, taskType.String(), limit)
 }
 
+// GetScheduledTasks retrieves tasks scheduled for execution before the specified time.
 func (r *TaskRepository) GetScheduledTasks(ctx context.Context, before time.Time, limit int) ([]*domain.Task, error) {
 	query := `
 		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
@@ -280,6 +290,7 @@ func (r *TaskRepository) GetScheduledTasks(ctx context.Context, before time.Time
 	return r.getTasksByQuery(ctx, query, domain.TaskStatusPending, before.Format(time.RFC3339), limit)
 }
 
+// GetActiveTasks retrieves all currently running tasks.
 func (r *TaskRepository) GetActiveTasks(ctx context.Context) ([]*domain.Task, error) {
 	query := `
 		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
@@ -293,6 +304,7 @@ func (r *TaskRepository) GetActiveTasks(ctx context.Context) ([]*domain.Task, er
 	return tasks, err
 }
 
+// GetStalledTasks retrieves tasks that have been running longer than the specified duration.
 func (r *TaskRepository) GetStalledTasks(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Task, error) {
 	cutoff := time.Now().Add(-olderThan)
 	query := `
@@ -307,6 +319,7 @@ func (r *TaskRepository) GetStalledTasks(ctx context.Context, olderThan time.Dur
 	return r.getTasksByQuery(ctx, query, domain.TaskStatusRunning, cutoff.Format(time.RFC3339), limit)
 }
 
+// Delete removes a task from the database.
 func (r *TaskRepository) Delete(ctx context.Context, id domain.TaskID) error {
 	query := `DELETE FROM tasks WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, id.String())
@@ -316,6 +329,8 @@ func (r *TaskRepository) Delete(ctx context.Context, id domain.TaskID) error {
 	return nil
 }
 
+// DeleteCompletedTasks removes completed tasks older than the specified duration.
+// Returns the number of tasks deleted.
 func (r *TaskRepository) DeleteCompletedTasks(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
 	query := `DELETE FROM tasks WHERE status = ? AND completed_at < ?`
@@ -326,6 +341,7 @@ func (r *TaskRepository) DeleteCompletedTasks(ctx context.Context, olderThan tim
 	return result.RowsAffected()
 }
 
+// getTasksByQuery executes a query and returns the resulting tasks.
 func (r *TaskRepository) getTasksByQuery(ctx context.Context, query string, args ...interface{}) ([]*domain.Task, error) {
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -345,6 +361,7 @@ func (r *TaskRepository) getTasksByQuery(ctx context.Context, query string, args
 	return tasks, nil
 }
 
+// scanTask converts database rows into a domain Task entity.
 func (r *TaskRepository) scanTask(rows *sql.Rows) (*domain.Task, error) {
 	var taskID, taskType, status, priority string
 	var payload, resultJSON, errorCode, errorMessage, errorDetails []byte

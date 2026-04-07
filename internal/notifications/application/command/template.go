@@ -1,3 +1,6 @@
+// Package command provides command handlers for modifying notification state.
+// This package implements the command side of CQRS for notification-related operations,
+// handling write requests that create and modify notification entities.
 package command
 
 import (
@@ -7,6 +10,7 @@ import (
 	"github.com/basilex/skeleton/internal/notifications/domain"
 )
 
+// CreateTemplateCommand represents a command to create a new notification template.
 type CreateTemplateCommand struct {
 	Name      string
 	Channel   domain.Channel
@@ -16,10 +20,13 @@ type CreateTemplateCommand struct {
 	Variables []string
 }
 
+// CreateTemplateHandler handles commands to create notification templates.
+// It validates the template data and persists it to the repository.
 type CreateTemplateHandler struct {
 	templateRepo domain.TemplateRepository
 }
 
+// NewCreateTemplateHandler creates a new CreateTemplateHandler with the required repository.
 func NewCreateTemplateHandler(
 	templateRepo domain.TemplateRepository,
 ) *CreateTemplateHandler {
@@ -28,6 +35,8 @@ func NewCreateTemplateHandler(
 	}
 }
 
+// Handle executes the CreateTemplateCommand to create a new template.
+// It constructs the template entity with optional HTML body and persists it.
 func (h *CreateTemplateHandler) Handle(ctx context.Context, cmd CreateTemplateCommand) (domain.TemplateID, error) {
 	opts := make([]domain.TemplateOption, 0)
 	if cmd.HTMLBody != "" {
@@ -53,6 +62,7 @@ func (h *CreateTemplateHandler) Handle(ctx context.Context, cmd CreateTemplateCo
 	return template.ID(), nil
 }
 
+// UpdateTemplateCommand represents a command to update an existing template.
 type UpdateTemplateCommand struct {
 	ID        domain.TemplateID
 	Subject   string
@@ -62,10 +72,13 @@ type UpdateTemplateCommand struct {
 	IsActive  bool
 }
 
+// UpdateTemplateHandler handles commands to update notification templates.
+// It retrieves the existing template, applies updates, and persists changes.
 type UpdateTemplateHandler struct {
 	templateRepo domain.TemplateRepository
 }
 
+// NewUpdateTemplateHandler creates a new UpdateTemplateHandler with the required repository.
 func NewUpdateTemplateHandler(
 	templateRepo domain.TemplateRepository,
 ) *UpdateTemplateHandler {
@@ -74,6 +87,8 @@ func NewUpdateTemplateHandler(
 	}
 }
 
+// Handle executes the UpdateTemplateCommand to modify an existing template.
+// It updates content, variables, and active status while preserving the template identity.
 func (h *UpdateTemplateHandler) Handle(ctx context.Context, cmd UpdateTemplateCommand) error {
 	template, err := h.templateRepo.GetByID(ctx, cmd.ID)
 	if err != nil {

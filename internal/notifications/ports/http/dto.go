@@ -1,3 +1,6 @@
+// Package http provides HTTP request/response DTOs for the notifications service.
+// This package contains data transfer objects used by HTTP handlers for serialization
+// and validation of notification, template, and preference requests.
 package http
 
 import (
@@ -7,6 +10,8 @@ import (
 	"github.com/basilex/skeleton/internal/notifications/domain"
 )
 
+// CreateNotificationRequest represents a request to create a new notification manually.
+// Admin-only endpoint for creating notifications without a template.
 type CreateNotificationRequest struct {
 	UserID      *string           `json:"user_id" example:"019d65d6-de90-7200-b1cf-4f8745597e0a"`
 	Email       string            `json:"email" example:"user@example.com"`
@@ -22,6 +27,8 @@ type CreateNotificationRequest struct {
 	Metadata    map[string]string `json:"metadata" example:"{\"key\":\"value\"}"`
 }
 
+// CreateFromTemplateRequest represents a request to create a notification from a template.
+// Used for generating notifications using predefined templates with variable substitution.
 type CreateFromTemplateRequest struct {
 	TemplateName string            `json:"template_name" binding:"required" example:"welcome_email"`
 	UserID       *string           `json:"user_id" example:"019d65d6-de90-7200-b1cf-4f8745597e0a"`
@@ -35,6 +42,8 @@ type CreateFromTemplateRequest struct {
 	Metadata     map[string]string `json:"metadata" example:"{\"key\":\"value\"}"`
 }
 
+// NotificationResponse represents a notification in API responses.
+// Contains all notification details including status, delivery information, and metadata.
 type NotificationResponse struct {
 	ID          string            `json:"id"`
 	UserID      *string           `json:"user_id,omitempty"`
@@ -58,27 +67,34 @@ type NotificationResponse struct {
 	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
+// NotificationListResponse represents a paginated list of notifications.
 type NotificationListResponse struct {
 	Notifications []NotificationResponse `json:"notifications"`
 	NextCursor    *string                `json:"next_cursor,omitempty"`
 }
 
+// NotificationPreferencesRequest represents a request to update user notification preferences.
+// Allows enabling/disabling channels and configuring delivery options.
 type NotificationPreferencesRequest struct {
 	Channels map[string]ChannelPreferenceRequest `json:"channels" binding:"required"`
 }
 
+// ChannelPreferenceRequest represents preference settings for a single notification channel.
 type ChannelPreferenceRequest struct {
 	Enabled    bool               `json:"enabled"`
 	Frequency  string             `json:"frequency" example:"immediate"`
 	QuietHours *QuietHoursRequest `json:"quiet_hours,omitempty"`
 }
 
+// QuietHoursRequest represents quiet hours configuration for a notification channel.
+// During quiet hours, notifications are held and delivered later.
 type QuietHoursRequest struct {
 	StartHour int    `json:"start_hour" example:"22"`
 	EndHour   int    `json:"end_hour" example:"8"`
 	Timezone  string `json:"timezone" example:"UTC"`
 }
 
+// NotificationPreferencesResponse represents user notification preferences in API responses.
 type NotificationPreferencesResponse struct {
 	UserID    string                               `json:"user_id"`
 	Channels  map[string]ChannelPreferenceResponse `json:"channels"`
@@ -86,18 +102,22 @@ type NotificationPreferencesResponse struct {
 	UpdatedAt time.Time                            `json:"updated_at"`
 }
 
+// ChannelPreferenceResponse represents preference settings for a single channel in responses.
 type ChannelPreferenceResponse struct {
 	Enabled    bool                `json:"enabled"`
 	Frequency  string              `json:"frequency"`
 	QuietHours *QuietHoursResponse `json:"quiet_hours,omitempty"`
 }
 
+// QuietHoursResponse represents quiet hours configuration in API responses.
 type QuietHoursResponse struct {
 	StartHour int    `json:"start_hour"`
 	EndHour   int    `json:"end_hour"`
 	Timezone  string `json:"timezone"`
 }
 
+// CreateTemplateRequest represents a request to create a notification template.
+// Templates allow reusable notification content with variable substitution.
 type CreateTemplateRequest struct {
 	Name      string   `json:"name" binding:"required" example:"welcome_email"`
 	Channel   string   `json:"channel" binding:"required" example:"email"`
@@ -107,6 +127,7 @@ type CreateTemplateRequest struct {
 	Variables []string `json:"variables" example:"Name,AppName"`
 }
 
+// UpdateTemplateRequest represents a request to update an existing notification template.
 type UpdateTemplateRequest struct {
 	Subject   string   `json:"subject" binding:"required" example:"Welcome to {{.AppName}}"`
 	Body      string   `json:"body" binding:"required" example:"Hello {{.Name}}, welcome!"`
@@ -114,6 +135,7 @@ type UpdateTemplateRequest struct {
 	Variables []string `json:"variables" example:"Name,AppName"`
 }
 
+// TemplateResponse represents a notification template in API responses.
 type TemplateResponse struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -127,6 +149,8 @@ type TemplateResponse struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// ToNotificationResponse converts a domain Notification to the response DTO.
+// It maps all fields including optional values like timestamps and metadata.
 func ToNotificationResponse(n *domain.Notification) NotificationResponse {
 	var userID *string
 	if n.Recipient().UserID != nil {
@@ -158,6 +182,8 @@ func ToNotificationResponse(n *domain.Notification) NotificationResponse {
 	}
 }
 
+// ToPreferencesResponse converts domain NotificationPreferences to the response DTO.
+// It maps channel preferences and quiet hours configuration.
 func ToPreferencesResponse(p *domain.NotificationPreferences) NotificationPreferencesResponse {
 	channels := make(map[string]ChannelPreferenceResponse)
 	for ch, pref := range p.Channels() {
@@ -184,6 +210,7 @@ func ToPreferencesResponse(p *domain.NotificationPreferences) NotificationPrefer
 	}
 }
 
+// ToTemplateResponse converts a domain NotificationTemplate to the response DTO.
 func ToTemplateResponse(t *domain.NotificationTemplate) TemplateResponse {
 	return TemplateResponse{
 		ID:        t.ID().String(),
@@ -199,6 +226,8 @@ func ToTemplateResponse(t *domain.NotificationTemplate) TemplateResponse {
 	}
 }
 
+// parseUserID converts an optional string user ID to a domain UserID pointer.
+// Returns nil if the input string is nil or empty.
 func parseUserID(s *string) *identityDomain.UserID {
 	if s == nil || *s == "" {
 		return nil
