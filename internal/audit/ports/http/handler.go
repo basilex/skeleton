@@ -30,6 +30,24 @@ type ListRecordsRequest struct {
 	Limit    int    `form:"limit"`
 }
 
+// ListRecords godoc
+// @Summary List audit records
+// @Description Returns paginated list of audit records with optional filters
+// @Tags audit
+// @Produce json
+// @Security BearerAuth
+// @Param actor_id query string false "Filter by actor ID"
+// @Param resource query string false "Filter by resource (user, role, auth)"
+// @Param action query string false "Filter by action (create, read, update, delete, login, logout, etc.)"
+// @Param date_from query string false "Filter from date (RFC3339 format)"
+// @Param date_to query string false "Filter to date (RFC3339 format)"
+// @Param cursor query string false "Pagination cursor (UUID v7)"
+// @Param limit query int false "Items per page (default 20, max 100)"
+// @Success 200 {object} query.ListRecordsResult "Paginated audit records"
+// @Failure 401 {object} apierror.APIError "Unauthorized"
+// @Failure 403 {object} apierror.APIError "Forbidden"
+// @Failure 500 {object} apierror.APIError "Internal error"
+// @Router /api/v1/audit/records [get]
 func (h *Handler) ListRecords(c *gin.Context) {
 	var req ListRecordsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {

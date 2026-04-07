@@ -28,6 +28,8 @@
 // @tag.description User management operations
 // @tag.name roles
 // @tag.description Role management operations
+// @tag.name audit
+// @tag.description Audit log operations
 // @tag.name status
 // @tag.description System status and health checks
 
