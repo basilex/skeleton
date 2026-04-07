@@ -1,29 +1,29 @@
 # ADR-003: Event Bus Strategy
 
-## Статус: Accepted
+## Status: Accepted
 
-## Контекст
+## Context
 
-Потрібен механізм комунікації між bounded contexts:
-- Слабка зв'язаність між контекстами
-- Різні вимоги для dev/test vs prod
-- Проста розробка та тестування
+A communication mechanism between bounded contexts is needed:
+- Loose coupling between contexts
+- Different requirements for dev/test vs prod
+- Simple development and testing
 
-## Рішення
+## Decision
 
-Два implementations одного інтерфейсу `eventbus.Bus`:
-- **In-Memory** — синхронний, для dev/test
-- **Redis Pub/Sub** — асинхронний, для prod
+Two implementations of the same `eventbus.Bus` interface:
+- **In-Memory** — synchronous, for dev/test
+- **Redis Pub/Sub** — asynchronous, for prod
 
-Вибір через env: `APP_ENV=prod` → Redis, інакше → In-Memory.
+Selection via env: `APP_ENV=prod` → Redis, otherwise → In-Memory.
 
-## Наслідки
+## Consequences
 
-### Позитивні
-- Просте тестування без Redis
-- Один інтерфейс — легка заміна
-- Panic recovery у кожному handler
+### Positive
+- Simple testing without Redis
+- One interface — easy replacement
+- Panic recovery in each handler
 
-### Негативні
-- Redis Pub/Sub — at-most-once delivery (повідомлення можуть губитись)
-- In-memory — не працює з кількома інстансами
+### Negative
+- Redis Pub/Sub — at-most-once delivery (messages can be lost)
+- In-memory — doesn't work with multiple instances

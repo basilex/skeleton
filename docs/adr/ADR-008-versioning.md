@@ -6,18 +6,18 @@ Accepted
 
 ## Context
 
-Потрібно надійний спосіб версіонування бінарників та відстеження версій в API:
+Need a reliable way to version binaries and track versions in API:
 
-1. **Git hash як версія** не інформативний для користувачів
-2. Потрібна підтримка різних середовищ (dev, staging, prod)
-3. Потрібно легко розуміти яка версія розгорнута
-4. CI/CD pipeline має легко налаштовувати версії
+1. **Git hash as version** not informative for users
+2. Need support for different environments (dev, staging, prod)
+3. Need to easily understand which version is deployed
+4. CI/CD pipeline should easily configure versions
 
 ## Decision
 
-Використовувати **Semantic Versioning** (SemVer) з environment suffix:
+Use **Semantic Versioning** (SemVer) with environment suffix:
 
-### Формат
+### Format
 
 ```
 MAJOR.MINOR.PATCH-STAGE
@@ -28,13 +28,13 @@ MAJOR.MINOR.PATCH-STAGE
 - `PATCH` - bug fixes
 - `STAGE` - environment (dev, staging, prod)
 
-### Приклади
+### Examples
 
-- `0.1.0-dev` - developmentверсія
-- `0.1.0-staging` - staging середовище
+- `0.1.0-dev` - development version
+- `0.1.0-staging` - staging environment
 - `1.0.0-prod` - production release
 
-### Реалізація
+### Implementation
 
 ```makefile
 VERSION_MAJOR ?= 0
@@ -65,7 +65,7 @@ Response:
 }
 ```
 
-### Використання в CI/CD
+### Usage in CI/CD
 
 ```yaml
 # GitHub Actions / GitLab CI
@@ -73,7 +73,7 @@ Response:
   run: |
     VERSION_STAGE=prod make build
     
-# Або для release tag
+# Or for release tag
 - name: Build release
   run: |
     VERSION_MAJOR=$(echo $TAG | cut -d. -f1 | sed 's/v//')
@@ -86,27 +86,27 @@ Response:
 
 ### Positive
 
-- ✓ Зрозумілі версії для користувачів та розробників
-- ✓ Підтримка SemVer стандарту
-- ✓ Легко налаштувати для різних середовищ
-- ✓ Git commit зберігається для референсу
-- ✓ Сумісність з release automation tools
+- ✓ Clear versions for users and developers
+- ✓ SemVer standard support
+- ✓ Easy to configure for different environments
+- ✓ Git commit preserved for reference
+- ✓ Compatibility with release automation tools
 
 ### Negative
 
-- Потрібно вручну оновлювати версії в Makefile для release
-- CI/CD pipeline має передавати змінні середовища
+- Need to manually update versions in Makefile for release
+- CI/CD pipeline must pass environment variables
 
 ### Neutral
 
-- Зберігаємо git commit як додаткову інформацію
-- Build time автоматично генерується
+- Keep git commit as additional information
+- Build time automatically generated
 
 ## Alternatives Considered
 
-1. **Git tags only** - не підтримує staging середовища
-2. **Date-based versioning** (2024.01.07) - не відповідає SemVer
-3. **Auto-increment** - складніше для release management
+1. **Git tags only** - doesn't support staging environments
+2. **Date-based versioning** (2024.01.07) - doesn't follow SemVer
+3. **Auto-increment** - more complex for release management
 
 ## References
 

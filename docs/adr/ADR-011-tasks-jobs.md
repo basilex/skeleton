@@ -6,25 +6,25 @@ Accepted
 
 ## Context
 
-Багато операцій в додатку вимагають асинхронної обробки:
-- Відправка email/SMS повідомлень
-- Обробка файлів (resise, thumbnail generation)
-- Cleanup старих даних
-- Генерація звітів
-- Інтеграції з зовнішніми API
-- Масові операції (batch processing)
+Many operations in the application require asynchronous processing:
+- Sending email/SMS notifications
+- File processing (resize, thumbnail generation)
+- Cleanup of old data
+- Report generation
+- Integrations with external APIs
+- Batch operations (batch processing)
 
-На даний момент немає централізованої системи для фонових задач. Notifications context потребує механізму для відправки повідомлень асинхронно з retry логікою.
+Currently there is no centralized system for background tasks. The Notifications context needs a mechanism to send messages asynchronously with retry logic.
 
 ## Decision
 
-Створити окремий **Tasks** bounded context як універсальну систему для фонових задач.
+Create a separate **Tasks** bounded context as a universal system for background tasks.
 
 ### 1. Domain Layer
 
 #### Aggregates
 
-**Task** - основний aggregate:
+**Task** - main aggregate:
 ```go
 type Task struct {
     id          TaskID
@@ -100,7 +100,7 @@ func (t *Task) CanRetry() bool
 func (t *Task) NextRetryDelay() time.Duration  // exponential backoff
 ```
 
-**TaskSchedule** - для периодичних задач:
+**TaskSchedule** - for periodic tasks:
 ```go
 type TaskSchedule struct {
     id          ScheduleID
@@ -124,7 +124,7 @@ func (s *TaskSchedule) UpdateNextRun() error
 func (s *TaskSchedule) ShouldRun(now time.Time) bool
 ```
 
-**DeadLetterQueue** - для задач що не вдалося виконати:
+**DeadLetterQueue** - for tasks that failed to execute:
 ```go
 type DeadLetterTask struct {
     id          DeadLetterID
@@ -890,13 +890,13 @@ type WorkerConfig struct {
 ## Migration Plan
 
 ```sql
--- migrations/008_create_tasks.up.sql
+-- migrations/014_create_tasks.up.sql
 CREATE TABLE tasks (...);
 
--- migrations/009_create_schedules.up.sql
+-- migrations/015_create_schedules.up.sql
 CREATE TABLE task_schedules (...);
 
--- migrations/010_create_dead_letters.up.sql
+-- migrations/016_create_dead_letters.up.sql
 CREATE TABLE dead_letters (...);
 ```
 

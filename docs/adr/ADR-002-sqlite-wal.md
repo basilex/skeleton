@@ -1,35 +1,35 @@
 # ADR-002: SQLite WAL
 
-## Статус: Accepted
+## Status: Accepted
 
-## Контекст
+## Context
 
-Потрібна легка, serverless БД для skeleton проекту, яка:
-- Не вимагає окремого сервера
-- Підтримує транзакції та foreign keys
-- Має хорошу продуктивність для read-heavy навантажень
-- Легко налаштовується для dev/test/prod
+A lightweight, serverless database is needed for the skeleton project that:
+- Doesn't require a separate server
+- Supports transactions and foreign keys
+- Has good performance for read-heavy workloads
+- Is easily configured for dev/test/prod
 
-## Рішення
+## Decision
 
-Використовувати SQLite у WAL (Write-Ahead Logging) режимі з драйвером `modernc.org/sqlite` (pure Go, без CGO).
+Use SQLite in WAL (Write-Ahead Logging) mode with the `modernc.org/sqlite` driver (pure Go, no CGO).
 
-PRAGMA налаштування:
-- `journal_mode=WAL` — конкурентні читання під час запису
-- `synchronous=NORMAL` — баланс між безпекою та швидкістю
-- `foreign_keys=ON` — цілісність даних
-- `busy_timeout=5000` — чекати при блокуванні
+PRAGMA settings:
+- `journal_mode=WAL` — concurrent reads during writes
+- `synchronous=NORMAL` — balance between safety and speed
+- `foreign_keys=ON` — data integrity
+- `busy_timeout=5000` — wait when blocked
 
-`SetMaxOpenConns(1)` — SQLite не підтримує конкурентний запис.
+`SetMaxOpenConns(1)` — SQLite doesn't support concurrent writes.
 
-## Наслідки
+## Consequences
 
-### Позитивні
-- Zero infrastructure — немає окремого БД сервера
-- Pure Go драйвер — легка компіляція без CGO
-- WAL дозволяє concurrent reads
+### Positive
+- Zero infrastructure — no separate database server
+- Pure Go driver — easy compilation without CGO
+- WAL allows concurrent reads
 
-### Негативні
-- Обмежена конкурентність запису (1 connection)
-- Не масштабується горизонтально
-- Для high-load потрібна міграція на PostgreSQL
+### Negative
+- Limited write concurrency (1 connection)
+- Doesn't scale horizontally
+- For high-load, migration to PostgreSQL is needed

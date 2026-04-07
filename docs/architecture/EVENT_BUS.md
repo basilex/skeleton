@@ -1,16 +1,16 @@
 # Event Bus
 
-## Коли використовувати події
+## When to Use Events
 
-**Події** — коли:
-- Інший bounded context має реагувати на дію
-- Потрібна слабка зв'язаність між компонентами
-- Операція не вимагає синхронної відповіді
+**Events** — when:
+- Another bounded context needs to react to an action
+- Loose coupling between components is needed
+- The operation doesn't require a synchronous response
 
-**Прямий виклик** — коли:
-- Потрібен результат тут і зараз
-- Обидва компоненти в одному bounded context
-- Операція критична і не може бути відкладена
+**Direct Call** — when:
+- A result is needed here and now
+- Both components are in the same bounded context
+- The operation is critical and cannot be deferred
 
 ## Interface
 
@@ -34,13 +34,13 @@ type Bus interface {
 ## Naming Conventions
 
 - Format: `{context}.{entity}_{action}`
-- Приклади: 
-  - `identity.user_registered` — новий користувач зареєстрований
-  - `identity.role_assigned` — роль призначена користувачу
-  - `identity.role_revoked` — роль відкликана у користувача
-  - `identity.login` — користувач увійшов в систему
-  - `identity.logout` — користувач вийшов з системи
-- Snake_case для event names
+- Examples: 
+  - `identity.user_registered` — new user registered
+  - `identity.role_assigned` — role assigned to user
+  - `identity.role_revoked` — role revoked from user
+  - `identity.login` — user logged in
+  - `identity.logout` — user logged out
+- Snake_case for event names
 
 ## Delivery Guarantees
 
@@ -49,7 +49,7 @@ type Bus interface {
 | In-Memory | At-least-once (sync) | Sequential | dev, test |
 | Redis Pub/Sub | At-most-once (fire-and-forget) | Per-channel | prod |
 
-## Приклад реєстрації хендлера
+## Handler Registration Example
 
 ```go
 // cmd/api/main.go
@@ -62,4 +62,4 @@ bus.Subscribe("identity.user_registered", func(ctx context.Context, e eventbus.E
 
 ## Panic Recovery
 
-Кожен handler захищений recover — panic не падає весь bus, тільки логується.
+Each handler is protected by recover — panic doesn't bring down the entire bus, it's only logged.

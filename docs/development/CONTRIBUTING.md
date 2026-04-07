@@ -2,21 +2,21 @@
 
 ## Code Style
 
-- Ідіоматичний Go (effective Go, Go proverbs)
-- Godoc коментарі для всіх публічних типів/функцій
-- Context propagation — ctx перший параметр
+- Idiomatic Go (effective Go, Go proverbs)
+- Godoc comments for all public types/functions
+- Context propagation — ctx as first parameter
 - No naked returns
 - Errors wrapping: `fmt.Errorf("operationName: %w", err)`
 - No `init()` functions
-- No global variables (окрім ldflags у main)
-- Interface segregation — малі, focused інтерфейси
+- No global variables (except ldflags in main)
+- Interface segregation — small, focused interfaces
 
 ## Git Workflow
 
-1. Створити гілку від `main`
-2. Комітити маленькими, логічними шматками
+1. Create a branch from `main`
+2. Commit in small, logical chunks
 3. Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`
-4. PR з описом змін
+4. PR with description of changes
 
 ## Before Push
 
@@ -28,8 +28,8 @@ make test
 
 ## Adding New Bounded Context
 
-1. Створити структуру `internal/{context}/`
+1. Create structure `internal/{context}/`
 2. Domain → Application → Infrastructure → Ports
-3. Написати тести (domain first)
-4. Зареєструвати routes у `main.go`
-5. Оновити документацію
+3. Write tests (domain first)
+4. Register routes in `main.go`
+5. Update documentation

@@ -6,32 +6,32 @@ Accepted
 
 ## Context
 
-Більшість сучасних додатків працюють з файлами:
-- User avatars та profile images
+Most modern applications work with files:
+- User avatars and profile images
 - Document uploads (PDF, DOCX)
 - Media files (images, videos, audio)
-- Exports та reports
+- Exports and reports
 - Attachments (emails, messages)
 
-Потрібно:
-- Зберігати файли в cloud storage (S3, GCS) або локально
-- Генерувати тимчасові URL для завантаження/вивантаження
-- Обробляти зображення (resize, crop, compress)
-- Валідувати файли (тип, розмір)
-- Управляти доступом до файлів
-- Очищувати старі файли
+Need to:
+- Store files in cloud storage (S3, GCS) or locally
+- Generate temporary URLs for upload/download
+- Process images (resize, crop, compress)
+- Validate files (type, size)
+- Manage file access
+- Clean up old files
 
-На даний момент немає механізму для роботи з файлами.
+Currently, there is no mechanism for working with files.
 
 ## Decision
 
-Створити окремий **Files** bounded context з абстракцією над storage провайдерами.
+Create a separate **Files** bounded context with abstraction over storage providers.
 
 ### 1. Domain Layer
 
 #### Aggregates
 
-**File** - основний aggregate:
+**File** - main aggregate:
 ```go
 type File struct {
     id              FileID
@@ -99,7 +99,7 @@ func (f *File) IsDocument() bool
 func (f *File) CanAccess(userID *domain.UserID) bool
 ```
 
-**FileUpload** - для завантаження файлів:
+**FileUpload** - for file uploads:
 ```go
 type FileUpload struct {
     id              UploadID
@@ -125,7 +125,7 @@ func NewFileUpload(file *File, ttl time.Duration) (*FileUpload, error)
 func (u *FileUpload) GeneratePresignedURL(provider StorageProvider) (string, error)
 ```
 
-**FileProcessing** - статус обробки файлів:
+**FileProcessing** - file processing status:
 ```go
 type FileProcessing struct {
     id              ProcessingID

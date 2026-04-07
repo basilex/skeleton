@@ -6,26 +6,26 @@ Accepted
 
 ## Context
 
-Кожен сучасний додаток вимагає механізму повідомлень для:
-- Welcome emails при реєстрації
+Every modern application requires a notification mechanism for:
+- Welcome emails on registration
 - Password reset emails
 - Alert notifications (security, system)
 - Marketing campaigns (optional)
 - In-app notifications
-- SMS для критичних подій (2FA, security alerts)
+- SMS for critical events (2FA, security alerts)
 - Push notifications (mobile apps)
 
-На даний момент Identity контекст публікує події (`identity.user_registered`, `identity.login`, etc.), але немає механізму для перетворення цих подій в повідомлення користувачам.
+Currently, the Identity context publishes events (`identity.user_registered`, `identity.login`, etc.), but there is no mechanism to convert these events into user notifications.
 
 ## Decision
 
-Створити окремий **Notifications** bounded context з наступною архітектурою:
+Create a separate **Notifications** bounded context with the following architecture:
 
 ### 1. Domain Layer
 
 #### Aggregates
 
-**Notification** - основний aggregate:
+**Notification** - main aggregate:
 ```go
 type Notification struct {
     id          NotificationID
@@ -81,7 +81,7 @@ const (
 )
 ```
 
-**NotificationTemplate** - шаблони повідомлень:
+**NotificationTemplate** - message templates:
 ```go
 type NotificationTemplate struct {
     id          TemplateID
@@ -97,7 +97,7 @@ type NotificationTemplate struct {
 }
 ```
 
-**NotificationPreferences** - налаштування користувача:
+**NotificationPreferences** - user preferences:
 ```go
 type NotificationPreferences struct {
     id        PreferencesID
@@ -538,13 +538,13 @@ For channels that support delivery confirmation:
 ## Migration Plan
 
 ```sql
--- migrations/005_create_templates.up.sql
+-- migrations/017_create_notification_templates.up.sql
 CREATE TABLE notification_templates (...);
 
--- migrations/006_create_preferences.up.sql
+-- migrations/018_create_notification_preferences.up.sql
 CREATE TABLE notification_preferences (...);
 
--- migrations/007_create_notifications.up.sql
+-- migrations/019_create_notifications.up.sql
 CREATE TABLE notifications (...);
 ```
 

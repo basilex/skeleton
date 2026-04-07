@@ -4,8 +4,8 @@
 
 - Go 1.24+
 - Make
-- OpenSSL (для генерації ключів)
-- Docker (опціонально)
+- OpenSSL (for key generation)
+- Docker (optional)
 
 ## Quick Start
 
@@ -54,7 +54,7 @@ make run
 
 ## Version Management
 
-Проект використовує semantic versioning з environment suffix:
+The project uses semantic versioning with environment suffix:
 
 ```bash
 # Development build (default: 0.1.0-dev)
@@ -101,7 +101,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 
 ### Authenticated (session cookie)
 
-Усі захищені endpoints використовують session cookie — токен передається автоматично через `Set-Cookie` при login.
+All protected endpoints use session cookies — the token is automatically passed via `Set-Cookie` during login.
 
 ```bash
 # Get my profile (requires session cookie)
@@ -119,68 +119,68 @@ curl -X POST http://localhost:8080/api/v1/auth/logout \
 
 ## Token Formats
 
-Система використовує різні формати токенів в залежності від середовища:
+The system uses different token formats depending on the environment:
 
-### Development/Test (`APP_ENV=dev` або `APP_ENV=test`)
+### Development/Test (`APP_ENV=dev` or `APP_ENV=test`)
 
-Використовується **MockTokenService** для спрощення розробки без криптографічних операцій:
+Uses **MockTokenService** to simplify development without cryptographicoperations:
 
 **Access token:**
 ```
 access-{user_id}-{timestamp}
 ```
-Приклад: `access-019d6746-a5ee-7c00-961f-26d4258d5a32-1775554191`
+Example: `access-019d6746-a5ee-7c00-961f-26d4258d5a32-1775554191`
 
 **Refresh token:**
 ```
 refresh-{UUIDv7}
 ```
-Приклад: `refresh-019d6746-e0b4-7a00-a177-b41b9b2b9c17`
+Example: `refresh-019d6746-e0b4-7a00-a177-b41b9b2b9c17`
 
-**Особливості:**
-- Не потребують RSA ключів
-- Швидка генерація та валідація
-- Дають повний доступ (`*:*` wildcard permission)
-- User ID видно прямо в токені (для дебагу)
+**Features:**
+- No RSA keys required
+- Fast generation and validation
+- Grant full access (`*:*` wildcard permission)
+- User ID visible directly in token (for debugging)
 
 ### Production (`APP_ENV=prod`)
 
-Використовується **JWTService** з RS256 підписом:
+Uses **JWTService** with RS256 signature:
 
 **Access token:**
 ```
-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDE5ZDY3NDYtLi4uIiwicm9sZXMiOlsiYWRtaW4iXSwicGVybWlzc2lvbnMiOlsiKjoqIl0sImV4cCI6MTc3NTU1...}
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDE5ZDY3NDYtLi4uIiwicm9sZXMiOlsiYWRtaW4iXSwicGVybWlzc2lvbnMiOlsiKjoqIl0sImV4cCI6MTc3NTU1...} (JWT format)
 ```
 
 **Refresh token:**
 ```
-eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9... (JWT формат)
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9... (JWT format)
 ```
 
-**Особливості:**
-- Потрібні RSA ключі (`./keys/private.pem`, `./keys/public.pem`)
-- Генерація: `make keys`
+**Features:**
+- RSA keys required (`./keys/private.pem`, `./keys/public.pem`)
+- Generate with: `make keys`
 - cryptographic signature validation
-- Реальні permissions з RBAC моделі
-- Access TTL: 15 хвилин (за замовчуванням)
-- Refresh TTL: 7 днів (за замовчуванням)
+- Real permissions from RBAC model
+- Access TTL: 15 minutes (default)
+- Refresh TTL: 7 days (default)
 
-**Увага:** Переконайтеся що `APP_ENV=prod` в продакшені, інакше система буде використовувати mock tokens!
+**Warning:** Ensure `APP_ENV=prod` in production, otherwise the system will use mock tokens!
 
 ### Audit Logs (requires: audit:read)
 
 ```bash
 # List audit records (requires authentication)
 curl http://localhost:8080/api/v1/audit/records \
-  -H "Authorization: Bearer <token>"
+  -b "session=<session_id>"
 
 # Filter by actor
 curl "http://localhost:8080/api/v1/audit/records?actor_id=019d65d6-de90-7200-b1cf-4f8745597e0a" \
-  -H "Authorization: Bearer <token>"
+  -b "session=<session_id>"
 
 # Filter by date range
 curl "http://localhost:8080/api/v1/audit/records?date_from=2024-01-01T00:00:00Z&date_to=2024-12-31T23:59:59Z" \
-  -H "Authorization: Bearer <token>"
+  -b "session=<session_id>"
 ```
 
 ### Admin (requires: roles:manage)
@@ -199,7 +199,7 @@ curl -X DELETE http://localhost:8080/api/v1/users/<user_id>/roles/<role_id> \
 
 ## Pagination
 
-Всі list endpoints використовують cursor-based пагінацію:
+All list endpoints use cursor-based pagination:
 
 ```
 GET /api/v1/users?limit=20&cursor=019d65d6-de90-7200-b1cf-4f8745597e0a
@@ -217,14 +217,14 @@ Response:
 
 ## Dev User
 
-Після `make seed`:
+After `make seed`:
 - Email: `admin@skeleton.local`
 - Password: `Admin1234!`
 - Role: `super_admin`
 
 ## Swagger Documentation
 
-Swagger UI доступний за адресою: http://localhost:8080/swagger/index.html
+Swagger UI is available at: http://localhost:8080/swagger/index.html
 
 ```bash
 # Generate swagger docs
@@ -238,7 +238,7 @@ All HTTP handlers must have swagger annotations (see [ADR-009](../adr/ADR-009-sw
 
 ## Docker Support
 
-Проект підтримує Docker для development та production.
+The project supports Docker for development and production.
 
 ### Development (with hot reload)
 
@@ -336,3 +336,71 @@ curl http://localhost:8080/health
 - Hot reload with Air
 - Fast iteration
 - Volume mounts for code changes
+
+## Notifications
+
+The project includes a full-featured notification system with support for:
+- Multi-channel (Email, SMS, Push, In-App)
+- Template-based messages
+- User preferences
+- Background worker with retry logic
+
+### Quick Start
+
+```bash
+# After setup, notifications start automatically with the main app
+make dev
+
+# Create notification via API (admin only)
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -b "session=<session_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channel": "email",
+    "email": "user@example.com",
+    "subject": "Welcome!",
+    "content": "Welcome to our platform!",
+    "priority": "normal"
+  }'
+```
+
+### Development Mode
+
+In development, notifications log to console:
+
+```
+========== EMAIL ==========
+To: user@example.com
+Subject: Welcome!
+----------------------------
+Welcome to our platform!
+============================
+```
+
+### User Preferences
+
+```bash
+# Get user notification preferences
+curl http://localhost:8080/api/v1/notifications/preferences \
+  -b "session=<session_id>"
+
+# Update preferences
+curl -X PATCH http://localhost:8080/api/v1/notifications/preferences \
+  -b "session=<session_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "channels": {
+      "email": {
+        "enabled": true,
+        "frequency": "immediate"
+      },
+      "sms": {
+        "enabled": false
+      }
+    }
+  }'
+```
+
+### See Full Documentation
+
+Detailed usage, templates, worker configuration: [NOTIFICATIONS.md](./NOTIFICATIONS.md)

@@ -26,22 +26,22 @@ make test-p0
 
 ## Test Conventions
 
-- **Unit tests**: domain + application, без інфраструктури
-- **Integration tests**: persistence + HTTP, реальний SQLite `:memory:`
+- **Unit tests**: domain + application, no infrastructure
+- **Integration tests**: persistence + HTTP, real SQLite `:memory:`
 - **Pattern**: Arrange → Act → Assert
-- **Table-driven tests** де можливо
-- **`testify/require`** (не `assert`) для fatal failures
-- **No global state** між тестами
+- **Table-driven tests** where possible
+- **`testify/require`** (not `assert`) for fatal failures
+- **No global state** between tests
 
 ## Test Helpers
 
 ```go
-// SQLite :memory: + міграції
+// SQLite :memory: + migrations
 db := testutil.NewTestDB(t)
 
-// Створити тестову роль
+// Create test role
 role := testutil.CreateTestRole(t, roleRepo, "users:read", "users:write")
 
-// Створити тестового юзера
+// Create test user
 user := testutil.CreateTestUser(t, userRepo)
 ```

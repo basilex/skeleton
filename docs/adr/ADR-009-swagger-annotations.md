@@ -7,23 +7,23 @@ Accepted
 ## Context
 
 API documentation is critical for:
-1. **Developer experience** — нові розробники швидко розуміють API
-2. **Client integration** — сторонні сервіси можуть інтегруватися без додаткової документації
-3. **Testing** — Swagger UI дозволяє тестувати endpoints вручну
-4. **Consistency** — єдиний формат для всіх endpoints
+1. **Developer experience** — new developers quickly understand API
+2. **Client integration** — third-party services can integrate without additional documentation
+3. **Testing** — Swagger UI allows testing endpoints manually
+4. **Consistency** — unified format for all endpoints
 
-Проблема: відсутність swagger анотацій призводить до:
-- Неповної документації API
-- Складнощів у підтримці (документація відстає від коду)
-- Відсутності specs для external integrators
+Problem: lack of swagger annotations leads to:
+- Incomplete API documentation
+- Difficulties in maintenance (documentation lags behind code)
+- Lack of specs for external integrators
 
 ## Decision
 
-**Всі HTTP handlers обов'язково повинні мати swagger анотації.**
+**All HTTP handlers must have swagger annotations.**
 
-### Вимоги
+##Requirements
 
-#### Обов'язкові поля для кожного handler:
+### Mandatory fields for each handler:
 
 ```go
 // ListRecords godoc
@@ -45,23 +45,23 @@ func (h *Handler) ListRecords(c *gin.Context) {
 }
 ```
 
-#### Чек-лист для кожної анотації:
+#### Checklist for each annotation:
 
-- [ ] `@Summary` — короткий опис (1-2 sentences)
-- [ ]`@Description` — детальний опис якщо потрібно
-- [ ] `@Tags` — група endpoint'ів (auth, users, roles, audit, status)
+- [ ] `@Summary` — short description (1-2 sentences)
+- [ ] `@Description` — detailed description if needed
+- [ ] `@Tags` — endpoint group (auth, users, roles, audit, status)
 - [ ] `@Produce` — content-type (json)
-- [ ] `@Security` — тип авторизації (BearerAuth, SessionAuth)
-- [ ] `@Param` — параметри (path, query, body)
+- [ ] `@Security` — authorization type (BearerAuth, SessionAuth)
+- [ ] `@Param` — parameters (path, query, body)
   - Name, type, required, description
-- [ ] `@Success` — успішна відповідь
+- [ ] `@Success` — successful response
   - Status code, response type, description
-- [ ] `@Failure` — помилки
-  - Status codes для різних помилок
-  - Тип відповіді (apierror.APIError)
-- [ ] `@Router` — маршрут і HTTP method
+- [ ] `@Failure` — errors
+  - Status codes for different errors
+  - Response type (apierror.APIError)
+- [ ] `@Router` — route and HTTP method
 
-### Приклади для різних HTTP methods
+### Examples for different HTTP methods
 
 #### GET (list)
 
@@ -115,7 +115,7 @@ func (h *Handler) ListRecords(c *gin.Context) {
 
 ### Tags
 
-Використовувати наступні tags:
+Use the following tags:
 - `auth` — authentication operations (register, login, logout)
 - `users` — user management operations
 - `roles` — role management operations
@@ -124,27 +124,27 @@ func (h *Handler) ListRecords(c *gin.Context) {
 
 ### Security
 
-Використовувати:
-- `@Security BearerAuth` — для JWT token authentication
-- `@Security SessionAuth` — для cookie-based session authentication
+Use:
+- `@Security BearerAuth` — for JWT token authentication
+- `@Security SessionAuth` — for cookie-based session authentication
 
 ### Response Types
 
-Для складних типів відповідей використовувати:
-1. DTO structs з `json` tags: `{object} query.UserDTO`
-2. Для map/simple types: `{object} map[string]interface{}`
-3. Для помилок: `{object} apierror.APIError`
+For complex response types use:
+1. DTO structs with `json` tags: `{object} query.UserDTO`
+2. For map/simple types: `{object} map[string]interface{}`
+3. For errors: `{object} apierror.APIError`
 
 ## Implementation
 
-### Автоматична генерація
+### Automatic generation
 
 ```bash
-make swagger         # Згенерувати docs
-make swagger-serve   # Згенерувати і запустити Swagger UI
+make swagger         # Generate docs
+make swagger-serve   # Generate and launch Swagger UI
 ```
 
-Swagger UI доступний за адресою: http://localhost:8080/swagger/index.html
+Swagger UI is available at: http://localhost:8080/swagger/index.html
 
 ### CI/CD Integration
 
@@ -165,34 +165,34 @@ Swagger UI доступний за адресою: http://localhost:8080/swagger
 
 ### Positive
 
-- ✓ Автоматично генерована документація
-- ✓ Swagger UI для тестування API
-- ✓ Documentation as code (не відстає від коду)
-- ✓ Можна генерувати client SDKs
-- ✓ Легко інтегрувати з Postman, Insomnia
+- ✓ Automatically generated documentation
+- ✓ Swagger UI for API testing
+- ✓ Documentation as code (doesn't lag behind code)
+- ✓ Can generate client SDKs
+- ✓ Easy integration with Postman, Insomnia
 
 ### Negative
 
-- Потрібно підтримувати анотації при зміні endpoints
-- Swagger generation додає час до build process
+- Need to maintain annotations when changing endpoints
+- Swagger generation adds time to build process
 
 ### Neutral
 
-- Response types мають бути serializable to JSON
-- Всі DTOs мають мати `json` tags
+- Response types must be serializable to JSON
+- All DTOs must have `json` tags
 
 ## Checklist for Code Review
 
-При review PR з новим handler'ом перевірити:
+When reviewing PR with new handler check:
 
-- [ ] Всі обов'язкові поля анотації присутні
-- [ ] Tags відповідають bounded context
-- [ ] Security type правильний (BearerAuth / SessionAuth)
-- [ ] Всі параметри задокументовані (@Param)
-- [ ] Усі response codes покриті (@Success, @Failure)
-- [ ] Router path与方法 HTTP співпадають
-- [ ] `make swagger` виконано без помилок
-- [ ] Swagger changes закомічені
+- [ ] All mandatory annotation fields present
+- [ ] Tags match bounded context
+- [ ] Security type correct (BearerAuth / SessionAuth)
+- [ ] All parameters documented (@Param)
+- [ ] All response codes covered (@Success, @Failure)
+- [ ] Router path and HTTP method match
+- [ ] `make swagger` executed without errors
+- [ ] Swagger changes committed
 
 ## Examples from Codebase
 

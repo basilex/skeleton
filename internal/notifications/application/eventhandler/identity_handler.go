@@ -89,3 +89,8 @@ func parseUserID(s string) *identityDomain.UserID {
 	id := identityDomain.UserID(s)
 	return &id
 }
+
+func (h *IdentityEventHandler) Register(bus eventbus.Bus) {
+	bus.Subscribe("identity.user_registered", h.OnUserRegistered)
+	bus.Subscribe("identity.password_reset_requested", h.OnPasswordResetRequested)
+}

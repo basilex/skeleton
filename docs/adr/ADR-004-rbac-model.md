@@ -1,29 +1,29 @@
 # ADR-004: RBAC Model
 
-## Статус: Accepted
+## Status: Accepted
 
-## Контекст
+## Context
 
-Потрібна система контролю доступу:
-- Різні рівні доступу для різних користувачів
-- Гнучкість у призначенні прав
-- Проста інтеграція з HTTP middleware
+An access control system is needed:
+- Different access levels for different users
+- Flexibility in assigning permissions
+- Simple integration with HTTP middleware
 
-## Рішення
+## Decision
 
 Role-Based Access Control (RBAC):
 - User → UserRole → Role → RolePermission → Permission
 - Permission format: `resource:action`
-- Wildcard підтримка: `*:*`, `resource:*`
+- Wildcard support: `*:*`, `resource:*`
 - Middleware chain: Authenticate → RequirePermission
 
-## Наслідки
+## Consequences
 
-### Позитивні
-- Стандартний, зрозумілий підхід
-- Легко додавати нові permissions
-- Wildcard зменшує дублювання правил
+### Positive
+- Standard, understandable approach
+- Easy to add new permissions
+- Wildcard reduces rule duplication
 
-### Негативні
-- Не підтримує attribute-based rules (ABAC)
-- Для fine-grained access потрібне розширення
+### Negative
+- Doesn't support attribute-based rules (ABAC)
+- For fine-grained access, extension is needed

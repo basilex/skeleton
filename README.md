@@ -9,6 +9,8 @@ Go DDD Hexagonal architecture skeleton project — production-ready foundation f
 - **RBAC** — role-based access control with wildcard permissions
 - **JWT Auth** — RS256 tokens with access/refresh flow
 - **Session Management** — cookie-based sessions with Redis/in-memory store
+- **Notifications** — multi-channel (Email, SMS, Push, In-App) with templates & preferences
+- **Tasks/Jobs** — background job processing with retry & dead letter queue
 - **Cursor Pagination** — UUID v7-based pagination for stable, performant lists
 - **UUID v7** — time-ordered identifiers for optimal database indexing
 - **SQLite WAL** — zero-config database with pure Go driver
@@ -30,7 +32,7 @@ make docker-dev
 
 ## Docker Support
 
-Проект підтримує Docker для development та production:
+The project supports Docker for development and production:
 
 ```bash
 # Development with hot reload
@@ -78,11 +80,21 @@ See [GETTING_STARTED.md](docs/development/GETTING_STARTED.md) for Docker details
 │   │   ├── application/  # Command/query handlers
 │   │   ├── infrastructure/ # DB, token, session implementations
 │   │   └── ports/        # HTTP handlers, middleware, DTOs
-│   └── audit/            # Audit log, system events
-│       ├── domain/       # Record aggregate, events
-│       ├── application/  # Log/Query handlers
-│       ├── infrastructure/ # Persistence, event handlers
-│       └── ports/        # HTTP handler
+│   ├── audit/            # Audit log, system events
+│   │   ├── domain/       # Record aggregate, events
+│   │   ├── application/  # Log/Query handlers
+│   │   ├── infrastructure/ # Persistence, event handlers
+│   │   └── ports/        # HTTP handler
+│   ├── notifications/    # Email, SMS, Push, In-App notifications
+│   │   ├── domain/       # Notification, Template, Preferences aggregates
+│   │   ├── application/  # Command/Query handlers, Event handlers
+│   │   ├── infrastructure/ # Repositories, Senders, Worker
+│   │   └── ports/        # HTTP handlers
+│   └── tasks/            # Background jobs, scheduled tasks
+│       ├── domain/       # Task, Schedule, DeadLetter aggregates
+│       ├── application/  # Command/Query handlers
+│       ├── infrastructure/ # Repositories, Worker
+│       └── ports/        # HTTP handlers
 ├── pkg/                  # Shared packages
 │   ├── eventbus/         # Event bus interface + implementations
 │   ├── database/         # SQLite setup
@@ -105,6 +117,7 @@ See [GETTING_STARTED.md](docs/development/GETTING_STARTED.md) for Docker details
 - [Event Bus](docs/architecture/EVENT_BUS.md)
 - [RBAC Model](docs/architecture/RBAC.md)
 - [Getting Started](docs/development/GETTING_STARTED.md)
+- [Notifications Guide](docs/development/NOTIFICATIONS.md)
 - [Testing](docs/development/TESTING.md)
 - [Contributing](docs/development/CONTRIBUTING.md)
 
@@ -119,10 +132,13 @@ See [GETTING_STARTED.md](docs/development/GETTING_STARTED.md) for Docker details
 - [ADR-007: Cursor Pagination](docs/adr/ADR-007-cursor-pagination.md)
 - [ADR-008: Semantic Versioning Strategy](docs/adr/ADR-008-versioning.md)
 - [ADR-009: Mandatory Swagger Annotations](docs/adr/ADR-009-swagger-annotations.md)
+- [ADR-010: Notifications Context](docs/adr/ADR-010-notifications.md)
+- [ADR-011: Tasks/Jobs Context](docs/adr/ADR-011-tasks-jobs.md)
+- [ADR-012: Files/Storage Context](docs/adr/ADR-012-files-storage.md)
 
 ## Version Management
 
-Проект використовує **Semantic Versioning** з підтримкою різних середовищ:
+The project uses **Semantic Versioning** with environment support:
 
 ```bash
 # Development build (default: 0.1.0-dev)
@@ -138,7 +154,7 @@ VERSION_STAGE=prod make build      # 0.1.0-prod
 VERSION_MAJOR=0 VERSION_MINOR=2 VERSION_PATCH=0 make build  # 0.2.0-dev
 ```
 
-Endpoint `/build` показує версію, `commit` - git hash для референсу:
+The `/build` endpoint shows version, `commit` - git hash for reference:
 
 ```bash
 curl http://localhost:8080/build

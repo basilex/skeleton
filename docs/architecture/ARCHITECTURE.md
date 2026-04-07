@@ -2,7 +2,7 @@
 
 ## Hexagonal Architecture Overview
 
-Цей проект побудований за принципами **Hexagonal Architecture** (Ports & Adapters) з елементами **Domain-Driven Design**.
+This project is built following **Hexagonal Architecture** (Ports & Adapters) principles with elements of **Domain-Driven Design**.
 
 ## Layers
 
@@ -55,18 +55,18 @@ graph TD
 
 ## Dependency Rule
 
-Залежності йдуть **всередину**:
-- **Domain** — не залежить ні від чого зовнішнього
-- **Application** — залежить тільки від Domain
-- **Infrastructure** — залежить від Domain та Application (реалізує інтерфейси)
-- **Ports** — залежать від Application (HTTP handlers викликають use cases)
+Dependencies go **inward**:
+- **Domain** — doesn't depend on anything external
+- **Application** — depends only on Domain
+- **Infrastructure** — depends on Domain and Application (implements interfaces)
+- **Ports** — depend on Application (HTTP handlers call use cases)
 
 ## Conventions
 
 ### Bounded Contexts
-- Кожен контекст — окремий пакет у `internal/`
-- **Жодних cross-context імпортів** між bounded contexts
-- Комунікація між контекстами — тільки через `eventbus.Bus`
+- Each context is a separate package in `internal/`
+- **No cross-context imports** between bounded contexts
+- Communication between contexts — only through `eventbus.Bus`
 
 ### Naming
 - Domain: `user.go`, `role.go`, `events.go`, `errors.go`

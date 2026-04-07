@@ -1,32 +1,32 @@
 # ADR-005: No ORM
 
-## Статус: Accepted
+## Status: Accepted
 
-## Контекст
+## Context
 
-Потрібен спосіб взаємодії з БД:
-- Контроль над SQL запитами
-- Уникнення N+1 problem
-- Прозорість продуктивності
-- Ідіоматичний Go
+Need a way to interact with DB:
+- Control over SQL queries
+- Avoid N+1 problem
+- Performance transparency
+- Idiomatic Go
 
-## Рішення
+## Decision
 
-Використовувати `sqlx` замість ORM (GORM тощо):
-- Named parameters для читабельності
-- Struct scanning для зручності
-- Прямий SQL — повний контроль
-- Заборона string concatenation у SQL
+Use `sqlx` instead of ORM (GORM etc.):
+- Named parameters for readability
+- Struct scanning for convenience
+- Direct SQL — full control
+- No string concatenation in SQL
 
-## Наслідки
+## Consequences
 
-### Позитивні
-- Повний контроль над запитами
-- Немає hidden queries / N+1
-- Легше оптимізувати продуктивність
-- Менше залежностей
+### Positive
+- Full control over queries
+- No hidden queries / N+1
+- Easier to optimize performance
+- Fewer dependencies
 
-### Негативні
-- Більше boilerplate для CRUD
-- Потрібно вручну писати migrations
-- Складніші зміни схеми
+### Negative
+- More boilerplate for CRUD
+- Need to manually write migrations
+- More complex schema changes

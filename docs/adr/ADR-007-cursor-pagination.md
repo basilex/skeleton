@@ -1,23 +1,23 @@
 # ADR-007: Cursor-based Pagination
 
-## Статус: Accepted
+## Status: Accepted
 
-## Контекст
+## Context
 
-Web-інтерфейс потребує ефективної пагінації для списків (users, roles тощо).
+Web interface needs efficient pagination for lists (users, roles, etc.).
 
-Offset-based пагінація (`LIMIT/OFFSET`) має критичні недоліки:
-1. **Performance degradation** — OFFSET сканує і відкидає рядки, продуктивність падає лінійно
-2. **Inconsistent results** — при додаванні/видаленні записів між запитами дані "зсуваються"
-3. **No bookmarking** — неможливо повернутись до тієї ж позиції після змін
+Offset-based pagination (`LIMIT/OFFSET`) has critical disadvantages:
+1. **Performance degradation** — OFFSET scans and discards rows, performance drops linearly
+2. **Inconsistent results** — when adding/deleting records between requests data "shifts"
+3. **No bookmarking** — impossible to return to the same position after changes
 
-## Рішення
+## Decision
 
-Cursor-based пагінація з UUID v7 як курсор.
+Cursor-based pagination with UUID v7 as cursor.
 
-### Чому UUID v7 працює ідеально
+### Why UUID v7 works perfectly
 
-UUID v7 містить timestamp у старших бітах → лексикографічно впорядкований → ідеальний курсор.
+UUID v7 contains timestamp in high bits → lexicographically ordered → ideal cursor.
 
 ### API Design
 
@@ -38,13 +38,13 @@ GET /api/v1/users?limit=20&cursor=019d65d6-de90-7200-b1cf-4f8745597e0a
 }
 ```
 
-### Конвенції
+### Conventions
 
-| Параметр | Default | Max | Description |
+| Parameter | Default | Max | Description |
 |----------|---------|-----|-------------|
-| `limit` | 20 | 100 | Кількість записів |
-| `cursor` | — | — | UUID v7 останнього елемента |
-| `sort` | `desc` | — | Напрямок (тільки desc) |
+| `limit` | 20 | 100 | Number of records |
+| `cursor` | — | — | UUID v7 of last element |
+| `sort` | `desc` | — | Direction (desc only) |
 
 ### Repository Pattern
 
@@ -70,24 +70,24 @@ ORDER BY id DESC
 LIMIT ? + 1   -- fetch one extra to detect has_more
 ```
 
-### Переваги
+### Benefits
 
-| Характеристика | Offset | Cursor (UUID v7) |
+| Characteristic | Offset | Cursor (UUID v7) |
 |---------------|--------|------------------|
-| Performance | O(n) деградація | O(log n) — index seek |
-| Consistency | Зсуви при змінах | Стабільний |
-| Bookmarking | Неможливо | Можливо (cursor = URL) |
-| Deep pages | Повільні | Однакова швидкість |
+| Performance | O(n) degradation | O(log n) — index seek |
+| Consistency | Shifts on changes | Stable |
+| Bookmarking | Impossible | Possible (cursor = URL) |
+| Deep pages | Slow | Same speed |
 
-### Наслідки
+## Consequences
 
-**Позитивні:**
-- Стабільна продуктивність на будь-якій глибині
-- Неможливо "пропустити" запис при одночасних змінах
-- Cursor = UUID v7 = timestamp → можна фільтрувати за часом
-- Stateless — не потребує серверного стану
+**Positive:**
+- Stable performance at any depth
+- Impossible to "skip" a record during concurrent changes
+- Cursor = UUID v7 = timestamp → can filter by time
+- Stateless — doesn't require server state
 
-**Негативні:**
-- Не можна стрибнути на конкретну сторінку (тільки forward/backward)
-- Потрібно зберігати cursor на клієнті
-- Total count недоступний (не робимо COUNT)
+**Negative:**
+- Cannot jump to a specific page (only forward/backward)
+- Need to store cursor on client
+- Total count unavailable (no COUNT)

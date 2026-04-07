@@ -1,21 +1,21 @@
 # ADR-006: UUID v7 for Primary Keys
 
-## Статус: Accepted
+## Status: Accepted
 
-## Контекст
+## Context
 
-UUID v4 (random) має критичні недоліки як primary key у БД:
+UUID v4 (random) has critical disadvantages as a primary key in DB:
 
-1. **Fragmentation** — випадковий порядок вставки розбиває B-tree індекси, викликаючи page splits
-2. **Poor locality** — сусідні за часом записи розкидані по всьому диску
-3. **Cache inefficiency** — кожна нова вставка ймовірно потрапляє на нову сторінку
-4. **Write amplification** — page splits генерують зайві I/O операції
+1. **Fragmentation** — random insert order breaks B-tree indexes, causing page splits
+2. **Poor locality** — records adjacent in time are scattered across the entire disk
+3. **Cache inefficiency** — each new insert likely hits a new page
+4. **Write amplification** — page splits generate unnecessary I/O operations
 
-Для SQLite WAL це особливо критично при зростанні таблиць.
+For SQLite WAL this is especially critical as tables grow.
 
-## Рішення
+## Decision
 
-Власна реалізація UUID v7 (`pkg/uuid/uuid.go`) — zero external dependencies.
+Custom UUID v7 implementation (`pkg/uuid/uuid.go`) — zero external dependencies.
 
 UUID v7 structure:
 ```
@@ -38,48 +38,48 @@ UUID v7 structure:
 - **2 bits** — variant (0b10)
 - **62 bits** — random (collision resistance)
 
-### Переваги UUID v7
+### UUID v7 Benefits
 
-| Характеристика | UUID v4 | UUID v7 |
+| Characteristic | UUID v4 | UUID v7 |
 |---------------|---------|---------|
-| Порядок | Випадковий | Часовий |
-| B-tree fragmentation | Висока | Мінімальна |
-| Write amplification | Високий | Низький |
-| Cache locality | Погана | Хороша |
-| Sortable | Ні | Так |
-| Timestamp extraction | Ні | Так |
+| Order | Random | Time-based |
+| B-tree fragmentation | High | Minimal |
+| Write amplification | High | Low |
+| Cache locality | Poor | Good |
+| Sortable | No | Yes |
+| Timestamp extraction | No | Yes |
 
-### Реалізація
+### Implementation
 
-- `NewV7()` — генерація нового UUID
-- `Parse(s)` / `MustParse(s)` — парсинг з рядка
-- `String()` — формат `xxxxxxxx-xxxx-7xxx-8xxx-xxxxxxxxxxxx`
-- `Timestamp()` — витягнення часу з UUID
-- `Version()` — повертає 7
-- `MarshalText()` / `UnmarshalText()` — серіалізація для JSON/DB
+- `NewV7()` — generate new UUID
+- `Parse(s)` / `MustParse(s)` — parse from string
+- `String()` — format `xxxxxxxx-xxxx-7xxx-8xxx-xxxxxxxxxxxx`
+- `Timestamp()` — extract time from UUID
+- `Version()` — returns 7
+- `MarshalText()` / `UnmarshalText()` — serialization for JSON/DB
 
-### Використання в проекті
+### Usage in Project
 
-Всі ID типи використовують UUID v7:
+All ID types use UUID v7:
 ```go
 func NewUserID() UserID {
     return UserID(uuid.NewV7().String())
 }
 ```
 
-## Наслідки
+## Consequences
 
-### Позитивні
-- Часово-впорядковані PK — оптимальна продуктивність B-tree індексів
-- Вбудований timestamp — можна сортувати/фільтрувати без JOIN
-- Zero dependencies — немає `google/uuid`
-- Thread-safe — `crypto/rand` з mutex для rand_a
-- RFC 9562 compliant — сумісний з іншими UUID v7 реалізаціями
+### Positive
+- Time-ordered PK — optimal B-tree index performance
+- Built-in timestamp — can sort/filter without JOIN
+- Zero dependencies — no `google/uuid`
+- Thread-safe — `crypto/rand` with mutex for rand_a
+- RFC 9562 compliant — compatible with other UUID v7 implementations
 
-### Негативні
-- Власна реалізація — потрібно підтримувати та тестувати
-- Менше battle-tested ніж `google/uuid`
-- 48-bit timestamp — працює до ~10889 року
+### Negative
+- Custom implementation — need to maintain and test
+- Less battle-tested than `google/uuid`
+- 48-bit timestamp — works until ~10889 year
 
-### Міграція
-Якщо проект починався з UUID v4 — міграція не потрібна, нові записи автоматично отримують v7.
+### Migration
+If project started with UUID v4 — migration not needed, new records automatically get v7.

@@ -13,6 +13,13 @@ import (
 	"github.com/basilex/skeleton/internal/identity/infrastructure/session"
 	"github.com/basilex/skeleton/internal/identity/infrastructure/token"
 	identityHTTP "github.com/basilex/skeleton/internal/identity/ports/http"
+	notificationCommand "github.com/basilex/skeleton/internal/notifications/application/command"
+	notificationEventHandler "github.com/basilex/skeleton/internal/notifications/application/eventhandler"
+	notificationQuery "github.com/basilex/skeleton/internal/notifications/application/query"
+	notificationPersistence "github.com/basilex/skeleton/internal/notifications/infrastructure/persistence"
+	"github.com/basilex/skeleton/internal/notifications/infrastructure/sender"
+	"github.com/basilex/skeleton/internal/notifications/infrastructure/worker"
+	notificationHTTP "github.com/basilex/skeleton/internal/notifications/ports/http"
 	"github.com/basilex/skeleton/internal/status/application/query"
 	statusDomain "github.com/basilex/skeleton/internal/status/domain"
 	statusHTTP "github.com/basilex/skeleton/internal/status/ports/http"
@@ -29,15 +36,19 @@ type Dependencies struct {
 	AuthMiddleware    *identityHTTP.AuthMiddleware
 	RBACMiddleware    *identityHTTP.RBACMiddleware
 
-	IdentityHandler   *identityHTTP.Handler
-	StatusHandler     *statusHTTP.Handler
-	AuditHandler      *auditHTTP.Handler
-	AuditEventHandler *auditEventHandler.IdentityEventHandler
+	IdentityHandler          *identityHTTP.Handler
+	StatusHandler            *statusHTTP.Handler
+	AuditHandler             *auditHTTP.Handler
+	AuditEventHandler        *auditEventHandler.IdentityEventHandler
+	NotificationHandler      *notificationHTTP.Handler
+	NotificationWorker       *worker.NotificationWorker
+	NotificationEventHandler *notificationEventHandler.IdentityEventHandler
 }
 
 func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTime, goVersion string) *Dependencies {
 	bus := membus.New()
 
+	// Identity
 	userRepo := persistence.NewUserRepository(db)
 	roleRepo := persistence.NewRoleRepository(db)
 	auditRepo := auditPersistence.NewAuditRepository(db)
@@ -70,24 +81,85 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	authMiddleware := identityHTTP.NewAuthMiddleware(tokenService)
 	rbacMiddleware := identityHTTP.NewRBACMiddleware()
 
+	// Status
 	statusHandler := newStatusHandler(version, commit, buildTime, goVersion, cfg.App.Env)
 
+	// Audit
 	logEventHandler := auditCommand.NewLogEventHandler(auditRepo)
 	listRecordsHandler := auditQuery.NewListRecordsHandler(auditRepo)
 	auditHandler := auditHTTP.NewHandler(listRecordsHandler)
 	auditIdentityEventHandler := auditEventHandler.NewIdentityEventHandler(logEventHandler)
 
+	// Notifications
+	notificationRepo := notificationPersistence.NewNotificationRepository(db)
+	templateRepo := notificationPersistence.NewTemplateRepository(db)
+	preferencesRepo := notificationPersistence.NewPreferencesRepository(db)
+
+	createNotificationHandler := notificationCommand.NewCreateNotificationHandler(notificationRepo, bus)
+	createFromTemplateHandler := notificationCommand.NewCreateFromTemplateHandler(notificationRepo, templateRepo)
+	markDeliveredHandler := notificationCommand.NewMarkDeliveredHandler(notificationRepo)
+	markFailedHandler := notificationCommand.NewMarkFailedHandler(notificationRepo)
+	updatePreferencesHandler := notificationCommand.NewUpdatePreferencesHandler(preferencesRepo)
+	getNotificationHandler := notificationQuery.NewGetNotificationHandler(notificationRepo)
+	listNotificationsHandler := notificationQuery.NewListNotificationsHandler(notificationRepo)
+	getPreferencesHandler := notificationQuery.NewGetPreferencesHandler(preferencesRepo)
+	createTemplateHandler := notificationCommand.NewCreateTemplateHandler(templateRepo)
+	updateTemplateHandler := notificationCommand.NewUpdateTemplateHandler(templateRepo)
+	getTemplateHandler := notificationQuery.NewGetTemplateHandler(templateRepo)
+	listTemplatesHandler := notificationQuery.NewListTemplatesHandler(templateRepo)
+
+	notificationHandler := notificationHTTP.NewHandler(
+		createNotificationHandler,
+		createFromTemplateHandler,
+		markDeliveredHandler,
+		markFailedHandler,
+		updatePreferencesHandler,
+		getNotificationHandler,
+		listNotificationsHandler,
+		getPreferencesHandler,
+		createTemplateHandler,
+		updateTemplateHandler,
+		getTemplateHandler,
+		listTemplatesHandler,
+	)
+
+	// Notification sender (console for development - logs to console)
+	// In production, replace with real SMTP/AWS SES/Twilio implementations
+	emailSender := sender.NewConsoleEmailSender()
+	compositeSender := sender.NewCompositeSender(emailSender, nil, nil, nil)
+
+	// Notification worker
+	notificationWorker := worker.NewNotificationWorker(
+		notificationRepo,
+		preferencesRepo,
+		compositeSender,
+		bus,
+		worker.WorkerConfig{
+			PollInterval:   5e9, // 5 seconds
+			BatchSize:      100,
+			StalledTimeout: 300e9, // 5 minutes
+		},
+	)
+
+	// Notification event handler (auto-send emails on user registration)
+	notificationIdentityEventHandler := notificationEventHandler.NewIdentityEventHandler(createFromTemplateHandler)
+
+	// Register event handlers
 	auditIdentityEventHandler.Register(bus)
+	notificationIdentityEventHandler.Register(bus)
 
 	return &Dependencies{
-		IdentityHandler:   identityHandler,
-		AuthMiddleware:    authMiddleware,
-		RBACMiddleware:    rbacMiddleware,
-		SessionMiddleware: sessionMiddleware,
-		StatusHandler:     statusHandler,
-		EventBus:          bus,
-		AuditHandler:      auditHandler,
-		AuditEventHandler: auditIdentityEventHandler,
+		IdentityHandler:          identityHandler,
+		AuthMiddleware:           authMiddleware,
+		RBACMiddleware:           rbacMiddleware,
+		SessionMiddleware:        sessionMiddleware,
+		StatusHandler:            statusHandler,
+		EventBus:                 bus,
+		AuditHandler:             auditHandler,
+		AuditEventHandler:        auditIdentityEventHandler,
+		NotificationHandler:      notificationHandler,
+		NotificationWorker:       notificationWorker,
+		NotificationEventHandler: notificationIdentityEventHandler,
 	}
 }
 

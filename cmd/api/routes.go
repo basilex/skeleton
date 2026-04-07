@@ -36,6 +36,7 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 		registerUserRoutes(v1, di)
 		registerRoleRoutes(v1, di)
 		registerAuditRoutes(v1, di)
+		registerNotificationRoutes(v1, di)
 	}
 
 	registerStatusRoutes(r, di)
@@ -67,6 +68,21 @@ func registerStatusRoutes(r *gin.Engine, di *Dependencies) {
 
 func registerAuditRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	v1.GET("/audit/records", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("audit:read"), di.AuditHandler.ListRecords)
+}
+
+func registerNotificationRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// User notification endpoints (authenticated)
+	v1.GET("/notifications", di.AuthMiddleware.Authenticate(), di.NotificationHandler.ListNotifications)
+	v1.GET("/notifications/:id", di.AuthMiddleware.Authenticate(), di.NotificationHandler.GetNotification)
+	v1.GET("/notifications/preferences", di.AuthMiddleware.Authenticate(), di.NotificationHandler.GetPreferences)
+	v1.PATCH("/notifications/preferences", di.AuthMiddleware.Authenticate(), di.NotificationHandler.UpdatePreferences)
+
+	// Admin notification endpoints (requires special permissions)
+	v1.POST("/notifications", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:write"), di.NotificationHandler.CreateNotification)
+	v1.GET("/notifications/templates", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.ListTemplates)
+	v1.GET("/notifications/templates/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.GetTemplate)
+	v1.POST("/notifications/templates", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.CreateTemplate)
+	v1.PATCH("/notifications/templates/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.UpdateTemplate)
 }
 
 func recoveryMiddleware() gin.HandlerFunc {

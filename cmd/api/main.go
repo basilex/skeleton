@@ -30,6 +30,10 @@
 // @tag.description Role management operations
 // @tag.name audit
 // @tag.description Audit log operations
+// @tag.name notifications
+// @tag.description Notification management operations
+// @tag.name tasks
+// @tag.description Background tasks and scheduled jobs
 // @tag.name status
 // @tag.description System status and health checks
 
@@ -77,6 +81,14 @@ func main() {
 	defer db.Close()
 
 	di := wireDependencies(cfg, db, version, commit, buildTime, runtime.Version())
+
+	// Start notification worker in background
+	go func() {
+		if err := di.NotificationWorker.Start(context.Background()); err != nil {
+			slog.Error("notification worker error", "error", err)
+		}
+	}()
+	slog.Info("notification worker started")
 
 	router := setupRouter(cfg, di)
 
