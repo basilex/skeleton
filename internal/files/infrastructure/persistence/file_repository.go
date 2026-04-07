@@ -78,6 +78,41 @@ func (r *FileRepository) Create(ctx context.Context, file *domain.File) error {
 	return nil
 }
 
+// GetByID retrieves a file by ID.
+func (r *FileRepository) GetByID(ctx context.Context, id domain.FileID) (*domain.File, error) {
+	query := `
+		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+			storage_provider, checksum, metadata, access_level,
+			uploaded_at, expires_at, processed_at, created_at, updated_at
+		FROM files WHERE id = ?
+	`
+
+	var fileID, ownerID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
+	var size int64
+	var metadataJSON []byte
+	var uploadedAt, createdAt, updatedAt string
+	var expiresAt, processedAt *string
+
+	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
+		&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &path,
+		&storageProvider, &checksum, &metadataJSON, &accessLevel,
+		&uploadedAt, &expiresAt, &processedAt, &createdAt, &updatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrFileNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("scan file: %w", err)
+	}
+
+	return r.reconstituteFile(
+		fileID, ownerID, filename, storedName, mimeType, size, path,
+		storageProvider, checksum, metadataJSON, accessLevel,
+		uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
+	)
+}
+
 // Update updates an existing file record.
 func (r *FileRepository) Update(ctx context.Context, file *domain.File) error {
 	query := `
@@ -135,60 +170,6 @@ func (r *FileRepository) Update(ctx context.Context, file *domain.File) error {
 	return nil
 }
 
-// GetByID retrieves a file by ID.
-func (r *FileRepository) GetByID(ctx context.Context, id domain.FileID) (*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
-			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files WHERE id = ?
-	`
-
-	return r.scanFile(ctx, query, id.String())
-}
-
-// GetByPath retrieves a file by storage path.
-func (r *FileRepository) GetByPath(ctx context.Context, path string) (*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
-			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files WHERE path = ?
-	`
-
-	return r.scanFile(ctx, query, path)
-}
-
-// GetByOwner retrieves files by owner ID with pagination.
-func (r *FileRepository) GetByOwner(ctx context.Context, ownerID string, limit, offset int) ([]*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
-			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files 
-		WHERE owner_id = ?
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
-	`
-
-	return r.scanFiles(ctx, query, ownerID, limit, offset)
-}
-
-// GetExpired retrieves expired files.
-func (r *FileRepository) GetExpired(ctx context.Context, before time.Time, limit int) ([]*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
-			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files 
-		WHERE expires_at IS NOT NULL AND expires_at < ?
-		ORDER BY expires_at ASC
-		LIMIT ?
-	`
-
-	return r.scanFiles(ctx, query, before.Format(time.RFC3339), limit)
-}
-
 // Delete deletes a file by ID.
 func (r *FileRepository) Delete(ctx context.Context, id domain.FileID) error {
 	query := `DELETE FROM files WHERE id = ?`
@@ -210,81 +191,25 @@ func (r *FileRepository) Delete(ctx context.Context, id domain.FileID) error {
 	return nil
 }
 
-// DeleteBatch deletes multiple files by IDs.
-func (r *FileRepository) DeleteBatch(ctx context.Context, ids []domain.FileID) error {
-	if len(ids) == 0 {
-		return nil
-	}
-
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `DELETE FROM files WHERE id = ?`)
-	if err != nil {
-		return fmt.Errorf("prepare statement: %w", err)
-	}
-	defer stmt.Close()
-
-	for _, id := range ids {
-		if _, err := stmt.ExecContext(ctx, id.String()); err != nil {
-			return fmt.Errorf("delete file %s: %w", id, err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-
-	return nil
-}
-
-// Count returns the total number of files matching the filter.
-func (r *FileRepository) Count(ctx context.Context, filter *domain.FileFilter) (int64, error) {
-	query := `SELECT COUNT(*) FROM files WHERE 1=1`
-	args := []interface{}{}
-
-	query, args = r.applyFilter(query, args, filter)
-
-	var count int64
-	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
-		return 0, fmt.Errorf("count files: %w", err)
-	}
-
-	return count, nil
-}
-
-// List retrieves files matching the filter with pagination.
-func (r *FileRepository) List(ctx context.Context, filter *domain.FileFilter, limit, offset int) ([]*domain.File, error) {
+// GetByPath retrieves a file by storage path.
+func (r *FileRepository) GetByPath(ctx context.Context, path string) (*domain.File, error) {
 	query := `
 		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
 			storage_provider, checksum, metadata, access_level,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files WHERE 1=1
+		FROM files WHERE path = ?
 	`
-	args := []interface{}{}
 
-	query, args = r.applyFilter(query, args, filter)
-	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
-	args = append(args, limit, offset)
-
-	return r.scanFiles(ctx, query, args...)
-}
-
-// scanFile scans a single file from a query result.
-func (r *FileRepository) scanFile(ctx context.Context, query string, args ...interface{}) (*domain.File, error) {
-	var fileID, ownerID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
+	var fileID, ownerID, filename, storedName, mimeType, filePath, storageProvider, checksum, accessLevel string
 	var size int64
-	var metadataJSON string
-	var uploadedAtStr, createdAtStr, updatedAtStr string
-	var expiresAtStr, processedAtStr *string
+	var metadataJSON []byte
+	var uploadedAt, createdAt, updatedAt string
+	var expiresAt, processedAt *string
 
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(
-		&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &path,
+	err := r.db.QueryRowContext(ctx, query, path).Scan(
+		&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &filePath,
 		&storageProvider, &checksum, &metadataJSON, &accessLevel,
-		&uploadedAtStr, &expiresAtStr, &processedAtStr, &createdAtStr, &updatedAtStr,
+		&uploadedAt, &expiresAt, &processedAt, &createdAt, &updatedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -294,42 +219,176 @@ func (r *FileRepository) scanFile(ctx context.Context, query string, args ...int
 		return nil, fmt.Errorf("scan file: %w", err)
 	}
 
-	return r.reconstructFile(
-		fileID, ownerID, filename, storedName, mimeType, size, path,
+	return r.reconstituteFile(
+		fileID, ownerID, filename, storedName, mimeType, size, filePath,
 		storageProvider, checksum, metadataJSON, accessLevel,
-		uploadedAtStr, expiresAtStr, processedAtStr, createdAtStr, updatedAtStr,
+		uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
 	)
 }
 
-// scanFiles scans multiple files from a query result.
-func (r *FileRepository) scanFiles(ctx context.Context, query string, args ...interface{}) ([]*domain.File, error) {
+// GetByOwner retrieves files by owner ID with pagination.
+func (r *FileRepository) GetByOwner(ctx context.Context, ownerID string, limit, offset int) ([]*domain.File, error) {
+	query := `
+		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+			storage_provider, checksum, metadata, access_level,
+			uploaded_at, expires_at, processed_at, created_at, updated_at
+		FROM files 
+		WHERE owner_id = ?
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, ownerID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query files: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanFiles(rows)
+}
+
+// GetExpired retrieves expired files.
+func (r *FileRepository) GetExpired(ctx context.Context, before time.Time, limit int) ([]*domain.File, error) {
+	query := `
+		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+			storage_provider, checksum, metadata, access_level,
+			uploaded_at, expires_at, processed_at, created_at, updated_at
+		FROM files 
+		WHERE expires_at IS NOT NULL AND expires_at < ?
+		ORDER BY expires_at ASC
+		LIMIT ?
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, before.Format(time.RFC3339), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query expired files: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanFiles(rows)
+}
+
+// List retrieves files matching the filter with pagination.
+func (r *FileRepository) List(ctx context.Context, filter *domain.FileFilter, limit, offset int) ([]*domain.File, error) {
+	query := `SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+		storage_provider, checksum, metadata, access_level,
+		uploaded_at, expires_at, processed_at, created_at, updated_at
+		FROM files WHERE 1=1`
+	args := []interface{}{}
+
+	if filter != nil {
+		if filter.OwnerID != nil {
+			query += ` AND owner_id = ?`
+			args = append(args, *filter.OwnerID)
+		}
+		if filter.MimeType != nil {
+			query += ` AND mime_type LIKE ?`
+			args = append(args, *filter.MimeType+`%`)
+		}
+		if filter.AccessLevel != nil {
+			query += ` AND access_level = ?`
+			args = append(args, string(*filter.AccessLevel))
+		}
+		if filter.UploadedFrom != nil {
+			query += ` AND uploaded_at >= ?`
+			args = append(args, filter.UploadedFrom.Format(time.RFC3339))
+		}
+		if filter.UploadedTo != nil {
+			query += ` AND uploaded_at <= ?`
+			args = append(args, filter.UploadedTo.Format(time.RFC3339))
+		}
+	}
+
+	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query files: %w", err)
 	}
 	defer rows.Close()
 
+	return r.scanFiles(rows)
+}
+
+// DeleteBatch deletes multiple files by IDs.
+func (r *FileRepository) DeleteBatch(ctx context.Context, ids []domain.FileID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.PrepareContext(ctx, `DELETE FROM files WHERE id = ?`)
+	if err != nil {
+		return fmt.Errorf("prepare stmt: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, id := range ids {
+		if _, err := stmt.ExecContext(ctx, id.String()); err != nil {
+			return fmt.Errorf("delete file %s: %w", id, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// Count returns the total number of files matching the filter.
+func (r *FileRepository) Count(ctx context.Context, filter *domain.FileFilter) (int64, error) {
+	query := `SELECT COUNT(*) FROM files WHERE 1=1`
+	args := []interface{}{}
+
+	if filter != nil {
+		if filter.OwnerID != nil {
+			query += ` AND owner_id = ?`
+			args = append(args, *filter.OwnerID)
+		}
+		if filter.MimeType != nil {
+			query += ` AND mime_type LIKE ?`
+			args = append(args, *filter.MimeType+`%`)
+		}
+		if filter.AccessLevel != nil {
+			query += ` AND access_level = ?`
+			args = append(args, string(*filter.AccessLevel))
+		}
+	}
+
+	var count int64
+	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count files: %w", err)
+	}
+
+	return count, nil
+}
+
+// scanFiles scans multiple files from rows.
+func (r *FileRepository) scanFiles(rows *sql.Rows) ([]*domain.File, error) {
 	var files []*domain.File
 
 	for rows.Next() {
 		var fileID, ownerID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
 		var size int64
-		var metadataJSON string
-		var uploadedAtStr, createdAtStr, updatedAtStr string
-		var expiresAtStr, processedAtStr *string
+		var metadataJSON []byte
+		var uploadedAt, createdAt, updatedAt string
+		var expiresAt, processedAt *string
 
 		if err := rows.Scan(
 			&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &path,
 			&storageProvider, &checksum, &metadataJSON, &accessLevel,
-			&uploadedAtStr, &expiresAtStr, &processedAtStr, &createdAtStr, &updatedAtStr,
+			&uploadedAt, &expiresAt, &processedAt, &createdAt, &updatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan file row: %w", err)
+			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
-		file, err := r.reconstructFile(
+		file, err := r.reconstituteFile(
 			fileID, ownerID, filename, storedName, mimeType, size, path,
 			storageProvider, checksum, metadataJSON, accessLevel,
-			uploadedAtStr, expiresAtStr, processedAtStr, createdAtStr, updatedAtStr,
+			uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -345,16 +404,16 @@ func (r *FileRepository) scanFiles(ctx context.Context, query string, args ...in
 	return files, nil
 }
 
-// reconstructFile reconstructs a File from database fields.
-func (r *FileRepository) reconstructFile(
+// reconstituteFile reconstructs a File from database fields.
+func (r *FileRepository) reconstituteFile(
 	fileID, ownerID, filename, storedName, mimeType string, size int64, path string,
-	storageProvider, checksum, metadataJSON, accessLevel string,
+	storageProvider, checksum string, metadataJSON []byte, accessLevel string,
 	uploadedAtStr string, expiresAtStr, processedAtStr *string,
 	createdAtStr, updatedAtStr string,
 ) (*domain.File, error) {
 	var metadata domain.FileMetadata
-	if metadataJSON != "" {
-		if err := json.Unmarshal([]byte(metadataJSON), &metadata); err != nil {
+	if len(metadataJSON) > 0 {
+		if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
 			return nil, fmt.Errorf("unmarshal metadata: %w", err)
 		}
 	}
@@ -375,7 +434,7 @@ func (r *FileRepository) reconstructFile(
 	}
 
 	var expiresAt, processedAt *time.Time
-	if expiresAtStr != nil {
+	if expiresAtStr != nil && *expiresAtStr != "" {
 		t, err := time.Parse(time.RFC3339, *expiresAtStr)
 		if err != nil {
 			return nil, fmt.Errorf("parse expires_at: %w", err)
@@ -383,7 +442,7 @@ func (r *FileRepository) reconstructFile(
 		expiresAt = &t
 	}
 
-	if processedAtStr != nil {
+	if processedAtStr != nil && *processedAtStr != "" {
 		t, err := time.Parse(time.RFC3339, *processedAtStr)
 		if err != nil {
 			return nil, fmt.Errorf("parse processed_at: %w", err)
@@ -395,23 +454,6 @@ func (r *FileRepository) reconstructFile(
 	if ownerID != "" {
 		uid := identitydomain.UserID(ownerID)
 		ownerIDPtr = &uid
-	}
-
-	var expiresAt, processedAt *time.Time
-	if expiresAtStr != nil {
-		t, err := time.Parse(time.RFC3339, *expiresAtStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse expires_at: %w", err)
-		}
-		expiresAt = &t
-	}
-
-	if processedAtStr != nil {
-		t, err := time.Parse(time.RFC3339, *processedAtStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse processed_at: %w", err)
-		}
-		processedAt = &t
 	}
 
 	return domain.ReconstituteFile(
@@ -432,38 +474,4 @@ func (r *FileRepository) reconstructFile(
 		createdAt,
 		updatedAt,
 	), nil
-}
-
-// applyFilter applies a filter to the query.
-func (r *FileRepository) applyFilter(query string, args []interface{}, filter *domain.FileFilter) (string, []interface{}) {
-	if filter == nil {
-		return query, args
-	}
-
-	if filter.OwnerID != nil {
-		query += ` AND owner_id = ?`
-		args = append(args, *filter.OwnerID)
-	}
-
-	if filter.MimeType != nil {
-		query += ` AND mime_type LIKE ?`
-		args = append(args, *filter.MimeType+"%")
-	}
-
-	if filter.AccessLevel != nil {
-		query += ` AND access_level = ?`
-		args = append(args, string(*filter.AccessLevel))
-	}
-
-	if filter.UploadedFrom != nil {
-		query += ` AND uploaded_at >= ?`
-		args = append(args, filter.UploadedFrom.Format(time.RFC3339))
-	}
-
-	if filter.UploadedTo != nil {
-		query += ` AND uploaded_at <= ?`
-		args = append(args, filter.UploadedTo.Format(time.RFC3339))
-	}
-
-	return query, args
 }
