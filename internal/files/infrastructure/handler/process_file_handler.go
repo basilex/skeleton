@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/basilex/skeleton/internal/files/domain"
 	"github.com/basilex/skeleton/internal/files/infrastructure/processing"

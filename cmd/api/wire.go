@@ -21,6 +21,13 @@ import (
 	auditEventHandler "github.com/basilex/skeleton/internal/audit/infrastructure/eventhandler"
 	auditPersistence "github.com/basilex/skeleton/internal/audit/infrastructure/persistence"
 	auditHTTP "github.com/basilex/skeleton/internal/audit/ports/http"
+	filesCommand "github.com/basilex/skeleton/internal/files/application/command"
+	filesQuery "github.com/basilex/skeleton/internal/files/application/query"
+	filesHandler "github.com/basilex/skeleton/internal/files/infrastructure/handler"
+	filesPersistence "github.com/basilex/skeleton/internal/files/infrastructure/persistence"
+	filesProcessing "github.com/basilex/skeleton/internal/files/infrastructure/processing"
+	filesStorage "github.com/basilex/skeleton/internal/files/infrastructure/storage"
+	filesHTTP "github.com/basilex/skeleton/internal/files/ports/http"
 	identityCommand "github.com/basilex/skeleton/internal/identity/application/command"
 	identityQuery "github.com/basilex/skeleton/internal/identity/application/query"
 	"github.com/basilex/skeleton/internal/identity/domain"
@@ -38,6 +45,8 @@ import (
 	"github.com/basilex/skeleton/internal/status/application/query"
 	statusDomain "github.com/basilex/skeleton/internal/status/domain"
 	statusHTTP "github.com/basilex/skeleton/internal/status/ports/http"
+	tasksDomain "github.com/basilex/skeleton/internal/tasks/domain"
+	tasksPersistence "github.com/basilex/skeleton/internal/tasks/infrastructure/persistence"
 	"github.com/basilex/skeleton/pkg/config"
 	"github.com/basilex/skeleton/pkg/eventbus"
 	membus "github.com/basilex/skeleton/pkg/eventbus/memory"
@@ -79,6 +88,10 @@ type Dependencies struct {
 	NotificationWorker *worker.NotificationWorker
 	// NotificationEventHandler processes identity events for automatic notifications.
 	NotificationEventHandler *notificationEventHandler.IdentityEventHandler
+	// FilesHandler handles all file-related HTTP endpoints.
+	FilesHandler *filesHTTP.Handler
+	// ProcessFileHandler handles file processing tasks.
+	ProcessFileHandler *filesHandler.ProcessFileHandler
 }
 
 // wireDependencies constructs the complete dependency graph for the application.
