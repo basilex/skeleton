@@ -117,6 +117,56 @@ curl -X POST http://localhost:8080/api/v1/auth/logout \
   -b "session=<session_id>"
 ```
 
+## Token Formats
+
+Система використовує різні формати токенів в залежності від середовища:
+
+### Development/Test (`APP_ENV=dev` або `APP_ENV=test`)
+
+Використовується **MockTokenService** для спрощення розробки без криптографічних операцій:
+
+**Access token:**
+```
+access-{user_id}-{timestamp}
+```
+Приклад: `access-019d6746-a5ee-7c00-961f-26d4258d5a32-1775554191`
+
+**Refresh token:**
+```
+refresh-{UUIDv7}
+```
+Приклад: `refresh-019d6746-e0b4-7a00-a177-b41b9b2b9c17`
+
+**Особливості:**
+- Не потребують RSA ключів
+- Швидка генерація та валідація
+- Дають повний доступ (`*:*` wildcard permission)
+- User ID видно прямо в токені (для дебагу)
+
+### Production (`APP_ENV=prod`)
+
+Використовується **JWTService** з RS256 підписом:
+
+**Access token:**
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDE5ZDY3NDYtLi4uIiwicm9sZXMiOlsiYWRtaW4iXSwicGVybWlzc2lvbnMiOlsiKjoqIl0sImV4cCI6MTc3NTU1...}
+```
+
+**Refresh token:**
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9... (JWT формат)
+```
+
+**Особливості:**
+- Потрібні RSA ключі (`./keys/private.pem`, `./keys/public.pem`)
+- Генерація: `make keys`
+- cryptographic signature validation
+- Реальні permissions з RBAC моделі
+- Access TTL: 15 хвилин (за замовчуванням)
+- Refresh TTL: 7 днів (за замовчуванням)
+
+**Увага:** Переконайтеся що `APP_ENV=prod` в продакшені, інакше система буде використовувати mock tokens!
+
 ### Audit Logs (requires: audit:read)
 
 ```bash

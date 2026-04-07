@@ -23,12 +23,14 @@ import (
 )
 
 type Dependencies struct {
-	IdentityHandler   *identityHTTP.Handler
+	EventBus eventbus.Bus
+
+	SessionMiddleware *session.Middleware
 	AuthMiddleware    *identityHTTP.AuthMiddleware
 	RBACMiddleware    *identityHTTP.RBACMiddleware
-	SessionMiddleware *session.Middleware
+
+	IdentityHandler   *identityHTTP.Handler
 	StatusHandler     *statusHTTP.Handler
-	EventBus          eventbus.Bus
 	AuditHandler      *auditHTTP.Handler
 	AuditEventHandler *auditEventHandler.IdentityEventHandler
 }

@@ -124,11 +124,11 @@ func (m *mockUserRepoLogin) Delete(ctx context.Context, id domain.UserID) error 
 type mockTokenService struct{}
 
 func (m *mockTokenService) GenerateAccessToken(userID domain.UserID, roles []domain.Role) (string, error) {
-	return "mock-access-token", nil
+	return "access-test-token", nil
 }
 
 func (m *mockTokenService) GenerateRefreshToken() (string, error) {
-	return "mock-refresh-token", nil
+	return "refresh-test-token", nil
 }
 
 func (m *mockTokenService) ValidateAccessToken(token string) (*domain.TokenClaims, error) {
