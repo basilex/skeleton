@@ -18,11 +18,11 @@ func NewHandler(getBuildInfo *query.GetBuildInfoHandler) *Handler {
 }
 
 // GetInfo godoc
-// @Summary Get build info
-// @Description Returns application build information
+// @Summary Get build information
+// @Description Returns build version, commit, and runtime info
 // @Tags status
 // @Produce json
-// @Success 200 {object} domain.BuildInfo "Build info"
+// @Success 200 {object} map[string]string "Build info"
 // @Router /build [get]
 func (h *Handler) GetInfo(c *gin.Context) {
 	result := h.getBuildInfo.Handle(c.Request.Context())

@@ -183,12 +183,12 @@ func (h *Handler) GetUser(c *gin.Context) {
 // @Description Returns paginated list of users
 // @Tags users
 // @Produce json
-// @Security SessionAuth
+// @Security BearerAuth
 // @Param cursor query string false "Pagination cursor (UUID v7)"
 // @Param limit query int false "Items per page (default 20, max 100)"
 // @Param search query string false "Search by email"
 // @Param is_active query bool false "Filter by active status"
-// @Success 200 {object} pagination.PageResult "Paginated users"
+// @Success 200 {object} map[string]interface{} "Paginated users"
 // @Failure 401 {object} apierror.APIError "Unauthorized"
 // @Failure 403 {object} apierror.APIError "Forbidden"
 // @Router /api/v1/users [get]

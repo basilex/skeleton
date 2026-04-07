@@ -43,7 +43,7 @@ type ListRecordsRequest struct {
 // @Param date_to query string false "Filter to date (RFC3339 format)"
 // @Param cursor query string false "Pagination cursor (UUID v7)"
 // @Param limit query int false "Items per page (default 20, max 100)"
-// @Success 200 {object} query.ListRecordsResult "Paginated audit records"
+// @Success 200 {object} map[string]interface{} "Paginated audit records"
 // @Failure 401 {object} apierror.APIError "Unauthorized"
 // @Failure 403 {object} apierror.APIError "Forbidden"
 // @Failure 500 {object} apierror.APIError "Internal error"
