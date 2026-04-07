@@ -2,20 +2,22 @@ package domain
 
 import (
 	"context"
+
+	"github.com/basilex/skeleton/pkg/pagination"
 )
 
 type UserFilter struct {
 	Search   string
 	IsActive *bool
-	Page     int
-	PageSize int
+	Cursor   string
+	Limit    int
 }
 
 type UserRepository interface {
 	Save(ctx context.Context, user *User) error
 	FindByID(ctx context.Context, id UserID) (*User, error)
 	FindByEmail(ctx context.Context, email Email) (*User, error)
-	FindAll(ctx context.Context, filter UserFilter) ([]*User, int, error)
+	FindAll(ctx context.Context, filter UserFilter) (pagination.PageResult[*User], error)
 	Delete(ctx context.Context, id UserID) error
 }
 

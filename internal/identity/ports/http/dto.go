@@ -28,26 +28,22 @@ type AssignRoleRequest struct {
 }
 
 type UserFilterRequest struct {
-	Page     int    `form:"page"`
-	PageSize int    `form:"page_size"`
+	Cursor   string `form:"cursor"`
+	Limit    int    `form:"limit"`
 	Search   string `form:"search"`
 	IsActive *bool  `form:"is_active"`
 }
 
 func (r *UserFilterRequest) ToDomain() domain.UserFilter {
-	page := r.Page
-	if page < 1 {
-		page = 1
-	}
-	pageSize := r.PageSize
-	if pageSize < 1 {
-		pageSize = 20
+	limit := r.Limit
+	if limit <= 0 {
+		limit = 20
 	}
 	return domain.UserFilter{
 		Search:   r.Search,
 		IsActive: r.IsActive,
-		Page:     page,
-		PageSize: pageSize,
+		Cursor:   r.Cursor,
+		Limit:    limit,
 	}
 }
 

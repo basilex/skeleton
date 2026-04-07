@@ -5,6 +5,7 @@ import (
 	identityQuery "github.com/basilex/skeleton/internal/identity/application/query"
 	"github.com/basilex/skeleton/internal/identity/domain"
 	"github.com/basilex/skeleton/internal/identity/infrastructure/persistence"
+	"github.com/basilex/skeleton/internal/identity/infrastructure/session"
 	"github.com/basilex/skeleton/internal/identity/infrastructure/token"
 	identityHTTP "github.com/basilex/skeleton/internal/identity/ports/http"
 	"github.com/basilex/skeleton/internal/status/application/query"
@@ -17,11 +18,12 @@ import (
 )
 
 type Dependencies struct {
-	IdentityHandler *identityHTTP.Handler
-	AuthMiddleware  *identityHTTP.AuthMiddleware
-	RBACMiddleware  *identityHTTP.RBACMiddleware
-	StatusHandler   *statusHTTP.Handler
-	EventBus        eventbus.Bus
+	IdentityHandler   *identityHTTP.Handler
+	AuthMiddleware    *identityHTTP.AuthMiddleware
+	RBACMiddleware    *identityHTTP.RBACMiddleware
+	SessionMiddleware *session.Middleware
+	StatusHandler     *statusHTTP.Handler
+	EventBus          eventbus.Bus
 }
 
 func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTime, goVersion string) *Dependencies {
@@ -32,6 +34,9 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 
 	tokenService := newTokenService(cfg)
 	passwordHasher := &domain.BcryptHasher{}
+
+	sessionStore := newSessionStore(cfg)
+	sessionMiddleware := session.NewMiddleware(sessionStore, cfg.Session)
 
 	registerHandler := command.NewRegisterUserHandler(userRepo, roleRepo, bus, passwordHasher)
 	loginHandler := command.NewLoginUserHandler(userRepo, roleRepo, tokenService)
@@ -47,6 +52,7 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 		revokeRoleHandler,
 		getUserHandler,
 		listUsersHandler,
+		sessionStore,
 	)
 
 	authMiddleware := identityHTTP.NewAuthMiddleware(tokenService)
@@ -55,12 +61,17 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	statusHandler := newStatusHandler(version, commit, buildTime, goVersion, cfg.App.Env)
 
 	return &Dependencies{
-		IdentityHandler: identityHandler,
-		AuthMiddleware:  authMiddleware,
-		RBACMiddleware:  rbacMiddleware,
-		StatusHandler:   statusHandler,
-		EventBus:        bus,
+		IdentityHandler:   identityHandler,
+		AuthMiddleware:    authMiddleware,
+		RBACMiddleware:    rbacMiddleware,
+		SessionMiddleware: sessionMiddleware,
+		StatusHandler:     statusHandler,
+		EventBus:          bus,
 	}
+}
+
+func newSessionStore(cfg *config.Config) session.Store {
+	return session.NewInMemoryStore(cfg.Session.TTLMinutes)
 }
 
 func newTokenService(cfg *config.Config) domain.TokenService {

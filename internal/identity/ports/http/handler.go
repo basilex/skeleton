@@ -5,6 +5,7 @@ import (
 
 	"github.com/basilex/skeleton/internal/identity/application/command"
 	"github.com/basilex/skeleton/internal/identity/application/query"
+	"github.com/basilex/skeleton/internal/identity/infrastructure/session"
 	"github.com/basilex/skeleton/pkg/apierror"
 	"github.com/gin-gonic/gin"
 )
@@ -16,6 +17,7 @@ type Handler struct {
 	revokeRole   *command.RevokeRoleHandler
 	getUser      *query.GetUserHandler
 	listUsers    *query.ListUsersHandler
+	sessionStore session.Store
 }
 
 func NewHandler(
@@ -25,6 +27,7 @@ func NewHandler(
 	revokeRole *command.RevokeRoleHandler,
 	getUser *query.GetUserHandler,
 	listUsers *query.ListUsersHandler,
+	sessionStore session.Store,
 ) *Handler {
 	return &Handler{
 		registerUser: registerUser,
@@ -33,6 +36,7 @@ func NewHandler(
 		revokeRole:   revokeRole,
 		getUser:      getUser,
 		listUsers:    listUsers,
+		sessionStore: sessionStore,
 	}
 }
 
@@ -88,6 +92,10 @@ func (h *Handler) Refresh(c *gin.Context) {
 }
 
 func (h *Handler) Logout(c *gin.Context) {
+	sid, ok := c.Get("session_id")
+	if ok {
+		_ = h.sessionStore.Delete(c.Request.Context(), sid.(string))
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
@@ -109,8 +117,8 @@ func (h *Handler) ListUsers(c *gin.Context) {
 	}
 
 	result, err := h.listUsers.Handle(c.Request.Context(), query.ListUsersQuery{
-		Page:     req.Page,
-		PageSize: req.PageSize,
+		Cursor:   req.Cursor,
+		Limit:    req.Limit,
 		Search:   req.Search,
 		IsActive: req.IsActive,
 	})

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/basilex/skeleton/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -95,8 +96,8 @@ func (m *mockUserRepoLogin) FindByID(ctx context.Context, id domain.UserID) (*do
 	return nil, nil
 }
 
-func (m *mockUserRepoLogin) FindAll(ctx context.Context, filter domain.UserFilter) ([]*domain.User, int, error) {
-	return nil, 0, nil
+func (m *mockUserRepoLogin) FindAll(ctx context.Context, filter domain.UserFilter) (pagination.PageResult[*domain.User], error) {
+	return pagination.PageResult[*domain.User]{}, nil
 }
 
 func (m *mockUserRepoLogin) Delete(ctx context.Context, id domain.UserID) error {

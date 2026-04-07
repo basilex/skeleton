@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/basilex/skeleton/pkg/pagination"
 )
 
 type mockUserRepo struct {
@@ -32,8 +33,8 @@ func (m *mockUserRepo) FindByEmail(ctx context.Context, email domain.Email) (*do
 	return nil, domain.ErrUserNotFound
 }
 
-func (m *mockUserRepo) FindAll(ctx context.Context, filter domain.UserFilter) ([]*domain.User, int, error) {
-	return nil, 0, nil
+func (m *mockUserRepo) FindAll(ctx context.Context, filter domain.UserFilter) (pagination.PageResult[*domain.User], error) {
+	return pagination.PageResult[*domain.User]{}, nil
 }
 
 func (m *mockUserRepo) Delete(ctx context.Context, id domain.UserID) error {

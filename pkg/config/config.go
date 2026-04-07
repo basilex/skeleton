@@ -30,6 +30,13 @@ type RedisConfig struct {
 	URL string
 }
 
+type SessionConfig struct {
+	CookieName   string
+	CookieDomain string
+	CookieSecure bool
+	TTLMinutes   int
+}
+
 type LogConfig struct {
 	Level  string
 	Format string
@@ -40,6 +47,7 @@ type Config struct {
 	Database DatabaseConfig
 	Auth     AuthConfig
 	Redis    RedisConfig
+	Session  SessionConfig
 	Log      LogConfig
 }
 
@@ -73,6 +81,12 @@ func Load() (*Config, error) {
 		Redis: RedisConfig{
 			URL: getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		},
+		Session: SessionConfig{
+			CookieName:   getEnv("SESSION_COOKIE_NAME", "session"),
+			CookieDomain: getEnv("SESSION_COOKIE_DOMAIN", ""),
+			CookieSecure: getEnvBool("SESSION_COOKIE_SECURE", false),
+			TTLMinutes:   getEnvInt("SESSION_TTL_MINUTES", 1440),
+		},
 		Log: LogConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
 			Format: getEnv("LOG_FORMAT", "json"),
@@ -99,4 +113,12 @@ func getEnvInt(key string, fallback int) int {
 		return fallback
 	}
 	return v
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	s := getEnv(key, "")
+	if s == "" {
+		return fallback
+	}
+	return s == "true" || s == "1" || s == "yes"
 }

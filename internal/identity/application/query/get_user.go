@@ -23,15 +23,6 @@ type GetUserQuery struct {
 	UserID string
 }
 
-type UserDTO struct {
-	ID        string   `json:"id"`
-	Email     string   `json:"email"`
-	Roles     []string `json:"roles"`
-	IsActive  bool     `json:"is_active"`
-	CreatedAt string   `json:"created_at"`
-	UpdatedAt string   `json:"updated_at"`
-}
-
 func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (UserDTO, error) {
 	userID, err := domain.ParseUserID(q.UserID)
 	if err != nil {

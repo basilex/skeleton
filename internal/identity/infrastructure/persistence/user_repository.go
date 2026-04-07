@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/basilex/skeleton/pkg/pagination"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -80,9 +81,8 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email domain.Email) (*
 	return r.scanUser(row)
 }
 
-func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) ([]*domain.User, int, error) {
+func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) (pagination.PageResult[*domain.User], error) {
 	query := `SELECT id, email, password_hash, is_active, created_at, updated_at FROM users`
-	countQuery := `SELECT COUNT(*) FROM users`
 	args := make([]interface{}, 0)
 	conditions := make([]string, 0)
 
@@ -94,24 +94,23 @@ func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) 
 		conditions = append(conditions, "is_active = ?")
 		args = append(args, *filter.IsActive)
 	}
+	if filter.Cursor != "" {
+		conditions = append(conditions, "id < ?")
+		args = append(args, filter.Cursor)
+	}
 
 	if len(conditions) > 0 {
 		where := " WHERE " + joinConditions(conditions)
 		query += where
-		countQuery += where
 	}
 
-	query += ` ORDER BY created_at DESC`
-	if filter.PageSize > 0 {
-		query += ` LIMIT ? OFFSET ?`
-		args = append(args, filter.PageSize)
-		args = append(args, (filter.Page-1)*filter.PageSize)
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = pagination.DefaultLimit
 	}
 
-	var total int
-	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
-		return nil, 0, fmt.Errorf("count users: %w", err)
-	}
+	query += ` ORDER BY id DESC LIMIT ?`
+	args = append(args, limit+1)
 
 	var rows []struct {
 		ID           string `db:"id"`
@@ -122,19 +121,19 @@ func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) 
 		UpdatedAt    string `db:"updated_at"`
 	}
 	if err := r.db.SelectContext(ctx, &rows, query, args...); err != nil {
-		return nil, 0, fmt.Errorf("select users: %w", err)
+		return pagination.PageResult[*domain.User]{}, fmt.Errorf("select users: %w", err)
 	}
 
 	users := make([]*domain.User, len(rows))
 	for i, row := range rows {
 		u, err := r.scanUser(row)
 		if err != nil {
-			return nil, 0, fmt.Errorf("scan user: %w", err)
+			return pagination.PageResult[*domain.User]{}, fmt.Errorf("scan user: %w", err)
 		}
 		users[i] = u
 	}
 
-	return users, total, nil
+	return pagination.NewPageResult(users, limit), nil
 }
 
 func (r *UserRepository) Delete(ctx context.Context, id domain.UserID) error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/basilex/skeleton/pkg/pagination"
 )
 
 type ListUsersHandler struct {
@@ -20,40 +21,43 @@ func NewListUsersHandler(users domain.UserRepository, roles domain.RoleRepositor
 }
 
 type ListUsersQuery struct {
-	Page     int
-	PageSize int
+	Cursor   string
+	Limit    int
 	Search   string
 	IsActive *bool
 }
 
-type ListUsersResult struct {
-	Users []UserDTO `json:"users"`
-	Total int       `json:"total"`
+type UserDTO struct {
+	ID        string   `json:"id"`
+	Email     string   `json:"email"`
+	Roles     []string `json:"roles"`
+	IsActive  bool     `json:"is_active"`
+	CreatedAt string   `json:"created_at"`
+	UpdatedAt string   `json:"updated_at"`
 }
 
-func (h *ListUsersHandler) Handle(ctx context.Context, q ListUsersQuery) (ListUsersResult, error) {
-	if q.Page < 1 {
-		q.Page = 1
+func (h *ListUsersHandler) Handle(ctx context.Context, q ListUsersQuery) (pagination.PageResult[UserDTO], error) {
+	pq := pagination.PageQuery{
+		Cursor: q.Cursor,
+		Limit:  q.Limit,
 	}
-	if q.PageSize < 1 {
-		q.PageSize = 20
-	}
+	pq.Normalize()
 
 	filter := domain.UserFilter{
 		Search:   q.Search,
 		IsActive: q.IsActive,
-		Page:     q.Page,
-		PageSize: q.PageSize,
+		Cursor:   pq.Cursor,
+		Limit:    pq.Limit,
 	}
 
-	users, total, err := h.users.FindAll(ctx, filter)
+	page, err := h.users.FindAll(ctx, filter)
 	if err != nil {
-		return ListUsersResult{}, fmt.Errorf("find all users: %w", err)
+		return pagination.PageResult[UserDTO]{}, fmt.Errorf("find all users: %w", err)
 	}
 
 	allRoles, err := h.roles.FindAll(ctx)
 	if err != nil {
-		return ListUsersResult{}, fmt.Errorf("find all roles: %w", err)
+		return pagination.PageResult[UserDTO]{}, fmt.Errorf("find all roles: %w", err)
 	}
 
 	roleMap := make(map[domain.RoleID]*domain.Role)
@@ -61,15 +65,15 @@ func (h *ListUsersHandler) Handle(ctx context.Context, q ListUsersQuery) (ListUs
 		roleMap[r.ID()] = r
 	}
 
-	result := make([]UserDTO, len(users))
-	for i, u := range users {
+	items := make([]UserDTO, len(page.Items))
+	for i, u := range page.Items {
 		roleNames := make([]string, 0)
 		for _, roleID := range u.Roles() {
 			if r, ok := roleMap[roleID]; ok {
 				roleNames = append(roleNames, r.Name())
 			}
 		}
-		result[i] = UserDTO{
+		items[i] = UserDTO{
 			ID:        string(u.ID()),
 			Email:     u.Email().String(),
 			Roles:     roleNames,
@@ -79,8 +83,5 @@ func (h *ListUsersHandler) Handle(ctx context.Context, q ListUsersQuery) (ListUs
 		}
 	}
 
-	return ListUsersResult{
-		Users: result,
-		Total: total,
-	}, nil
+	return pagination.NewPageResultWithCursor(items, page.NextCursor, page.HasMore, page.Limit), nil
 }

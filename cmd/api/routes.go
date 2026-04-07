@@ -44,11 +44,11 @@ func registerAuthRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	v1.POST("/auth/register", di.IdentityHandler.Register)
 	v1.POST("/auth/login", di.IdentityHandler.Login)
 	v1.POST("/auth/refresh", di.IdentityHandler.Refresh)
-	v1.POST("/auth/logout", di.AuthMiddleware.Authenticate(), di.IdentityHandler.Logout)
+	v1.POST("/auth/logout", di.SessionMiddleware.Authenticate(), di.IdentityHandler.Logout)
+	v1.GET("/auth/me", di.SessionMiddleware.Authenticate(), di.IdentityHandler.GetMyProfile)
 }
 
 func registerUserRoutes(v1 *gin.RouterGroup, di *Dependencies) {
-	v1.GET("/users/me", di.AuthMiddleware.Authenticate(), di.IdentityHandler.GetMyProfile)
 	v1.GET("/users", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("users:read"), di.IdentityHandler.ListUsers)
 	v1.GET("/users/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("users:read"), di.IdentityHandler.GetUser)
 	v1.PATCH("/users/:id/deactivate", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("users:write"), di.IdentityHandler.DeactivateUser)
@@ -61,8 +61,7 @@ func registerRoleRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 
 func registerStatusRoutes(r *gin.Engine, di *Dependencies) {
 	r.GET("/health", di.StatusHandler.Health)
-	r.GET("/ready", di.StatusHandler.Ready)
-	r.GET("/api/v1/aux/info", di.StatusHandler.GetInfo)
+	r.GET("/build", di.StatusHandler.GetInfo)
 }
 
 func recoveryMiddleware() gin.HandlerFunc {
