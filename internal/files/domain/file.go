@@ -332,7 +332,7 @@ func (f *File) CanAccess(userID *domain.UserID) bool {
 // GeneratePath generates a storage path based on file ID and storage provider.
 func (f *File) GeneratePath() string {
 	ext := filepath.Ext(f.filename)
-	return fmt.Sprintf("%s/%s/%s%s",
+	return fmt.Sprintf("%s/%s/%s",
 		f.storageProvider,
 		f.id.String()[:2], // First 2 chars for directory sharding
 		f.id.String()+ext,
