@@ -206,14 +206,6 @@ func ParseFileID(s string) (domain.FileID, error) {
 	return domain.ParseFileID(s)
 }
 
-func MustParseFileID(s string) domain.FileID {
-	id, err := ParseFileID(s)
-	if err != nil {
-		panic(fmt.Sprintf("invalid file ID: %s", s))
-	}
-	return id
-}
-
 // UploadFileHandler implementation
 type uploadFileHandler struct {
 	fileRepo domain.FileRepository
