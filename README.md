@@ -90,6 +90,7 @@ make keys && make migrate-up && make seed && make run
 - [ADR-006: UUID v7](docs/adr/ADR-006-uuid-v7.md)
 - [ADR-007: Cursor Pagination](docs/adr/ADR-007-cursor-pagination.md)
 - [ADR-008: Semantic Versioning Strategy](docs/adr/ADR-008-versioning.md)
+- [ADR-009: Mandatory Swagger Annotations](docs/adr/ADR-009-swagger-annotations.md)
 
 ## Version Management
 

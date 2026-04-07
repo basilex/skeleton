@@ -148,3 +148,17 @@ Response:
 - Email: `admin@skeleton.local`
 - Password: `Admin1234!`
 - Role: `super_admin`
+
+## Swagger Documentation
+
+Swagger UI доступний за адресою: http://localhost:8080/swagger/index.html
+
+```bash
+# Generate swagger docs
+make swagger
+
+# Generate and serve Swagger UI
+make swagger-serve
+```
+
+All HTTP handlers must have swagger annotations (see [ADR-009](../adr/ADR-009-swagger-annotations.md)).
