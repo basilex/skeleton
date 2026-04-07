@@ -1,8 +1,12 @@
 .PHONY: build run test test-cover test-race test-p0 lint swagger migrate-up migrate-down seed keys clean tidy
 
-VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
-COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
-BUILD_TIME  = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+VERSION_MAJOR ?= 0
+VERSION_MINOR ?= 1
+VERSION_PATCH ?= 0
+VERSION_STAGE ?= dev
+VERSION       = $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)-$(VERSION_STAGE)
+COMMIT        ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
+BUILD_TIME     = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 build:
 	go build \
