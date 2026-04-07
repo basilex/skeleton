@@ -1,3 +1,36 @@
+// @title Skeleton API
+// @version 1.0
+// @description Go DDD Hexagonal architecture skeleton project API
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /
+
+// @securityDefinitions.apikey SessionAuth
+// @in cookie
+// @name session
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description JWT Bearer token (format: "Bearer {token}")
+
+// @tag.name auth
+// @tag.description Authentication operations
+// @tag.name users
+// @tag.description User management operations
+// @tag.name roles
+// @tag.description Role management operations
+// @tag.name status
+// @tag.description System status and health checks
+
 package main
 
 import (

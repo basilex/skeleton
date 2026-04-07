@@ -29,7 +29,10 @@ lint:
 	golangci-lint run ./...
 
 swagger:
-	swag init -g cmd/api/main.go -o docs/api
+	swag init -g cmd/api/main.go -o docs/api --parseDependency --parseInternal
+
+swagger-serve: swagger
+	swag serve -d docs/api
 
 migrate-up:
 	go run ./scripts/migrate/ up
