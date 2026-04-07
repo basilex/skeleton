@@ -87,7 +87,8 @@ func (r *FileRepository) GetByID(ctx context.Context, id domain.FileID) (*domain
 		FROM files WHERE id = ?
 	`
 
-	var fileID, ownerID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
+	var fileID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
+	var ownerID sql.NullString
 	var size int64
 	var metadataJSON []byte
 	var uploadedAt, createdAt, updatedAt string
@@ -106,8 +107,13 @@ func (r *FileRepository) GetByID(ctx context.Context, id domain.FileID) (*domain
 		return nil, fmt.Errorf("scan file: %w", err)
 	}
 
+	var ownerIDStr string
+	if ownerID.Valid {
+		ownerIDStr = ownerID.String
+	}
+
 	return r.reconstituteFile(
-		fileID, ownerID, filename, storedName, mimeType, size, path,
+		fileID, ownerIDStr, filename, storedName, mimeType, size, path,
 		storageProvider, checksum, metadataJSON, accessLevel,
 		uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
 	)
@@ -200,7 +206,8 @@ func (r *FileRepository) GetByPath(ctx context.Context, path string) (*domain.Fi
 		FROM files WHERE path = ?
 	`
 
-	var fileID, ownerID, filename, storedName, mimeType, filePath, storageProvider, checksum, accessLevel string
+	var fileID, filename, storedName, mimeType, filePath, storageProvider, checksum, accessLevel string
+	var ownerID sql.NullString
 	var size int64
 	var metadataJSON []byte
 	var uploadedAt, createdAt, updatedAt string
@@ -219,8 +226,13 @@ func (r *FileRepository) GetByPath(ctx context.Context, path string) (*domain.Fi
 		return nil, fmt.Errorf("scan file: %w", err)
 	}
 
+	var ownerIDStr string
+	if ownerID.Valid {
+		ownerIDStr = ownerID.String
+	}
+
 	return r.reconstituteFile(
-		fileID, ownerID, filename, storedName, mimeType, size, filePath,
+		fileID, ownerIDStr, filename, storedName, mimeType, size, filePath,
 		storageProvider, checksum, metadataJSON, accessLevel,
 		uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
 	)
@@ -371,7 +383,8 @@ func (r *FileRepository) scanFiles(rows *sql.Rows) ([]*domain.File, error) {
 	var files []*domain.File
 
 	for rows.Next() {
-		var fileID, ownerID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
+		var fileID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
+		var ownerID sql.NullString
 		var size int64
 		var metadataJSON []byte
 		var uploadedAt, createdAt, updatedAt string
@@ -385,8 +398,13 @@ func (r *FileRepository) scanFiles(rows *sql.Rows) ([]*domain.File, error) {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
+		var ownerIDStr string
+		if ownerID.Valid {
+			ownerIDStr = ownerID.String
+		}
+
 		file, err := r.reconstituteFile(
-			fileID, ownerID, filename, storedName, mimeType, size, path,
+			fileID, ownerIDStr, filename, storedName, mimeType, size, path,
 			storageProvider, checksum, metadataJSON, accessLevel,
 			uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
 		)
