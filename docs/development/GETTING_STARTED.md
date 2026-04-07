@@ -162,3 +162,79 @@ make swagger-serve
 ```
 
 All HTTP handlers must have swagger annotations (see [ADR-009](../adr/ADR-009-swagger-annotations.md)).
+
+## Docker
+
+Проект підтримує Docker для development та production.
+
+### Development (with hot reload)
+
+```bash
+# Start with hot reload
+make docker-dev
+
+# Or manually
+docker-compose up --build
+```
+
+Changes to Go files will automatically rebuild and restart.
+
+### Production
+
+```bash
+# Build production image
+make docker-build
+
+# Run production container
+make docker-prod
+
+# Or manually
+docker-compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+### Docker Commands
+
+```bash
+make docker-build      # Build production image
+make docker-dev        # Start development with hot reload
+make docker-prod       # Start production containers
+make docker-up         # Start containers in background
+make docker-down       # Stop and remove containers
+make docker-logs       # View container logs
+make docker-ps         # List running containers
+make docker-clean      # Remove containers, volumes, images
+```
+
+### With Redis (optional)
+
+```bash
+# Development with Redis
+make docker-dev-redis
+
+# This starts both app and Redis containers
+```
+
+### Environment Variables
+
+Production configuration in `configs/.env.prod.example`:
+- Copy to `.env.prod` and customize
+- Docker Compose will use these values
+
+### Health Check
+
+Both development and production containers include health checks:
+```bash
+curl http://localhost:8080/health
+# {"status":"ok"}
+```
+
+### Dockerfile Details
+
+**Multi-stage build:**
+- Build stage: `golang:1.24-alpine` (compiles binary)
+- Runtime stage: `alpine:3.19` (minimal ~10MB)
+- Non-root user for security
+- Health check included

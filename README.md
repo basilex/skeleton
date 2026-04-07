@@ -15,6 +15,7 @@ Go DDD Hexagonal architecture skeleton project — production-ready foundation f
 - **Event Bus** — pluggable in-memory (dev) / Redis (prod)
 - **RFC 7807 Errors** — standardized error responses
 - **Swagger/OpenAPI** — auto-generated API documentation
+- **Docker Ready** — multi-stage builds, docker-compose for dev/prod
 
 ## Quick Start
 
@@ -140,4 +141,13 @@ make migrate-up     # Apply migrations
 make migrate-down   # Rollback migrations
 make seed           # Seed dev data
 make clean          # Clean build artifacts
+
+# Docker
+make docker-build   # Build production image
+make docker-dev     # Start development (hot reload)
+make docker-prod    # Start production containers
+make docker-up      # Start in background
+make docker-down    # Stop containers
+make docker-logs    # View logs
+make docker-ps      # List containers
 ```

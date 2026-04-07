@@ -1,11 +1,13 @@
 # Binaries
 bin/
+tmp/
 
 # Data
 data/
 
 # Keys
-keys/
+keys/*.pem
+!keys/.gitkeep
 
 # Env files (реальні секрети не комітимо)
 configs/.env
@@ -39,3 +41,6 @@ Thumbs.db
 
 # Dependencies
 vendor/
+
+# Docker
+.docker/

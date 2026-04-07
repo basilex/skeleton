@@ -1,4 +1,4 @@
-.PHONY: build run test test-cover test-race test-p0 lint swagger migrate-up migrate-down seed keys clean tidy
+.PHONY: build run test test-cover test-race test-p0 lint swagger migrate-up migrate-down seed keys clean tidy docker-build docker-up docker-down docker-logs docker-ps docker-dev docker-prod
 
 VERSION_MAJOR ?= 0
 VERSION_MINOR ?= 1
@@ -57,3 +57,40 @@ clean:
 
 tidy:
 	go mod tidy
+
+# Docker commands
+docker-build:
+	docker build \
+	  --build-arg VERSION_MAJOR=$(VERSION_MAJOR) \
+	  --build-arg VERSION_MINOR=$(VERSION_MINOR) \
+	  --build-arg VERSION_PATCH=$(VERSION_PATCH) \
+	  --build-arg VERSION_STAGE=$(VERSION_STAGE) \
+	  --build-arg COMMIT=$(COMMIT) \
+	  --build-arg BUILD_TIME=$(BUILD_TIME) \
+	  -t skeleton-api:$(VERSION) \
+	  .
+
+docker-dev:
+	docker-compose up --build
+
+docker-prod:
+	docker-compose -f docker-compose.prod.yml up --build -d
+
+docker-up:
+	docker-compose up -d
+
+docker-down:
+	docker-compose down
+
+docker-logs:
+	docker-compose logs -f
+
+docker-ps:
+	docker-compose ps
+
+docker-clean:
+	docker-compose down -v --rmi local
+
+# Docker with Redis (optional)
+docker-dev-redis:
+	docker-compose --profile redis up --build
