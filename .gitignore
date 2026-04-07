@@ -1,0 +1,46 @@
+# Binaries
+bin/
+tmp/
+
+# Data
+data/
+
+# Keys
+keys/*.pem
+!keys/.gitkeep
+
+# Env files (реальні секрети не комітимо)
+configs/.env
+configs/.env.*
+!configs/.env.example
+!configs/.env.prod.example
+
+# Coverage
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Dependencies
+vendor/
+
+# Docker
+.docker/

@@ -1,0 +1,58 @@
+# Production environment
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION_MAJOR: 0
+        VERSION_MINOR: 1
+        VERSION_PATCH: 0
+        VERSION_STAGE: prod
+        COMMIT: ${COMMIT:-unknown}
+        BUILD_TIME: ${BUILD_TIME:-unknown}
+    image: skeleton-api:${VERSION:-0.1.0-prod}
+    container_name: skeleton-api-prod
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      - APP_ENV=prod
+      - APP_PORT=8080
+      - DATABASE_PATH=/app/data/skeleton.db
+      - AUTH_PRIVATE_KEY_PATH=/app/keys/private.pem
+      - AUTH_PUBLIC_KEY_PATH=/app/keys/public.pem
+      - AUTH_ACCESS_TTL_MINUTES=${AUTH_ACCESS_TTL_MINUTES:-15}
+      - AUTH_REFRESH_TTL_DAYS=${AUTH_REFRESH_TTL_DAYS:-7}
+      - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
+      - SESSION_COOKIE_NAME=session
+    volumes:
+      - app-data:/app/data
+      - app-keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  app-data:
+    driver: local
+  app-keys:
+    driver: local

@@ -1,0 +1,520 @@
+basePath: /
+definitions:
+  github_com_basilex_skeleton_internal_identity_application_query.UserDTO:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      roles:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  github_com_basilex_skeleton_pkg_apierror.APIError:
+    properties:
+      detail:
+        type: string
+      instance:
+        type: string
+      request_id:
+        type: string
+      status:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+    type: object
+  internal_identity_ports_http.AssignRoleRequest:
+    properties:
+      role_id:
+        example: 019d65d6-de90-7200-b1cf-4f8745597e0a
+        type: string
+    required:
+    - role_id
+    type: object
+  internal_identity_ports_http.LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: StrongPass123!
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_identity_ports_http.RefreshRequest:
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJSUzI1NiIs...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  internal_identity_ports_http.RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: StrongPass123!
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_identity_ports_http.TokenResponse:
+    properties:
+      access_token:
+        example: eyJhbGciOiJSUzI1NiIs...
+        type: string
+      refresh_token:
+        example: 019d65d6-de90-7200-b1cf-4f8745597e0a
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@swagger.io
+    name: API Support
+    url: http://www.swagger.io/support
+  description: Go DDD Hexagonal architecture skeleton project API
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Skeleton API
+  version: "1.0"
+paths:
+  /api/v1/audit/records:
+    get:
+      description: Returns paginated list of audit records with optional filters
+      parameters:
+      - description: Filter by actor ID
+        in: query
+        name: actor_id
+        type: string
+      - description: Filter by resource (user, role, auth)
+        in: query
+        name: resource
+        type: string
+      - description: Filter by action (create, read, update, delete, login, logout,
+          etc.)
+        in: query
+        name: action
+        type: string
+      - description: Filter from date (RFC3339 format)
+        in: query
+        name: date_from
+        type: string
+      - description: Filter to date (RFC3339 format)
+        in: query
+        name: date_to
+        type: string
+      - description: Pagination cursor (UUID v7)
+        in: query
+        name: cursor
+        type: string
+      - description: Items per page (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated audit records
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - BearerAuth: []
+      summary: List audit records
+      tags:
+      - audit
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates user and returns access + refresh tokens
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_identity_ports_http.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Tokens
+          schema:
+            $ref: '#/definitions/internal_identity_ports_http.TokenResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      summary: Login user
+      tags:
+      - auth
+  /api/v1/auth/logout:
+    post:
+      description: Destroys current user session and logs logout event
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - SessionAuth: []
+      summary: Logout user
+      tags:
+      - auth
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Issues new access token using refresh token
+      parameters:
+      - description: Refresh request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_identity_ports_http.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: New tokens
+          schema:
+            $ref: '#/definitions/internal_identity_ports_http.TokenResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "401":
+          description: Invalid refresh token
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      summary: Refresh access token
+      tags:
+      - auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user account with email and password
+      parameters:
+      - description: Registration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_identity_ports_http.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "422":
+          description: Validation error
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "500":
+          description: Internal error
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      summary: Register a new user
+      tags:
+      - auth
+  /api/v1/users:
+    get:
+      description: Returns paginated list of users
+      parameters:
+      - description: Pagination cursor (UUID v7)
+        in: query
+        name: cursor
+        type: string
+      - description: Items per page (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Search by email
+        in: query
+        name: search
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated users
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - users
+  /api/v1/users/{id}:
+    get:
+      description: Returns user details by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User details
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_internal_identity_application_query.UserDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - SessionAuth: []
+      summary: Get user by ID
+      tags:
+      - users
+  /api/v1/users/{id}/roles:
+    post:
+      consumes:
+      - application/json
+      description: Assigns a role to the specified user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Role assignment
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_identity_ports_http.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Role assigned
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "404":
+          description: User or role not found
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - SessionAuth: []
+      summary: Assign role to user
+      tags:
+      - roles
+  /api/v1/users/{id}/roles/{rid}:
+    delete:
+      description: Removes a role from the specified user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Role ID
+        in: path
+        name: rid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Role revoked
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - SessionAuth: []
+      summary: Revoke role from user
+      tags:
+      - roles
+  /api/v1/users/me:
+    get:
+      description: Returns authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_internal_identity_application_query.UserDTO'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_basilex_skeleton_pkg_apierror.APIError'
+      security:
+      - SessionAuth: []
+      summary: Get current user profile
+      tags:
+      - users
+  /build:
+    get:
+      description: Returns build version, commit, and runtime info
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Build info
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get build information
+      tags:
+      - status
+  /health:
+    get:
+      description: Returns service health status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - status
+  /ready:
+    get:
+      description: Returns service readiness status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is ready
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Readiness check
+      tags:
+      - status
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT Bearer token (format: "Bearer {token}")'
+    in: header
+    name: Authorization
+    type: apiKey
+  SessionAuth:
+    in: cookie
+    name: session
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: Authentication operations
+  name: auth
+- description: User management operations
+  name: users
+- description: Role management operations
+  name: roles
+- description: Audit log operations
+  name: audit
+- description: System status and health checks
+  name: status

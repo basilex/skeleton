@@ -1,0 +1,60 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+docs/
+*.md
+LICENSE
+
+# Build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Test
+coverage.out
+coverage.html
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+*.db
+*.db-journal
+*.db-wal
+
+# Keys (will be mounted as volumes)
+keys/*.pem
+
+# Env files (will be mounted at runtime)
+configs/.env
+configs/.env.*
+!configs/.env.example
+!configs/.env.prod.example
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+tmp/
+temp/
+
+# Logs
+*.log
