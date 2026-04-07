@@ -13,6 +13,7 @@ import (
 type Handler struct {
 	registerUser *command.RegisterUserHandler
 	loginUser    *command.LoginUserHandler
+	logoutUser   *command.LogoutUserHandler
 	assignRole   *command.AssignRoleHandler
 	revokeRole   *command.RevokeRoleHandler
 	getUser      *query.GetUserHandler
@@ -23,6 +24,7 @@ type Handler struct {
 func NewHandler(
 	registerUser *command.RegisterUserHandler,
 	loginUser *command.LoginUserHandler,
+	logoutUser *command.LogoutUserHandler,
 	assignRole *command.AssignRoleHandler,
 	revokeRole *command.RevokeRoleHandler,
 	getUser *query.GetUserHandler,
@@ -32,6 +34,7 @@ func NewHandler(
 	return &Handler{
 		registerUser: registerUser,
 		loginUser:    loginUser,
+		logoutUser:   logoutUser,
 		assignRole:   assignRole,
 		revokeRole:   revokeRole,
 		getUser:      getUser,
@@ -127,7 +130,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 
 // Logout godoc
 // @Summary Logout user
-// @Description Destroys current user session
+// @Description Destroys current user session and logs logout event
 // @Tags auth
 // @Produce json
 // @Security SessionAuth
@@ -135,10 +138,21 @@ func (h *Handler) Refresh(c *gin.Context) {
 // @Failure 401 {object} apierror.APIError "Unauthorized"
 // @Router /api/v1/auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	sid, ok := c.Get("session_id")
 	if ok {
 		_ = h.sessionStore.Delete(c.Request.Context(), sid.(string))
 	}
+
+	_ = h.logoutUser.Handle(c.Request.Context(), command.LogoutUserCommand{
+		UserID: userID.(string),
+	})
+
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 

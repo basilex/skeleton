@@ -73,6 +73,7 @@ func seedPermissions(ctx context.Context, db *sql.DB) {
 		{uuid.NewV7().String(), "users:write", "users", "write"},
 		{uuid.NewV7().String(), "roles:read", "roles", "read"},
 		{uuid.NewV7().String(), "roles:manage", "roles", "manage"},
+		{uuid.NewV7().String(), "audit:read", "audit", "read"},
 	}
 
 	for _, p := range perms {
@@ -103,11 +104,12 @@ func seedRolePermissions(ctx context.Context, db *sql.DB) {
 	db.QueryRowContext(ctx, `SELECT id FROM roles WHERE name = 'admin'`).Scan(&adminID)
 	db.QueryRowContext(ctx, `SELECT id FROM roles WHERE name = 'viewer'`).Scan(&viewerID)
 
-	var usersRead, usersWrite, rolesRead, rolesManage string
+	var usersRead, usersWrite, rolesRead, rolesManage, auditRead string
 	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'users:read'`).Scan(&usersRead)
 	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'users:write'`).Scan(&usersWrite)
 	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'roles:read'`).Scan(&rolesRead)
 	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'roles:manage'`).Scan(&rolesManage)
+	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'audit:read'`).Scan(&auditRead)
 
 	if superAdminID != "" {
 		log.Printf("super_admin has *:* wildcard (handled in code)")
@@ -125,8 +127,14 @@ func seedRolePermissions(ctx context.Context, db *sql.DB) {
 	if adminID != "" && rolesManage != "" {
 		insertRolePerm(ctx, db, adminID, rolesManage)
 	}
+	if adminID != "" && auditRead != "" {
+		insertRolePerm(ctx, db, adminID, auditRead)
+	}
 	if viewerID != "" && usersRead != "" {
 		insertRolePerm(ctx, db, viewerID, usersRead)
+	}
+	if viewerID != "" && auditRead != "" {
+		insertRolePerm(ctx, db, viewerID, auditRead)
 	}
 }
 

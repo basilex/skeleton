@@ -45,11 +45,16 @@ make keys && make migrate-up && make seed && make run
 │   └── logger.go         # Logger setup
 ├── internal/
 │   ├── status/           # Build info, health checks
-│   └── identity/         # Users, roles, auth, sessions
-│       ├── domain/       # Aggregates, value objects, events
-│       ├── application/  # Command/query handlers
-│       ├── infrastructure/ # DB, token, session implementations
-│       └── ports/        # HTTP handlers, middleware, DTOs
+│   ├── identity/         # Users, roles, auth, sessions
+│   │   ├── domain/       # Aggregates, value objects, events
+│   │   ├── application/  # Command/query handlers
+│   │   ├── infrastructure/ # DB, token, session implementations
+│   │   └── ports/        # HTTP handlers, middleware, DTOs
+│   └── audit/            # Audit log, system events
+│       ├── domain/       # Record aggregate, events
+│       ├── application/  # Log/Query handlers
+│       ├── infrastructure/ # Persistence, event handlers
+│       └── ports/        # HTTP handler
 ├── pkg/                  # Shared packages
 │   ├── eventbus/         # Event bus interface + implementations
 │   ├── database/         # SQLite setup

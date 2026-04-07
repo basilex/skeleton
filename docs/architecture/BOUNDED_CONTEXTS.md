@@ -5,7 +5,8 @@
 | Context | Відповідальність | Публікує події | Підписується на |
 |---------|-----------------|----------------|-----------------|
 | `status` | Build info, health check | — | — |
-| `identity` | Users, roles, auth, RBAC | `identity.user_registered`, `identity.role_assigned`, `identity.role_revoked` | — |
+| `identity` | Users, roles, auth, RBAC | `identity.user_registered`, `identity.role_assigned`, `identity.role_revoked`, `identity.login`, `identity.logout` | — |
+| `audit` | Audit log, all system events | — | `identity.user_registered`, `identity.role_assigned`, `identity.role_revoked`, `identity.login`, `identity.logout` |
 
 ## Rules
 
@@ -16,13 +17,13 @@
 
 ## Checklist: Додавання нового контексту
 
-- [ ] Створити `internal/{context}/` з domain/application/infrastructure/ports
-- [ ] Визначити domain aggregates та value objects
-- [ ] Описати repository interfaces у domain
-- [ ] Реалізувати command/query handlers
-- [ ] Реалізувати infrastructure adapters
-- [ ] Створити HTTP handlers у ports
-- [ ] Зареєструвати routes у `cmd/api/main.go`
-- [ ] Додати події якщо потрібна міжконтекстна комунікація
-- [ ] Написати тести (domain → application → infrastructure)
-- [ ] Оновити цю документацію
+- [x] Створити `internal/{context}/` з domain/application/infrastructure/ports
+- [x] Визначити domain aggregates та value objects
+- [x] Описати repository interfaces у domain
+- [x] Реалізувати command/query handlers
+- [x] Реалізувати infrastructure adapters
+- [x] Створити HTTP handlers у ports
+- [x] Зареєструвати routes у `cmd/api/routes.go`
+- [x] Додати події якщо потрібна міжконтекстна комунікація
+- [x] Написати тести (domain → application → infrastructure)
+- [x] Оновити цю документацію

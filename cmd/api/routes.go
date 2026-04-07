@@ -35,6 +35,7 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 		registerAuthRoutes(v1, di)
 		registerUserRoutes(v1, di)
 		registerRoleRoutes(v1, di)
+		registerAuditRoutes(v1, di)
 	}
 
 	registerStatusRoutes(r, di)
@@ -62,6 +63,10 @@ func registerRoleRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 func registerStatusRoutes(r *gin.Engine, di *Dependencies) {
 	r.GET("/health", di.StatusHandler.Health)
 	r.GET("/build", di.StatusHandler.GetInfo)
+}
+
+func registerAuditRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	v1.GET("/audit/records", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("audit:read"), di.AuditHandler.ListRecords)
 }
 
 func recoveryMiddleware() gin.HandlerFunc {

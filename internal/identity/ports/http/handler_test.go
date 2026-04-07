@@ -58,13 +58,14 @@ func TestHandler_Register_Success(t *testing.T) {
 	roleRepo := &mockRoleRepo{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, hasher)
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{})
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{}, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	body := bytes.NewBufferString(`{"email":"test@example.com","password":"Password1234!"}`)
@@ -88,13 +89,14 @@ func TestHandler_Register_InvalidEmail(t *testing.T) {
 	roleRepo := &mockRoleRepo{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, hasher)
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{})
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{}, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	body := bytes.NewBufferString(`{"email":"invalid","password":"Password1234!"}`)
@@ -118,13 +120,14 @@ func TestHandler_Register_ShortPassword(t *testing.T) {
 	roleRepo := &mockRoleRepo{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, hasher)
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{})
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{}, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	body := bytes.NewBufferString(`{"email":"test@example.com","password":"short"}`)
@@ -148,13 +151,14 @@ func TestHandler_Register_DuplicateEmail(t *testing.T) {
 	roleRepo := &mockRoleRepo{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, hasher)
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{})
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, &mockTokenService{}, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	body := bytes.NewBufferString(`{"email":"test@example.com","password":"Password1234!"}`)
@@ -182,13 +186,14 @@ func TestHandler_Login_Success(t *testing.T) {
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, &domain.BcryptHasher{})
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	body := bytes.NewBufferString(`{"email":"test@example.com","password":"Password1234!"}`)
@@ -221,13 +226,14 @@ func TestHandler_Login_WrongPassword(t *testing.T) {
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, &domain.BcryptHasher{})
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	body := bytes.NewBufferString(`{"email":"test@example.com","password":"WrongPassword!"}`)
@@ -251,13 +257,14 @@ func TestHandler_GetMyProfile_RequiresSession(t *testing.T) {
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, &domain.BcryptHasher{})
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	w := httptest.NewRecorder()
@@ -283,13 +290,14 @@ func TestHandler_GetMyProfile_WithSession(t *testing.T) {
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, &domain.BcryptHasher{})
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	ctx := context.Background()
@@ -315,13 +323,14 @@ func TestHandler_Logout_RequiresSession(t *testing.T) {
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, &domain.BcryptHasher{})
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	w := httptest.NewRecorder()
@@ -347,13 +356,14 @@ func TestHandler_Logout_WithSession(t *testing.T) {
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, &domain.BcryptHasher{})
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 	r := setupTestRouter(t, handler, store, sessCfg)
 
 	ctx := context.Background()

@@ -5,9 +5,22 @@ import (
 	"testing"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/basilex/skeleton/pkg/eventbus"
 	"github.com/basilex/skeleton/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
+
+type mockEventBus struct {
+	published []eventbus.Event
+}
+
+func (m *mockEventBus) Publish(ctx context.Context, event eventbus.Event) error {
+	m.published = append(m.published, event)
+	return nil
+}
+
+func (m *mockEventBus) Subscribe(eventName string, handler eventbus.Handler) {
+}
 
 func TestLoginUserHandler_HappyPath(t *testing.T) {
 	email, _ := domain.NewEmail("test@example.com")
@@ -16,8 +29,9 @@ func TestLoginUserHandler_HappyPath(t *testing.T) {
 
 	users := &mockUserRepoLogin{user: user}
 	tokenSvc := &mockTokenService{}
+	bus := &mockEventBus{}
 
-	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc)
+	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc, bus)
 
 	result, err := handler.Handle(context.Background(), LoginUserCommand{
 		Email:    "test@example.com",
@@ -35,8 +49,9 @@ func TestLoginUserHandler_WrongPassword(t *testing.T) {
 
 	users := &mockUserRepoLogin{user: user}
 	tokenSvc := &mockTokenService{}
+	bus := &mockEventBus{}
 
-	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc)
+	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc, bus)
 
 	_, err := handler.Handle(context.Background(), LoginUserCommand{
 		Email:    "test@example.com",
@@ -48,8 +63,9 @@ func TestLoginUserHandler_WrongPassword(t *testing.T) {
 func TestLoginUserHandler_UserNotFound(t *testing.T) {
 	users := &mockUserRepoLogin{err: domain.ErrUserNotFound}
 	tokenSvc := &mockTokenService{}
+	bus := &mockEventBus{}
 
-	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc)
+	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc, bus)
 
 	_, err := handler.Handle(context.Background(), LoginUserCommand{
 		Email:    "test@example.com",
@@ -66,8 +82,9 @@ func TestLoginUserHandler_InactiveUser(t *testing.T) {
 
 	users := &mockUserRepoLogin{user: user}
 	tokenSvc := &mockTokenService{}
+	bus := &mockEventBus{}
 
-	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc)
+	handler := NewLoginUserHandler(users, &mockRoleRepo{}, tokenSvc, bus)
 
 	_, err := handler.Handle(context.Background(), LoginUserCommand{
 		Email:    "test@example.com",

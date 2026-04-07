@@ -3,25 +3,30 @@ package command
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
 type LoginUserHandler struct {
 	users        domain.UserRepository
 	roles        domain.RoleRepository
 	tokenService domain.TokenService
+	bus          eventbus.Bus
 }
 
 func NewLoginUserHandler(
 	users domain.UserRepository,
 	roles domain.RoleRepository,
 	tokenService domain.TokenService,
+	bus eventbus.Bus,
 ) *LoginUserHandler {
 	return &LoginUserHandler{
 		users:        users,
 		roles:        roles,
 		tokenService: tokenService,
+		bus:          bus,
 	}
 }
 
@@ -70,6 +75,13 @@ func (h *LoginUserHandler) Handle(ctx context.Context, cmd LoginUserCommand) (To
 	refreshToken, err := h.tokenService.GenerateRefreshToken()
 	if err != nil {
 		return TokenPair{}, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	if err := h.bus.Publish(ctx, domain.UserLoggedIn{
+		UserID:    user.ID(),
+		OcurredAt: time.Now().UTC(),
+	}); err != nil {
+		return TokenPair{}, fmt.Errorf("publish login event: %w", err)
 	}
 
 	return TokenPair{

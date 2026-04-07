@@ -1,7 +1,12 @@
 package main
 
 import (
-	"github.com/basilex/skeleton/internal/identity/application/command"
+	auditCommand "github.com/basilex/skeleton/internal/audit/application/command"
+	auditQuery "github.com/basilex/skeleton/internal/audit/application/query"
+	auditEventHandler "github.com/basilex/skeleton/internal/audit/infrastructure/eventhandler"
+	auditPersistence "github.com/basilex/skeleton/internal/audit/infrastructure/persistence"
+	auditHTTP "github.com/basilex/skeleton/internal/audit/ports/http"
+	identityCommand "github.com/basilex/skeleton/internal/identity/application/command"
 	identityQuery "github.com/basilex/skeleton/internal/identity/application/query"
 	"github.com/basilex/skeleton/internal/identity/domain"
 	"github.com/basilex/skeleton/internal/identity/infrastructure/persistence"
@@ -24,6 +29,8 @@ type Dependencies struct {
 	SessionMiddleware *session.Middleware
 	StatusHandler     *statusHTTP.Handler
 	EventBus          eventbus.Bus
+	AuditHandler      *auditHTTP.Handler
+	AuditEventHandler *auditEventHandler.IdentityEventHandler
 }
 
 func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTime, goVersion string) *Dependencies {
@@ -31,6 +38,7 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 
 	userRepo := persistence.NewUserRepository(db)
 	roleRepo := persistence.NewRoleRepository(db)
+	auditRepo := auditPersistence.NewAuditRepository(db)
 
 	tokenService := newTokenService(cfg)
 	passwordHasher := &domain.BcryptHasher{}
@@ -38,16 +46,18 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	sessionStore := newSessionStore(cfg)
 	sessionMiddleware := session.NewMiddleware(sessionStore, cfg.Session)
 
-	registerHandler := command.NewRegisterUserHandler(userRepo, roleRepo, bus, passwordHasher)
-	loginHandler := command.NewLoginUserHandler(userRepo, roleRepo, tokenService)
-	assignRoleHandler := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
-	revokeRoleHandler := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
+	registerHandler := identityCommand.NewRegisterUserHandler(userRepo, roleRepo, bus, passwordHasher)
+	loginHandler := identityCommand.NewLoginUserHandler(userRepo, roleRepo, tokenService, bus)
+	logoutHandler := identityCommand.NewLogoutUserHandler(userRepo, bus)
+	assignRoleHandler := identityCommand.NewAssignRoleHandler(userRepo, roleRepo, bus)
+	revokeRoleHandler := identityCommand.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserHandler := identityQuery.NewGetUserHandler(userRepo, roleRepo)
 	listUsersHandler := identityQuery.NewListUsersHandler(userRepo, roleRepo)
 
 	identityHandler := identityHTTP.NewHandler(
 		registerHandler,
 		loginHandler,
+		logoutHandler,
 		assignRoleHandler,
 		revokeRoleHandler,
 		getUserHandler,
@@ -60,6 +70,13 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 
 	statusHandler := newStatusHandler(version, commit, buildTime, goVersion, cfg.App.Env)
 
+	logEventHandler := auditCommand.NewLogEventHandler(auditRepo)
+	listRecordsHandler := auditQuery.NewListRecordsHandler(auditRepo)
+	auditHandler := auditHTTP.NewHandler(listRecordsHandler)
+	auditIdentityEventHandler := auditEventHandler.NewIdentityEventHandler(logEventHandler)
+
+	auditIdentityEventHandler.Register(bus)
+
 	return &Dependencies{
 		IdentityHandler:   identityHandler,
 		AuthMiddleware:    authMiddleware,
@@ -67,6 +84,8 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 		SessionMiddleware: sessionMiddleware,
 		StatusHandler:     statusHandler,
 		EventBus:          bus,
+		AuditHandler:      auditHandler,
+		AuditEventHandler: auditIdentityEventHandler,
 	}
 }
 

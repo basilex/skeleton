@@ -33,13 +33,14 @@ func setupAuthTestRouter(t *testing.T) (*gin.Engine, *session.InMemoryStore, *mo
 	tokenSvc := &mockTokenService{}
 
 	registerH := command.NewRegisterUserHandler(userRepo, roleRepo, bus, hasher)
-	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc)
+	loginH := command.NewLoginUserHandler(userRepo, roleRepo, tokenSvc, bus)
+	logoutH := command.NewLogoutUserHandler(userRepo, bus)
 	assignH := command.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeH := command.NewRevokeRoleHandler(userRepo, roleRepo, bus)
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")

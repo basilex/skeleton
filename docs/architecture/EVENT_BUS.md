@@ -34,7 +34,12 @@ type Bus interface {
 ## Naming Conventions
 
 - Format: `{context}.{entity}_{action}`
-- Приклади: `identity.user_registered`, `identity.role_assigned`, `identity.role_revoked`
+- Приклади: 
+  - `identity.user_registered` — новий користувач зареєстрований
+  - `identity.role_assigned` — роль призначена користувачу
+  - `identity.role_revoked` — роль відкликана у користувача
+  - `identity.login` — користувач увійшов в систему
+  - `identity.logout` — користувач вийшов з системи
 - Snake_case для event names
 
 ## Delivery Guarantees

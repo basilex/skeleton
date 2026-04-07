@@ -73,6 +73,22 @@ curl -X POST http://localhost:8080/api/v1/auth/logout \
   -b "session=<session_id>"
 ```
 
+### Audit Logs (requires: audit:read)
+
+```bash
+# List audit records (requires authentication)
+curl http://localhost:8080/api/v1/audit/records \
+  -H "Authorization: Bearer <token>"
+
+# Filter by actor
+curl "http://localhost:8080/api/v1/audit/records?actor_id=019d65d6-de90-7200-b1cf-4f8745597e0a" \
+  -H "Authorization: Bearer <token>"
+
+# Filter by date range
+curl "http://localhost:8080/api/v1/audit/records?date_from=2024-01-01T00:00:00Z&date_to=2024-12-31T23:59:59Z" \
+  -H "Authorization: Bearer <token>"
+```
+
 ### Admin (requires: roles:manage)
 
 ```bash
