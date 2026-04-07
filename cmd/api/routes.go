@@ -183,6 +183,45 @@ func registerAuditRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	v1.GET("/audit/records", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("audit:read"), di.AuditHandler.ListRecords)
 }
 
+// registerFilesRoutes registers file management endpoints.
+// Files endpoints provide upload, download, processing, and management capabilities.
+//
+// User Endpoints (require authentication):
+//   - GET /api/v1/files - List files with filtering
+//   - POST /api/v1/files - Upload a file directly (small files <5MB)
+//   - GET /api/v1/files/:id - Get file metadata
+//   - DELETE /api/v1/files/:id - Delete a file
+//   - POST /api/v1/files/upload-url - Request presigned upload URL (large files)
+//   - POST /api/v1/files/confirm - Confirm upload completion
+//   - POST /api/v1/files/:id/process - Request file processing
+//   - GET /api/v1/files/processing/:id - Get processing status
+//   - GET /api/v1/files/:id/processings - List file processings
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with files handler and auth middlewares
+func registerFilesRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	files := v1.Group("/files")
+	files.Use(di.AuthMiddleware.Authenticate())
+
+	// File CRUD operations
+	files.GET("", di.FilesHandler.ListFiles)
+	files.GET("/:id", di.FilesHandler.GetFile)
+	files.DELETE("/:id", di.FilesHandler.DeleteFile)
+
+	// Direct upload (small files)
+	files.POST("", di.FilesHandler.UploadFile)
+
+	// Presigned upload URLs (large files)
+	files.POST("/upload-url", di.FilesHandler.RequestUploadURL)
+	files.POST("/confirm", di.FilesHandler.ConfirmUpload)
+
+	// File processing
+	files.POST("/:id/process", di.FilesHandler.RequestProcessing)
+	files.GET("/processing/:id", di.FilesHandler.GetProcessingStatus)
+	files.GET("/:id/processings", di.FilesHandler.ListProcessings)
+}
+
 // registerNotificationRoutes registers notification management endpoints.
 // Endpoints are split into user-accessible and admin-only routes.
 //

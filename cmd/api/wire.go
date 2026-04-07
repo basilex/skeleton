@@ -16,6 +16,8 @@
 package main
 
 import (
+	"fmt"
+
 	auditCommand "github.com/basilex/skeleton/internal/audit/application/command"
 	auditQuery "github.com/basilex/skeleton/internal/audit/application/query"
 	auditEventHandler "github.com/basilex/skeleton/internal/audit/infrastructure/eventhandler"
@@ -46,7 +48,6 @@ import (
 	statusDomain "github.com/basilex/skeleton/internal/status/domain"
 	statusHTTP "github.com/basilex/skeleton/internal/status/ports/http"
 	tasksDomain "github.com/basilex/skeleton/internal/tasks/domain"
-	tasksPersistence "github.com/basilex/skeleton/internal/tasks/infrastructure/persistence"
 	"github.com/basilex/skeleton/pkg/config"
 	"github.com/basilex/skeleton/pkg/eventbus"
 	membus "github.com/basilex/skeleton/pkg/eventbus/memory"
@@ -233,6 +234,77 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	// Initialize event handler for automatic notifications on identity events.
 	notificationIdentityEventHandler := notificationEventHandler.NewIdentityEventHandler(createFromTemplateHandler)
 
+	// Files bounded context
+	fileRepo := filesPersistence.NewFileRepository(db.DB)
+	uploadRepo := filesPersistence.NewUploadRepository(db.DB)
+	processingRepo := filesPersistence.NewProcessingRepository(db.DB)
+
+	localStorage, err := filesStorage.NewLocalStorage("./uploads", "http://localhost:8080/uploads")
+	if err != nil {
+		panic(fmt.Errorf("create local storage: %w", err))
+	}
+
+	imageProcessor := filesProcessing.NewImagingProcessor()
+
+	// Files command handlers
+	uploadFileHandler := filesCommand.NewUploadFileHandler(
+		fileRepo,
+		localStorage,
+		bus,
+	)
+	deleteFileHandler := filesCommand.NewDeleteFileHandler(
+		fileRepo,
+		localStorage,
+		bus,
+	)
+	requestUploadURLHandler := filesCommand.NewRequestUploadURLHandler(
+		uploadRepo,
+		fileRepo,
+		localStorage,
+	)
+	confirmUploadHandler := filesCommand.NewConfirmUploadHandler(
+		uploadRepo,
+		fileRepo,
+		bus,
+	)
+
+	// Note: ProcessFileHandler uses Tasks context which is not yet integrated
+	// For now, passing nil for taskRepo - this needs to be added when Tasks is integrated
+	var taskRepo tasksDomain.TaskRepository // Placeholder - Tasks integration needed
+	_ = taskRepo                            // Avoid unused variable error until Tasks is integrated
+	requestProcessingHandler := filesCommand.NewRequestProcessingHandler(
+		processingRepo,
+		fileRepo,
+		taskRepo,
+	)
+
+	// Files query handlers
+	getFileHandler := filesQuery.NewGetFileHandler(fileRepo)
+	listFilesHandler := filesQuery.NewListFilesHandler(fileRepo)
+	getProcessingStatusHandler := filesQuery.NewGetProcessingStatusHandler(processingRepo)
+	listProcessingsHandler := filesQuery.NewListProcessingsHandler(processingRepo)
+
+	// Files HTTP handler
+	filesHTTPHandler := filesHTTP.NewHandler(
+		uploadFileHandler,
+		deleteFileHandler,
+		requestUploadURLHandler,
+		confirmUploadHandler,
+		requestProcessingHandler,
+		getFileHandler,
+		listFilesHandler,
+		getProcessingStatusHandler,
+		listProcessingsHandler,
+	)
+
+	// ProcessFileHandler for Tasks integration
+	processFileHandler := filesHandler.NewProcessFileHandler(
+		processingRepo,
+		fileRepo,
+		localStorage,
+		imageProcessor,
+	)
+
 	// Register domain event handlers with the event bus.
 	// Register audit event handler to record identity events.
 	auditIdentityEventHandler.Register(bus)
@@ -252,6 +324,8 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 		NotificationHandler:      notificationHandler,
 		NotificationWorker:       notificationWorker,
 		NotificationEventHandler: notificationIdentityEventHandler,
+		FilesHandler:             filesHTTPHandler,
+		ProcessFileHandler:       processFileHandler,
 	}
 }
 
