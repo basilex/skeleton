@@ -5,8 +5,31 @@
 - Go 1.24+
 - Make
 - OpenSSL (для генерації ключів)
+- Docker (опціонально)
 
-## Setup
+## Quick Start
+
+### Local Development
+
+```bash
+# Initial setup (keys + migrate + seed)
+make setup
+
+# Run application
+make run
+
+# Or one command
+make dev
+```
+
+### Docker Development
+
+```bash
+# Build and run with hot reload
+make docker-dev
+
+# Access at http://localhost:8080
+```
 
 ```bash
 # Clone
@@ -48,7 +71,7 @@ curl http://localhost:8080/build
 # {"version":"0.1.0-dev","commit":"c4410c8","build_time":"2026-04-07T10:00:37Z","go_version":"go1.26.1","env":"dev"}
 ```
 
-详见 [ADR-008: Semantic Versioning Strategy](../adr/ADR-008-versioning.md).
+See [ADR-008: Semantic Versioning Strategy](../adr/ADR-008-versioning.md).
 
 ## API Endpoints
 
@@ -163,21 +186,27 @@ make swagger-serve
 
 All HTTP handlers must have swagger annotations (see [ADR-009](../adr/ADR-009-swagger-annotations.md)).
 
-## Docker
+## Docker Support
 
 Проект підтримує Docker для development та production.
 
 ### Development (with hot reload)
 
 ```bash
-# Start with hot reload
+# Quick start with Docker
 make docker-dev
 
 # Or manually
 docker-compose up --build
 ```
 
-Changes to Go files will automatically rebuild and restart.
+Changes to Go files automatically rebuild and restart.
+
+**Features:**
+- Hot reload with Air
+- Volume mounts for code changes
+- Health checks included
+- Optional Redis (`--profile redis`)
 
 ### Production
 
@@ -185,7 +214,7 @@ Changes to Go files will automatically rebuild and restart.
 # Build production image
 make docker-build
 
-# Run production container
+# Run production containers
 make docker-prod
 
 # Or manually
@@ -195,23 +224,31 @@ docker-compose -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.prod.yml logs -f
 ```
 
+**Features:**
+- Minimal alpine image (~10MB)
+- Non-root user for security
+- Resource limits (CPU/memory)
+- Automatic restarts
+- Health checks
+
 ### Docker Commands
 
 ```bash
 make docker-build      # Build production image
-make docker-dev        # Start development with hot reload
-make docker-prod       # Start production containers
-make docker-up         # Start containers in background
-make docker-down       # Stop and remove containers
-make docker-logs       # View container logs
-make docker-ps         # List running containers
+make docker-dev        # Development with hot reload
+make docker-prod       # Production deployment
+make docker-up         # Start in background
+make docker-down       # Stop containers
+make docker-logs       # View logs
+make docker-ps         # List containers
 make docker-clean      # Remove containers, volumes, images
+make docker-dev-redis  # Development with Redis
 ```
 
 ### With Redis (optional)
 
 ```bash
-# Development with Redis
+# Development with Redis for session/event bus
 make docker-dev-redis
 
 # This starts both app and Redis containers
@@ -219,13 +256,19 @@ make docker-dev-redis
 
 ### Environment Variables
 
-Production configuration in `configs/.env.prod.example`:
-- Copy to `.env.prod` and customize
-- Docker Compose will use these values
+**Development:** Copy `configs/.env.example` to `configs/.env.dev`
+
+**Production:** Use `configs/.env.prod.example` as template
+
+```bash
+cp configs/.env.prod.example configs/.env.prod
+# Edit and customize values
+```
 
 ### Health Check
 
 Both development and production containers include health checks:
+
 ```bash
 curl http://localhost:8080/health
 # {"status":"ok"}
@@ -238,3 +281,8 @@ curl http://localhost:8080/health
 - Runtime stage: `alpine:3.19` (minimal ~10MB)
 - Non-root user for security
 - Health check included
+
+**Development Dockerfile:**
+- Hot reload with Air
+- Fast iteration
+- Volume mounts for code changes

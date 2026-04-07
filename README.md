@@ -15,13 +15,40 @@ Go DDD Hexagonal architecture skeleton project — production-ready foundation f
 - **Event Bus** — pluggable in-memory (dev) / Redis (prod)
 - **RFC 7807 Errors** — standardized error responses
 - **Swagger/OpenAPI** — auto-generated API documentation
-- **Docker Ready** — multi-stage builds, docker-compose for dev/prod
+- **Docker Ready** — multi-stage builds, docker-compose, hot reload
+- **Production Ready** — health checks, graceful shutdown, security best practices
 
 ## Quick Start
 
 ```bash
-make keys && make migrate-up && make seed && make run
+# Local development
+make setup && make dev
+
+# Or Docker
+make docker-dev
 ```
+
+## Docker Support
+
+Проект підтримує Docker для development та production:
+
+```bash
+# Development with hot reload
+make docker-dev
+
+# Production
+make docker-prod
+
+# View logs
+make docker-logs
+
+# Stop containers
+make docker-down
+```
+
+See [GETTING_STARTED.md](docs/development/GETTING_STARTED.md) for Docker details.
+
+## Version Management
 
 ## Tech Stack
 
@@ -111,7 +138,7 @@ VERSION_STAGE=prod make build      # 0.1.0-prod
 VERSION_MAJOR=0 VERSION_MINOR=2 VERSION_PATCH=0 make build  # 0.2.0-dev
 ```
 
--version" показує версію, `commit` - git hash для референсу:
+Endpoint `/build` показує версію, `commit` - git hash для референсу:
 
 ```bash
 curl http://localhost:8080/build
