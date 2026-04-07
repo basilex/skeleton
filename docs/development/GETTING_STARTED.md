@@ -29,6 +29,27 @@ make seed
 make run
 ```
 
+## Version Management
+
+Проект використовує semantic versioning з environment suffix:
+
+```bash
+# Development build (default: 0.1.0-dev)
+make build
+
+# Staging build
+VERSION_STAGE=staging make build  # 0.1.0-staging
+
+# Production build
+VERSION_STAGE=prod make build      # 0.1.0-prod
+
+# Check version
+curl http://localhost:8080/build
+# {"version":"0.1.0-dev","commit":"c4410c8","build_time":"2026-04-07T10:00:37Z","go_version":"go1.26.1","env":"dev"}
+```
+
+详见 [ADR-008: Semantic Versioning Strategy](../adr/ADR-008-versioning.md).
+
 ## API Endpoints
 
 ### Status

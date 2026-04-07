@@ -89,6 +89,38 @@ make keys && make migrate-up && make seed && make run
 - [ADR-005: No ORM](docs/adr/ADR-005-no-orm.md)
 - [ADR-006: UUID v7](docs/adr/ADR-006-uuid-v7.md)
 - [ADR-007: Cursor Pagination](docs/adr/ADR-007-cursor-pagination.md)
+- [ADR-008: Semantic Versioning Strategy](docs/adr/ADR-008-versioning.md)
+
+## Version Management
+
+Проект використовує **Semantic Versioning** з підтримкою різних середовищ:
+
+```bash
+# Development build (default: 0.1.0-dev)
+make build
+
+# Staging build
+VERSION_STAGE=staging make build  # 0.1.0-staging
+
+# Production build
+VERSION_STAGE=prod make build      # 0.1.0-prod
+
+# Custom version
+VERSION_MAJOR=0 VERSION_MINOR=2 VERSION_PATCH=0 make build  # 0.2.0-dev
+```
+
+-version" показує версію, `commit` - git hash для референсу:
+
+```bash
+curl http://localhost:8080/build
+# {
+#   "version": "0.1.0-dev",
+#   "commit": "c4410c8",
+#   "build_time": "2026-04-07T10:00:37Z",
+#   "go_version": "go1.26.1",
+#   "env": "dev"
+# }
+```
 
 ## Commands
 
