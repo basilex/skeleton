@@ -404,3 +404,115 @@ curl -X PATCH http://localhost:8080/api/v1/notifications/preferences \
 ### See Full Documentation
 
 Detailed usage, templates, worker configuration: [NOTIFICATIONS.md](./NOTIFICATIONS.md)
+
+## Caching
+
+The application supports multi-tier caching for performance optimization.
+
+### Configuration
+
+```bash
+# Cache configuration
+CACHE_TYPE=memory                    # memory | redis
+CACHE_DEFAULT_TTL=300                 # Default TTL in seconds
+CACHE_REDIS_PREFIX=skeleton          # Key prefix for Redis
+CACHE_CLEANUP_INTERVAL=60            # Cleanup interval for memory cache
+```
+
+### Usage
+
+```go
+// In development - in-memory cache
+cache := cache.NewMemoryCache(time.Minute)
+
+// Set a value
+err := cache.Set(ctx, "user:123", userData, 5*time.Minute)
+
+// Get a value
+var user User
+err := cache.Get(ctx, "user:123", &user)
+
+// Delete by pattern
+err := cache.DeleteByPattern(ctx, "user:*")
+```
+
+### HTTP Caching
+
+```go
+// Cache GET responses for 5 minutes
+api.GET("/users", 
+    middleware.Cache(cacheClient, 5*time.Minute),
+    handler.ListUsers)
+```
+
+### See Full Documentation
+
+Detailed architecture, Redis integration: [ADR-014: Caching Strategy](../adr/ADR-014-caching.md)
+
+## Rate Limiting
+
+The application provides built-in rate limiting to protect against abuse.
+
+### Configuration
+
+```bash
+# Rate limiting configuration
+RATE_LIMIT_ENABLED=true               # Enable rate limiting
+RATE_LIMIT_TYPE=token_bucket          # token_bucket | sliding_window
+RATE_LIMIT_KEY_PREFIX=ratelimit      # Key prefix
+
+# Global rate limits
+RATE_LIMIT_GLOBAL_LIMIT=1000         # Max requests
+RATE_LIMIT_GLOBAL_WINDOW=60          # Time window in seconds
+
+# Auth rate limits (login, register)
+RATE_LIMIT_AUTH_LIMIT=5
+RATE_LIMIT_AUTH_WINDOW=60
+
+# Files rate limits (upload, download)
+RATE_LIMIT_FILES_LIMIT=10
+RATE_LIMIT_FILES_WINDOW=60
+```
+
+### Usage
+
+```go
+// Create rate limiter
+limiter := ratelimit.NewTokenBucket(ratelimit.Config{
+    Limit:  100,
+    Window: time.Minute,
+    KeyPrefix: "api",
+})
+
+// Apply to endpoints
+auth.POST("/login",
+    middleware.RateLimit(limiter, middleware.ByIP, 5, time.Minute),
+    handler.Login)
+
+// Rate limit per user
+api.GET("/users",
+    middleware.RateLimit(limiter, middleware.ByUser, 100, time.Minute),
+    handler.ListUsers)
+```
+
+### Key Strategies
+
+```go
+middleware.ByIP             // Rate limit by client IP
+middleware.ByUser           // Rate limit by authenticated user ID
+middleware.ByEndpoint       // Rate limit by endpoint
+middleware.ByUserAndEndpoint // Rate limit by user + endpoint combination
+```
+
+### Response Headers
+
+```
+X-RateLimit-Limit: 100        # Max requests allowed
+X-RateLimit-Remaining: 95     # Requests remaining in window
+X-RateLimit-Reset: 1640995200 # Unix timestamp when window resets
+Retry-After: 60               # Seconds to wait (on 429)
+```
+
+### See Full Documentation
+
+Detailed architecture, Sliding Window with Redis: [ADR-015: Rate Limiting Strategy](../adr/ADR-015-rate-limiting.md)
