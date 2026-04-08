@@ -92,8 +92,48 @@ curl http://localhost:8080/system/build
 
 # Detailed system information (cache, rate limiter, runtime)
 curl http://localhost:8080/system/info
-# {"cache":{"type":"memory"},"rate_limiter":{"type":"token_bucket"},"status":"operational"}
+# Response example:
+# {
+#   "status": "operational",
+#   "database": {
+#     "type": "sqlite",
+#     "status": "ok",
+#     "path": "./data/skeleton.db"
+#   },
+#   "redis": {
+#     "status": "not_configured",
+#     "url": "redis://localhost:6379/0"
+#   },
+#   "cache": {
+#     "type": "memory",
+#     "status": "ok"
+#   },
+#   "rate_limiter": {
+#     "type": "token_bucket",
+#     "status": "ok"
+#   },
+#   "config": {
+#     "env": "dev",
+#     "name": "skeleton"
+#   }
+# }
 ```
+
+#### Development vs Production
+
+**Development mode:**
+- Database: SQLite (embedded)
+- Cache: In-memory (no external dependencies)
+- Rate limiter: Token bucket (local)
+- Event bus: In-memory (synchronous)
+
+**Production mode (when configured):**
+- Database: PostgreSQL (TODO)
+- Cache: Redis (distributed)
+- Rate limiter: Sliding window (Redis-backed)
+- Event bus: Redis Pub/Sub (distributed)
+
+See [Configuration](#configuration) for environment-specific settings.
 
 ### Auth (public)
 

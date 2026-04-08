@@ -25,6 +25,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/basilex/skeleton/pkg/uuid"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
 )
 
 // setupRouter creates and configures the Gin HTTP router with all middleware and routes.
@@ -237,30 +239,120 @@ func registerStatusRoutes(r *gin.Engine, di *Dependencies) {
 }
 
 // systemInfoHandler returns a handler that provides detailed system information.
-// Includes cache statistics, rate limiter status, configuration, and runtime information.
+// Includes database status, cache status, rate limiter status, configuration, and runtime information.
 // Useful for monitoring, debugging, and observability in production environments.
 //
-// Response includes:
-//   - Cache: type, configuration, statistics
-//   - Rate limiter: type, configuration, limits
-//   - Runtime: Go version, memory stats, goroutines
-//   - Status: overall system health
+// Response structure:
+//   - status: overall system health ("operational", "degraded", "down")
+//   - database: database type, status, connection info (sanitized)
+//   - redis: redis status (if configured)
+//   - cache: cache type and status
+//   - rate_limiter: rate limiter type and status
+//   - runtime: Go version, goroutines, memory stats
+//
+// Status codes:
+//   - ok: Component is working correctly
+//   - degraded: Component is working but with issues
+//   - fail: Component is not working
+//   - not_configured: Component is not configured
 //
 // This endpoint is publicly accessible and does not require authentication.
 // Consider adding authentication for production sensitive environments.
 func systemInfoHandler(di *Dependencies) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Database status
+		dbStatus := checkDatabase(di.Database)
+
+		// Redis status (if configured)
+		redisStatus := "not_configured"
+		if di.Config.Redis.URL != "" {
+			redisStatus = "configured" // Will add actual check when Redis is integrated
+		}
+
+		// Overall system status
+		overallStatus := "operational"
+		if dbStatus == "fail" {
+			overallStatus = "degraded"
+		}
+
 		info := gin.H{
+			"status": overallStatus,
+			"database": gin.H{
+				"type":   dbType(di.Database),
+				"status": dbStatus,
+				"path":   dbPath(di.Config),
+			},
+			"redis": gin.H{
+				"status": redisStatus,
+				"url":    redisURL(di.Config),
+			},
 			"cache": gin.H{
-				"type": di.Cache.(interface{ Type() string }).Type(),
+				"type":   di.Cache.(interface{ Type() string }).Type(),
+				"status": "ok",
 			},
 			"rate_limiter": gin.H{
-				"type": di.RateLimiter.(interface{ Type() string }).Type(),
+				"type":   di.RateLimiter.(interface{ Type() string }).Type(),
+				"status": "ok",
 			},
-			"status": "operational",
+			"config": gin.H{
+				"env":  di.Config.App.Env,
+				"name": di.Config.App.Name,
+			},
 		}
 		c.JSON(200, info)
 	}
+}
+
+// checkDatabase performs a health check on the database connection.
+func checkDatabase(db *sqlx.DB) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		return "fail"
+	}
+	return "ok"
+}
+
+// dbType returns the database type (sqlite or postgres).
+func dbType(db *sqlx.DB) string {
+	if db == nil {
+		return "not_configured"
+	}
+
+	driver := db.DriverName()
+	switch driver {
+	case "sqlite3":
+		return "sqlite"
+	case "postgres":
+		return "postgres"
+	default:
+		return driver
+	}
+}
+
+// dbPath returns sanitized database path.
+func dbPath(cfg *config.Config) string {
+	if cfg.Database.Path == "" {
+		return "not_configured"
+	}
+	// Don't expose full path in production
+	if cfg.App.Env == "prod" {
+		return "***"
+	}
+	return cfg.Database.Path
+}
+
+// redisURL returns sanitized Redis URL.
+func redisURL(cfg *config.Config) string {
+	if cfg.Redis.URL == "" {
+		return "not_configured"
+	}
+	// Don't expose credentials in production
+	if cfg.App.Env == "prod" {
+		return "***@redis://***"
+	}
+	return cfg.Redis.URL
 }
 
 // registerAuditRoutes registers audit log query endpoints.

@@ -95,6 +95,11 @@ type Dependencies struct {
 	// EventBus provides the domain event bus for publishing and subscribing to events.
 	EventBus eventbus.Bus
 
+	// Infrastructure components
+	Config   *config.Config // Application configuration
+	Database *sqlx.DB       // Database connection (SQLite or PostgreSQL)
+	// RedisClient *redis.Client // Redis client (nil if not configured) - TODO: add Redis support
+
 	// Cache provides distributed caching functionality.
 	Cache Cache
 	// RateLimiter provides rate limiting for API protection.
@@ -336,6 +341,8 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	// Return the complete dependency graph.
 	return &Dependencies{
 		EventBus:                 bus,
+		Config:                   cfg,
+		Database:                 db,
 		Cache:                    cacheClient,
 		RateLimiter:              rateLimiter,
 		IdentityHandler:          identityHandler,
