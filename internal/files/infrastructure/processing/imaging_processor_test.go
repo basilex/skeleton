@@ -332,25 +332,104 @@ func TestImagingProcessor_GetMetadata(t *testing.T) {
 func TestImagingProcessor_Watermark(t *testing.T) {
 	processor := NewImagingProcessor()
 
-	t.Run("watermark placeholder", func(t *testing.T) {
+	t.Run("text watermark - bottom right", func(t *testing.T) {
 		input := createTestImage(t, 400, 400, "jpeg")
 
-		// Current implementation is a placeholder that returns the original
-		result, err := processor.Watermark(context.Background(), input, "test watermark", WatermarkBottomRight)
+		result, err := processor.Watermark(context.Background(), input, "© 2026", WatermarkBottomRight)
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// Since it's a placeholder, the result should be similar to input
-		// In production, this would have an actual watermark
+		// Result should have same dimensions
 		metadata, err := processor.GetMetadata(context.Background(), result)
 		require.NoError(t, err)
 		require.Equal(t, 400, metadata.Width)
 		require.Equal(t, 400, metadata.Height)
+
+		// Result should be larger than input (watermark adds data)
+		require.Greater(t, len(result), 0)
+	})
+
+	t.Run("text watermark - top left", func(t *testing.T) {
+		input := createTestImage(t, 300, 200, "png")
+
+		result, err := processor.Watermark(context.Background(), input, "CONFIDENTIAL", WatermarkTopLeft)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		metadata, err := processor.GetMetadata(context.Background(), result)
+		require.NoError(t, err)
+		require.Equal(t, 300, metadata.Width)
+		require.Equal(t, 200, metadata.Height)
+	})
+
+	t.Run("text watermark - center", func(t *testing.T) {
+		input := createTestImage(t, 500, 300, "jpeg")
+
+		result, err := processor.Watermark(context.Background(), input, "WATERMARK", WatermarkCenter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		metadata, err := processor.GetMetadata(context.Background(), result)
+		require.NoError(t, err)
+		require.Equal(t, 500, metadata.Width)
+		require.Equal(t, 300, metadata.Height)
+	})
+
+	t.Run("text watermark - all positions", func(t *testing.T) {
+		positions := []WatermarkPosition{
+			WatermarkTopLeft,
+			WatermarkTopRight,
+			WatermarkBottomLeft,
+			WatermarkBottomRight,
+			WatermarkCenter,
+		}
+
+		input := createTestImage(t, 200, 200, "jpeg")
+
+		for _, pos := range positions {
+			result, err := processor.Watermark(context.Background(), input, "TEST", pos)
+			require.NoError(t, err)
+			require.NotNil(t, result, "Position: %s", pos)
+		}
+	})
+
+	t.Run("text watermark on PNG", func(t *testing.T) {
+		input := createTestImage(t, 400, 400, "png")
+
+		result, err := processor.Watermark(context.Background(), input, "PNG Watermark", WatermarkBottomRight)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		metadata, err := processor.GetMetadata(context.Background(), result)
+		require.NoError(t, err)
+		require.Equal(t, "png", metadata.Format)
+	})
+
+	t.Run("empty watermark text", func(t *testing.T) {
+		input := createTestImage(t, 100, 100, "jpeg")
+
+		result, err := processor.Watermark(context.Background(), input, "", WatermarkCenter)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// Should still work with empty text
+		metadata, err := processor.GetMetadata(context.Background(), result)
+		require.NoError(t, err)
+		require.Equal(t, 100, metadata.Width)
 	})
 
 	t.Run("invalid image data", func(t *testing.T) {
 		_, err := processor.Watermark(context.Background(), []byte("invalid"), "test", WatermarkCenter)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "decode image")
+	})
+
+	t.Run("non-existent image file as watermark", func(t *testing.T) {
+		input := createTestImage(t, 100, 100, "jpeg")
+
+		// Try to use a non-existent file as watermark (should fallback to text or fail gracefully)
+		_, err := processor.Watermark(context.Background(), input, "/nonexistent/watermark.png", WatermarkCenter)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "read watermark file")
 	})
 }
