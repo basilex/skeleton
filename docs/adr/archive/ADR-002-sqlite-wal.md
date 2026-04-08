@@ -1,6 +1,10 @@
 # ADR-002: SQLite WAL
 
-## Status: Accepted
+## Status: **OBSOLETE** (Superseded by [ADR-016: Use pgx with PostgreSQL](ADR-016-pgx-with-postgres.md))
+
+This ADR described the original SQLite-based architecture. The project has since migrated to PostgreSQL. See ADR-016 for the current database architecture.
+
+---
 
 ## Context
 
