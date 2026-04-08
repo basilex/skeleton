@@ -79,7 +79,7 @@ func (m *Middleware) Authenticate() gin.HandlerFunc {
 		}
 
 		c.Set("session_id", sess.ID)
-		c.Set("user_id", string(sess.UserID))
+		c.Set("user_id", sess.UserID.String())
 		c.Set("user_roles", sess.Roles)
 		c.Set("user_permissions", sess.Permissions)
 
@@ -94,9 +94,13 @@ func (m *Middleware) Authenticate() gin.HandlerFunc {
 func GetUserID(c *gin.Context) domain.UserID {
 	v, ok := c.Get("user_id")
 	if !ok {
-		return ""
+		return domain.UserID{}
 	}
-	return domain.UserID(v.(string))
+	userID, err := domain.ParseUserID(v.(string))
+	if err != nil {
+		return domain.UserID{}
+	}
+	return userID
 }
 
 // GetSessionID extracts the session ID from the Gin context.

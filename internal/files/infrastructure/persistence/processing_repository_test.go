@@ -5,15 +5,16 @@ import (
 	"testing"
 
 	"github.com/basilex/skeleton/internal/files/domain"
+	"github.com/basilex/skeleton/pkg/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestProcessingRepository_Create(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("create processing", func(t *testing.T) {
@@ -33,11 +34,11 @@ func TestProcessingRepository_Create(t *testing.T) {
 }
 
 func TestProcessingRepository_GetByID(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("get existing processing", func(t *testing.T) {
@@ -60,11 +61,11 @@ func TestProcessingRepository_GetByID(t *testing.T) {
 }
 
 func TestProcessingRepository_Update(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("update processing status", func(t *testing.T) {
@@ -83,11 +84,11 @@ func TestProcessingRepository_Update(t *testing.T) {
 }
 
 func TestProcessingRepository_GetByFileID(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("get processings by file ID", func(t *testing.T) {
@@ -107,27 +108,24 @@ func TestProcessingRepository_GetByFileID(t *testing.T) {
 }
 
 func TestProcessingRepository_GetPending(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("get pending processings", func(t *testing.T) {
 		file, _ := domain.NewFile(nil, "test.jpg", "image/jpeg", 1024, domain.StorageLocal, domain.AccessPublic)
 		_ = fileRepo.Create(ctx, file)
 
-		// Create pending processing
 		pending1, _ := domain.NewFileProcessing(file.ID(), domain.OperationResize, domain.ProcessingOptions{})
 		_ = processingRepo.Create(ctx, pending1)
 
-		// Create running processing
 		running, _ := domain.NewFileProcessing(file.ID(), domain.OperationCrop, domain.ProcessingOptions{})
 		_ = running.Start()
 		_ = processingRepo.Create(ctx, running)
 
-		// Create completed processing
 		completed, _ := domain.NewFileProcessing(file.ID(), domain.OperationCompress, domain.ProcessingOptions{})
 		_ = completed.Start()
 		resultFile, _ := domain.NewFile(nil, "result.jpg", "image/jpeg", 512, domain.StorageLocal, domain.AccessPublic)
@@ -142,11 +140,11 @@ func TestProcessingRepository_GetPending(t *testing.T) {
 }
 
 func TestProcessingRepository_Delete(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("delete processing", func(t *testing.T) {
@@ -165,11 +163,11 @@ func TestProcessingRepository_Delete(t *testing.T) {
 }
 
 func TestProcessingRepository_List(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	processingRepo := NewProcessingRepository(db)
-	fileRepo := NewFileRepository(db)
+	processingRepo := NewProcessingRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("list with filter", func(t *testing.T) {

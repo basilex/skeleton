@@ -5,8 +5,8 @@ package domain
 
 import "errors"
 
-// Audit domain error definitions.
 var (
-	ErrRecordNotFound = errors.New("audit record not found")
-	ErrInvalidFilter  = errors.New("invalid audit filter")
+	ErrRecordNotFound  = errors.New("audit record not found")
+	ErrInvalidFilter   = errors.New("invalid audit filter")
+	ErrInvalidRecordID = errors.New("invalid record id")
 )

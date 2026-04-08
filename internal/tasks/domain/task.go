@@ -11,24 +11,28 @@ import (
 )
 
 // TaskID is a unique identifier for a task.
-type TaskID string
+type TaskID uuid.UUID
 
 // NewTaskID generates a new unique TaskID using UUID v7.
 func NewTaskID() TaskID {
-	return TaskID(uuid.NewV7().String())
+	return TaskID(uuid.NewV7())
 }
 
 // ParseTaskID validates and converts a string to TaskID.
 func ParseTaskID(s string) (TaskID, error) {
 	if s == "" {
-		return "", fmt.Errorf("task ID cannot be empty")
+		return TaskID{}, fmt.Errorf("task ID cannot be empty")
 	}
-	return TaskID(s), nil
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return TaskID{}, fmt.Errorf("invalid task id: %w", err)
+	}
+	return TaskID(u), nil
 }
 
 // String returns the string representation of TaskID.
 func (id TaskID) String() string {
-	return string(id)
+	return uuid.UUID(id).String()
 }
 
 // TaskType represents the type of task to be executed.

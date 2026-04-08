@@ -27,7 +27,7 @@ make test-p0
 ## Test Conventions
 
 - **Unit tests**: domain + application, no infrastructure
-- **Integration tests**: persistence + HTTP, real SQLite `:memory:`
+- **Integration tests**: persistence + HTTP, real PostgreSQL via testcontainers
 - **Pattern**: Arrange → Act → Assert
 - **Table-driven tests** where possible
 - **`testify/require`** (not `assert`) for fatal failures
@@ -36,7 +36,7 @@ make test-p0
 ## Test Helpers
 
 ```go
-// SQLite :memory: + migrations
+// PostgreSQL + migrations via testcontainers
 db := testutil.NewTestDB(t)
 
 // Create test role

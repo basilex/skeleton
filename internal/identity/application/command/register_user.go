@@ -85,6 +85,6 @@ func (h *RegisterUserHandler) Handle(ctx context.Context, cmd RegisterUserComman
 	}
 
 	return RegisterUserResult{
-		UserID: string(user.ID()),
+		UserID: user.ID().String(),
 	}, nil
 }

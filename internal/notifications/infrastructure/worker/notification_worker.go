@@ -147,11 +147,11 @@ func (w *NotificationWorker) processStalled(ctx context.Context) error {
 // sendNotification attempts to send a notification, handling user preferences and errors.
 func (w *NotificationWorker) sendNotification(ctx context.Context, notification *domain.Notification) error {
 	if notification.Recipient().UserID != nil {
-		preferences, err := w.preferencesRepo.GetByUserID(ctx, string(*notification.Recipient().UserID))
+		preferences, err := w.preferencesRepo.GetByUserID(ctx, notification.Recipient().UserID.String())
 		if err == nil {
 			if !preferences.IsChannelEnabled(notification.Channel()) {
 				log.Printf("Channel %s disabled for user %s, skipping notification %s",
-					notification.Channel(), *notification.Recipient().UserID, notification.ID())
+					notification.Channel(), notification.Recipient().UserID.String(), notification.ID())
 				_ = notification.MarkFailed("channel disabled by user preferences")
 				_ = w.notificationRepo.Update(ctx, notification)
 				return nil

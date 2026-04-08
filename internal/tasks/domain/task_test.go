@@ -294,7 +294,7 @@ func TestParseTaskID(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, TaskID(tt.input), id)
+				require.Equal(t, tt.input, id.String())
 			}
 		})
 	}

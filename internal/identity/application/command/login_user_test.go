@@ -136,5 +136,5 @@ func (m *mockTokenService) ValidateAccessToken(token string) (*domain.TokenClaim
 }
 
 func (m *mockTokenService) ValidateRefreshToken(token string) (domain.UserID, error) {
-	return "", nil
+	return domain.UserID{}, nil
 }

@@ -6,15 +6,16 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/internal/files/domain"
+	"github.com/basilex/skeleton/pkg/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestUploadRepository_Create(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	uploadRepo := NewUploadRepository(db)
-	fileRepo := NewFileRepository(db)
+	uploadRepo := NewUploadRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("create upload", func(t *testing.T) {
@@ -33,11 +34,11 @@ func TestUploadRepository_Create(t *testing.T) {
 }
 
 func TestUploadRepository_GetByID(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	uploadRepo := NewUploadRepository(db)
-	fileRepo := NewFileRepository(db)
+	uploadRepo := NewUploadRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("get existing upload", func(t *testing.T) {
@@ -60,11 +61,11 @@ func TestUploadRepository_GetByID(t *testing.T) {
 }
 
 func TestUploadRepository_GetByFileID(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	uploadRepo := NewUploadRepository(db)
-	fileRepo := NewFileRepository(db)
+	uploadRepo := NewUploadRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("get upload by file ID", func(t *testing.T) {
@@ -81,11 +82,11 @@ func TestUploadRepository_GetByFileID(t *testing.T) {
 }
 
 func TestUploadRepository_UpdateStatus(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	uploadRepo := NewUploadRepository(db)
-	fileRepo := NewFileRepository(db)
+	uploadRepo := NewUploadRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("update status", func(t *testing.T) {
@@ -104,11 +105,11 @@ func TestUploadRepository_UpdateStatus(t *testing.T) {
 }
 
 func TestUploadRepository_Delete(t *testing.T) {
-	db := setupTestDB(t)
-	defer db.Close()
+	pool := testutil.SetupPostgres(t)
+	testutil.RunMigrations(t, pool, testutil.DefaultSchema)
 
-	uploadRepo := NewUploadRepository(db)
-	fileRepo := NewFileRepository(db)
+	uploadRepo := NewUploadRepository(pool)
+	fileRepo := NewFileRepository(pool)
 	ctx := context.Background()
 
 	t.Run("delete upload", func(t *testing.T) {

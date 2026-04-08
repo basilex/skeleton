@@ -25,7 +25,7 @@ func (s *MockTokenService) GenerateAccessToken(userID domain.UserID, roles []dom
 			permissions = append(permissions, p.String())
 		}
 	}
-	return fmt.Sprintf("access-%s-%d", string(userID), time.Now().Unix()), nil
+	return fmt.Sprintf("access-%s-%d", userID.String(), time.Now().Unix()), nil
 }
 
 // GenerateRefreshToken generates a mock refresh token using a UUID.
@@ -40,8 +40,9 @@ func (s *MockTokenService) ValidateAccessToken(tokenString string) (*domain.Toke
 	if len(tokenString) < 7 || tokenString[:7] != "access-" {
 		return nil, fmt.Errorf("invalid access token format")
 	}
+	mockUserID, _ := domain.ParseUserID("00000000-0000-0000-0000-000000000001")
 	return &domain.TokenClaims{
-		UserID:      domain.UserID("mock-user-id"),
+		UserID:      mockUserID,
 		Roles:       []string{"admin"},
 		Permissions: []string{"*:*"},
 	}, nil
@@ -51,7 +52,8 @@ func (s *MockTokenService) ValidateAccessToken(tokenString string) (*domain.Toke
 // Accepts any token starting with "refresh-" prefix and returns a mock user ID.
 func (s *MockTokenService) ValidateRefreshToken(token string) (domain.UserID, error) {
 	if len(token) < 8 || token[:8] != "refresh-" {
-		return "", fmt.Errorf("invalid refresh token format")
+		return domain.UserID{}, fmt.Errorf("invalid refresh token format")
 	}
-	return domain.UserID("mock-user-id"), nil
+	mockUserID, _ := domain.ParseUserID("00000000-0000-0000-0000-000000000001")
+	return mockUserID, nil
 }

@@ -49,9 +49,9 @@ eventhandler/
 
 ```
 persistence/
-  ├── notification_repository.go   # SQLite implementation
-  ├── template_repository.go       # SQLite implementation
-  └── preferences_repository.go    # SQLite implementation
+  ├── notification_repository.go   # PostgreSQL implementation
+  ├── template_repository.go       # PostgreSQL implementation
+  └── preferences_repository.go    # PostgreSQL implementation
 
 sender/
   ├── interfaces.go               # EmailSender, SMSSender, etc.

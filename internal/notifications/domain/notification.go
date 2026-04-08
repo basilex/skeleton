@@ -12,24 +12,28 @@ import (
 )
 
 // NotificationID is a unique identifier for a notification.
-type NotificationID string
+type NotificationID uuid.UUID
 
 // NewNotificationID generates a new unique NotificationID using UUID v7.
 func NewNotificationID() NotificationID {
-	return NotificationID(uuid.NewV7().String())
+	return NotificationID(uuid.NewV7())
 }
 
 // ParseNotificationID validates and converts a string to NotificationID.
 func ParseNotificationID(s string) (NotificationID, error) {
 	if s == "" {
-		return "", fmt.Errorf("notification ID cannot be empty")
+		return NotificationID{}, fmt.Errorf("notification ID cannot be empty")
 	}
-	return NotificationID(s), nil
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return NotificationID{}, fmt.Errorf("invalid notification id: %w", err)
+	}
+	return NotificationID(u), nil
 }
 
 // String returns the string representation of NotificationID.
 func (id NotificationID) String() string {
-	return string(id)
+	return uuid.UUID(id).String()
 }
 
 // Channel represents a notification delivery channel.

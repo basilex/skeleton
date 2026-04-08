@@ -10,33 +10,45 @@ import (
 )
 
 // UserID is a unique identifier for a user entity.
-type UserID string
+type UserID uuid.UUID
 
 // NewUserID generates a new unique UserID using UUID v7.
 func NewUserID() UserID {
-	return UserID(uuid.NewV7().String())
+	return UserID(uuid.NewV7())
 }
 
 // ParseUserID validates and converts a string to UserID.
 func ParseUserID(s string) (UserID, error) {
-	if _, err := uuid.Parse(s); err != nil {
-		return "", fmt.Errorf("invalid user id: %w", err)
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return UserID{}, fmt.Errorf("invalid user id: %w", err)
 	}
-	return UserID(s), nil
+	return UserID(u), nil
+}
+
+// String returns the string representation of UserID.
+func (id UserID) String() string {
+	return uuid.UUID(id).String()
 }
 
 // RoleID is a unique identifier for a role entity.
-type RoleID string
+type RoleID uuid.UUID
 
 // NewRoleID generates a new unique RoleID using UUID v7.
 func NewRoleID() RoleID {
-	return RoleID(uuid.NewV7().String())
+	return RoleID(uuid.NewV7())
 }
 
 // ParseRoleID validates and converts a string to RoleID.
 func ParseRoleID(s string) (RoleID, error) {
-	if _, err := uuid.Parse(s); err != nil {
-		return "", fmt.Errorf("invalid role id: %w", err)
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return RoleID{}, fmt.Errorf("invalid role id: %w", err)
 	}
-	return RoleID(s), nil
+	return RoleID(u), nil
+}
+
+// String returns the string representation of RoleID.
+func (id RoleID) String() string {
+	return uuid.UUID(id).String()
 }

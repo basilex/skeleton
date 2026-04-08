@@ -74,11 +74,14 @@ import (
 	"github.com/basilex/skeleton/pkg/config"
 	"github.com/basilex/skeleton/pkg/database"
 	"github.com/basilex/skeleton/pkg/httpserver"
+	redisclient "github.com/basilex/skeleton/pkg/redis"
+	"github.com/redis/go-redis/v9"
 )
 
 // Build information populated at compile time via ldflags.
 // These variables provide version tracking and build metadata for
-// status endpoints and logging purposes.
+// observability and debugging purposes.
+// They are set via ldflags during build, but have sensible defaults for development.
 var (
 	// version represents the application version (e.g., "1.0.0").
 	version = "dev"
@@ -88,6 +91,17 @@ var (
 	buildTime = "unknown"
 )
 
+func parseBuildTime() time.Time {
+	if buildTime == "unknown" || buildTime == "" {
+		return time.Now()
+	}
+	t, err := time.Parse(time.RFC3339, buildTime)
+	if err != nil {
+		return time.Now()
+	}
+	return t
+}
+
 // main is the application entry point. It orchestrates the entire application
 // lifecycle including configuration loading, database initialization, dependency
 // wiring, and HTTP server management.
@@ -95,8 +109,8 @@ var (
 // The startup sequence is:
 //  1. Load configuration from environment/file
 //  2. Initialize structured logging
-//  3. Create data directory (if not using in-memory database)
-//  4. Connect to SQLite database
+//  3. Connect to PostgreSQL database
+//  4. Connect to Redis (optional)
 //  5. Wire all dependencies (repositories, services, handlers)
 //  6. Start background notification worker
 //  7. Configure HTTP router with middleware and routes
@@ -114,21 +128,33 @@ func main() {
 
 	setupLogger(cfg)
 
-	if cfg.Database.Path != ":memory:" {
-		if err := os.MkdirAll("./data", 0755); err != nil {
-			slog.Error("failed to create data directory", "error", err)
-			os.Exit(1)
-		}
-	}
-
-	db, err := database.NewSQLite(cfg.Database.Path)
+	// Connect to PostgreSQL
+	pool, err := database.NewPostgresPool(database.PostgresConfig{
+		URL:             cfg.Database.URL,
+		MaxConns:        int32(cfg.Database.MaxOpenConns),
+		MinConns:        int32(cfg.Database.MaxIdleConns),
+		MaxConnLifetime: 5 * time.Minute,
+		MaxConnIdleTime: 10 * time.Minute,
+		HealthCheck:     1 * time.Minute,
+	})
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
+		slog.Error("failed to connect to postgres", "error", err)
 		os.Exit(1)
 	}
-	defer db.Close()
+	defer pool.Close()
 
-	di := wireDependencies(cfg, db, version, commit, buildTime, runtime.Version())
+	// Connect to Redis (optional, for cache/event bus)
+	var redisClient *redis.Client
+	if cfg.Redis.URL != "" {
+		redisClient, err = redisclient.NewClient(redisclient.Config{URL: cfg.Redis.URL})
+		if err != nil {
+			slog.Error("failed to connect to redis", "error", err)
+			os.Exit(1)
+		}
+		defer redisClient.Close()
+	}
+
+	di := wireDependencies(cfg, pool, redisClient, version, commit, buildTime, runtime.Version())
 
 	// Start notification worker in background
 	go func() {

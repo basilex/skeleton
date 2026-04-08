@@ -314,7 +314,7 @@ func TestCancelTaskHandler_Handle(t *testing.T) {
 		handler := NewCancelTaskHandler(taskRepo)
 
 		err := handler.Handle(context.Background(), CancelTaskCommand{
-			TaskID: domain.TaskID("non-existent"),
+			TaskID: domain.NewTaskID(),
 			Reason: "User cancelled",
 		})
 

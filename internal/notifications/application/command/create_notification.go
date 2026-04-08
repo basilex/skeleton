@@ -65,11 +65,11 @@ func (h *CreateNotificationHandler) Handle(ctx context.Context, cmd CreateNotifi
 		opts...,
 	)
 	if err != nil {
-		return "", fmt.Errorf("create notification: %w", err)
+		return domain.NotificationID{}, fmt.Errorf("create notification: %w", err)
 	}
 
 	if err := h.notificationRepo.Create(ctx, notification); err != nil {
-		return "", fmt.Errorf("save notification: %w", err)
+		return domain.NotificationID{}, fmt.Errorf("save notification: %w", err)
 	}
 
 	event := domain.NewNotificationCreated(

@@ -203,6 +203,7 @@ func TestFileProcessingDuration(t *testing.T) {
 func TestReconstituteFileProcessing(t *testing.T) {
 	fileID := NewFileID()
 	resultFileID := NewFileID()
+	processingID := NewProcessingID()
 	now := time.Now()
 	startedAt := now.Add(-1 * time.Minute)
 	completedAt := now
@@ -214,7 +215,7 @@ func TestReconstituteFileProcessing(t *testing.T) {
 	}
 
 	processing := ReconstituteFileProcessing(
-		ProcessingID("processing-123"),
+		processingID,
 		fileID,
 		OperationResize,
 		options,
@@ -226,7 +227,7 @@ func TestReconstituteFileProcessing(t *testing.T) {
 		now,
 	)
 
-	require.Equal(t, ProcessingID("processing-123"), processing.ID())
+	require.Equal(t, processingID, processing.ID())
 	require.Equal(t, fileID, processing.FileID())
 	require.Equal(t, OperationResize, processing.Operation())
 	require.Equal(t, options, processing.Options())
@@ -244,7 +245,7 @@ func TestReconstituteFileProcessingWithError(t *testing.T) {
 	completedAt := now
 
 	processing := ReconstituteFileProcessing(
-		ProcessingID("processing-123"),
+		NewProcessingID(),
 		fileID,
 		OperationResize,
 		ProcessingOptions{},

@@ -50,7 +50,7 @@ func (h *GetUserHandler) Handle(ctx context.Context, q GetUserQuery) (UserDTO, e
 	}
 
 	return UserDTO{
-		ID:        string(user.ID()),
+		ID:        user.ID().String(),
 		Email:     user.Email().String(),
 		Roles:     roleNames,
 		IsActive:  user.IsActive(),

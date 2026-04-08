@@ -135,8 +135,14 @@ func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	taskIDParsed, err := domain.ParseTaskID(taskID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid task ID")
+		return
+	}
+
 	task, err := h.getTaskHandler.Handle(r.Context(), query.GetTaskQuery{
-		ID: domain.TaskID(taskID),
+		ID: taskIDParsed,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, err.Error())

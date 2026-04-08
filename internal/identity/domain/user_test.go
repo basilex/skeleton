@@ -25,7 +25,7 @@ func TestUserAssignRole(t *testing.T) {
 	hash, _ := NewPasswordHash("Password1234!")
 	user, _ := NewUser(email, hash)
 
-	roleID := RoleID("role-1")
+	roleID := NewRoleID()
 	err := user.AssignRole(roleID)
 	require.NoError(t, err)
 	require.Len(t, user.Roles(), 1)
@@ -37,7 +37,7 @@ func TestUserAssignDuplicateRole(t *testing.T) {
 	hash, _ := NewPasswordHash("Password1234!")
 	user, _ := NewUser(email, hash)
 
-	roleID := RoleID("role-1")
+	roleID := NewRoleID()
 	err := user.AssignRole(roleID)
 	require.NoError(t, err)
 
@@ -50,7 +50,7 @@ func TestUserRevokeRole(t *testing.T) {
 	hash, _ := NewPasswordHash("Password1234!")
 	user, _ := NewUser(email, hash)
 
-	roleID := RoleID("role-1")
+	roleID := NewRoleID()
 	_ = user.AssignRole(roleID)
 
 	err := user.RevokeRole(roleID)
@@ -63,7 +63,7 @@ func TestUserRevokeRoleNotAssigned(t *testing.T) {
 	hash, _ := NewPasswordHash("Password1234!")
 	user, _ := NewUser(email, hash)
 
-	err := user.RevokeRole(RoleID("role-1"))
+	err := user.RevokeRole(NewRoleID())
 	require.ErrorIs(t, err, ErrRoleNotAssigned)
 }
 
@@ -83,7 +83,7 @@ func TestUserDeactivateCannotAssignRole(t *testing.T) {
 
 	user.Deactivate()
 
-	err := user.AssignRole(RoleID("role-1"))
+	err := user.AssignRole(NewRoleID())
 	require.ErrorIs(t, err, ErrUserInactive)
 }
 
@@ -92,7 +92,7 @@ func TestUserDeactivateCannotRevokeRole(t *testing.T) {
 	hash, _ := NewPasswordHash("Password1234!")
 	user, _ := NewUser(email, hash)
 
-	roleID := RoleID("role-1")
+	roleID := NewRoleID()
 	_ = user.AssignRole(roleID)
 	user.Deactivate()
 
@@ -158,7 +158,7 @@ func TestUserSetRoles(t *testing.T) {
 	hash, _ := NewPasswordHash("Password1234!")
 	user, _ := NewUser(email, hash)
 
-	roles := []RoleID{RoleID("r1"), RoleID("r2")}
+	roles := []RoleID{NewRoleID(), NewRoleID()}
 	user.SetRoles(roles)
 
 	require.Len(t, user.Roles(), 2)
@@ -166,12 +166,12 @@ func TestUserSetRoles(t *testing.T) {
 }
 
 func TestReconstituteUser(t *testing.T) {
-	id := UserID("test-id")
+	id := NewUserID()
 	email, _ := NewEmail("test@example.com")
 	hash := PasswordHash("hashed")
 	now := time.Now().UTC()
 
-	user, err := ReconstituteUser(id, email, hash, []RoleID{RoleID("r1")}, true, now, now)
+	user, err := ReconstituteUser(id, email, hash, []RoleID{NewRoleID()}, true, now, now)
 	require.NoError(t, err)
 	require.Equal(t, id, user.ID())
 	require.Equal(t, email, user.Email())

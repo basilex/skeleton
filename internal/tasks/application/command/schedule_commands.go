@@ -47,11 +47,11 @@ func (h *CreateScheduleHandler) Handle(ctx context.Context, cmd CreateScheduleCo
 		opts...,
 	)
 	if err != nil {
-		return "", fmt.Errorf("create schedule: %w", err)
+		return domain.ScheduleID{}, fmt.Errorf("create schedule: %w", err)
 	}
 
 	if err := h.repo.Create(ctx, schedule); err != nil {
-		return "", fmt.Errorf("save schedule: %w", err)
+		return domain.ScheduleID{}, fmt.Errorf("save schedule: %w", err)
 	}
 
 	return schedule.ID(), nil

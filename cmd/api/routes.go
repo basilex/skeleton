@@ -34,7 +34,7 @@ import (
 	"github.com/basilex/skeleton/pkg/uuid"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // setupRouter creates and configures the Gin HTTP router with all middleware and routes.
@@ -304,31 +304,22 @@ func systemInfoHandler(di *Dependencies) gin.HandlerFunc {
 }
 
 // checkDatabase performs a health check on the database connection.
-func checkDatabase(db *sqlx.DB) string {
+func checkDatabase(pool *pgxpool.Pool) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := pool.Ping(ctx); err != nil {
 		return "fail"
 	}
 	return "ok"
 }
 
-// dbType returns the database type (sqlite or postgres).
-func dbType(db *sqlx.DB) string {
-	if db == nil {
+// dbType returns the database type.
+func dbType(pool *pgxpool.Pool) string {
+	if pool == nil {
 		return "not_configured"
 	}
-
-	driver := db.DriverName()
-	switch driver {
-	case "sqlite3":
-		return "sqlite"
-	case "postgres":
-		return "postgres"
-	default:
-		return driver
-	}
+	return "postgres"
 }
 
 // dbPath returns sanitized database path.

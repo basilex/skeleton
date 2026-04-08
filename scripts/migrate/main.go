@@ -1,7 +1,7 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -9,16 +9,34 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "modernc.org/sqlite"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
-	action := flag.String("action", "up", "migration action: up, down")
+	action := flag.String("action", "up", "migration action: up, down, status")
 	flag.Parse()
 
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./data/skeleton.db"
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://user:password@localhost:5432/skeleton?sslmode=disable"
+	}
+
+	ctx := context.Background()
+
+	poolConfig, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		log.Fatalf("parse database url: %v", err)
+	}
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		log.Fatalf("connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	// Test connection
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("ping database: %v", err)
 	}
 
 	dir, err := filepath.Abs("./migrations")
@@ -26,48 +44,53 @@ func main() {
 		log.Fatalf("resolve migrations path: %v", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		log.Fatalf("open db: %v", err)
-	}
-	defer db.Close()
-
-	if err := ensureMigrationTable(db); err != nil {
+	if err := ensureMigrationTable(ctx, pool); err != nil {
 		log.Fatalf("ensure migration table: %v", err)
 	}
 
 	switch *action {
 	case "up":
-		if err := runMigrationsUp(db, dir); err != nil {
+		if err := runMigrationsUp(ctx, pool, dir); err != nil {
 			log.Fatalf("migrate up: %v", err)
 		}
-		log.Println("migrations applied")
+		log.Println("✓ migrations applied successfully")
 	case "down":
-		if err := runMigrationsDown(db, dir); err != nil {
+		if err := runMigrationsDown(ctx, pool, dir); err != nil {
 			log.Fatalf("migrate down: %v", err)
 		}
-		log.Println("migrations rolled back")
+		log.Println("✓ migrations rolled back successfully")
+	case "status":
+		version, dirty, err := getMigrationStatus(ctx, pool)
+		if err != nil {
+			log.Fatalf("get migration status: %v", err)
+		}
+		fmt.Printf("Current version: %d (dirty: %v)\n", version, dirty)
 	default:
-		log.Fatalf("unknown action: %s", *action)
+		log.Fatalf("unknown action: %s (use: up, down, status)", *action)
 	}
 }
 
-func ensureMigrationTable(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
-		version INTEGER PRIMARY KEY,
-		dirty   INTEGER NOT NULL DEFAULT 0
-	)`)
+func ensureMigrationTable(ctx context.Context, pool *pgxpool.Pool) error {
+	_, err := pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version INTEGER PRIMARY KEY,
+			dirty   BOOLEAN NOT NULL DEFAULT false,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)
+	`)
 	return err
 }
 
-func currentVersion(db *sql.DB) (int, error) {
-	var v int
-	err := db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_migrations WHERE dirty = 0`).Scan(&v)
-	return v, err
+func getMigrationStatus(ctx context.Context, pool *pgxpool.Pool) (version int, dirty bool, err error) {
+	err = pool.QueryRow(ctx, `
+		SELECT COALESCE(MAX(version), 0), COALESCE(BOOL_OR(dirty), false)
+		FROM schema_migrations
+	`).Scan(&version, &dirty)
+	return
 }
 
-func runMigrationsUp(db *sql.DB, dir string) error {
-	current, err := currentVersion(db)
+func runMigrationsUp(ctx context.Context, pool *pgxpool.Pool, dir string) error {
+	current, _, err := getMigrationStatus(ctx, pool)
 	if err != nil {
 		return fmt.Errorf("get current version: %w", err)
 	}
@@ -77,6 +100,7 @@ func runMigrationsUp(db *sql.DB, dir string) error {
 		return fmt.Errorf("read migrations dir: %w", err)
 	}
 
+	applied := 0
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -97,22 +121,44 @@ func runMigrationsUp(db *sql.DB, dir string) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 
-		if _, err := db.Exec(string(content)); err != nil {
+		// Start transaction
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin transaction: %w", err)
+		}
+
+		// Execute migration
+		if _, err := tx.Exec(ctx, string(content)); err != nil {
+			tx.Rollback(ctx)
 			return fmt.Errorf("exec %s: %w", name, err)
 		}
 
-		if _, err := db.Exec(`INSERT INTO schema_migrations (version, dirty) VALUES (?, 0)`, version); err != nil {
+		// Record migration
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO schema_migrations (version, dirty) VALUES ($1, false)`,
+			version,
+		); err != nil {
+			tx.Rollback(ctx)
 			return fmt.Errorf("record migration %d: %w", version, err)
 		}
 
-		log.Printf("applied migration: %s", name)
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit migration %d: %w", version, err)
+		}
+
+		log.Printf("✓ applied migration: %s", name)
+		applied++
+	}
+
+	if applied == 0 {
+		log.Println("no pending migrations")
 	}
 
 	return nil
 }
 
-func runMigrationsDown(db *sql.DB, dir string) error {
-	current, err := currentVersion(db)
+func runMigrationsDown(ctx context.Context, pool *pgxpool.Pool, dir string) error {
+	current, _, err := getMigrationStatus(ctx, pool)
 	if err != nil {
 		return fmt.Errorf("get current version: %w", err)
 	}
@@ -136,13 +182,33 @@ func runMigrationsDown(db *sql.DB, dir string) error {
 			if err != nil {
 				return fmt.Errorf("read %s: %w", entry.Name(), err)
 			}
-			if _, err := db.Exec(string(content)); err != nil {
+
+			// Start transaction
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				return fmt.Errorf("begin transaction: %w", err)
+			}
+
+			// Execute down migration
+			if _, err := tx.Exec(ctx, string(content)); err != nil {
+				tx.Rollback(ctx)
 				return fmt.Errorf("exec %s: %w", entry.Name(), err)
 			}
-			if _, err := db.Exec(`DELETE FROM schema_migrations WHERE version = ?`, current); err != nil {
+
+			// Remove migration record
+			if _, err := tx.Exec(ctx,
+				`DELETE FROM schema_migrations WHERE version = $1`,
+				current,
+			); err != nil {
+				tx.Rollback(ctx)
 				return fmt.Errorf("remove migration record: %w", err)
 			}
-			log.Printf("rolled back migration: %s", entry.Name())
+
+			if err := tx.Commit(ctx); err != nil {
+				return fmt.Errorf("commit rollback: %w", err)
+			}
+
+			log.Printf("✓ rolled back migration: %s", entry.Name())
 			return nil
 		}
 	}

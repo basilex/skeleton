@@ -52,11 +52,11 @@ func (h *CreateTemplateHandler) Handle(ctx context.Context, cmd CreateTemplateCo
 		opts...,
 	)
 	if err != nil {
-		return "", fmt.Errorf("create template: %w", err)
+		return domain.TemplateID{}, fmt.Errorf("create template: %w", err)
 	}
 
 	if err := h.templateRepo.Create(ctx, template); err != nil {
-		return "", fmt.Errorf("save template: %w", err)
+		return domain.TemplateID{}, fmt.Errorf("save template: %w", err)
 	}
 
 	return template.ID(), nil

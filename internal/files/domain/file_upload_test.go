@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewFileUpload(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	ttl := 1 * time.Hour
 
@@ -44,7 +44,7 @@ func TestNewFileUpload(t *testing.T) {
 }
 
 func TestFileUploadSetUploadURL(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	upload, _ := NewFileUpload(file, 1*time.Hour)
 
@@ -61,7 +61,7 @@ func TestFileUploadSetUploadURL(t *testing.T) {
 }
 
 func TestFileUploadSetUploadURLWithNilFields(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	upload, _ := NewFileUpload(file, 1*time.Hour)
 
@@ -71,7 +71,7 @@ func TestFileUploadSetUploadURLWithNilFields(t *testing.T) {
 }
 
 func TestFileUploadMarkCompleted(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	t.Run("from pending", func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestFileUploadMarkCompleted(t *testing.T) {
 }
 
 func TestFileUploadMarkFailed(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	upload, _ := NewFileUpload(file, 1*time.Hour)
 
@@ -108,7 +108,7 @@ func TestFileUploadMarkFailed(t *testing.T) {
 }
 
 func TestFileUploadIsExpired(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	t.Run("not expired", func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestFileUploadIsExpired(t *testing.T) {
 }
 
 func TestFileUploadCanUpload(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	t.Run("pending and not expired", func(t *testing.T) {
@@ -166,7 +166,7 @@ func TestFileUploadCanUpload(t *testing.T) {
 }
 
 func TestFileUploadFields(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	upload, _ := NewFileUpload(file, 1*time.Hour)
 
@@ -185,7 +185,7 @@ func TestFileUploadFields(t *testing.T) {
 }
 
 func TestReconstituteFileUpload(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	now := time.Now()
 	expiresAt := now.Add(1 * time.Hour)
@@ -195,8 +195,9 @@ func TestReconstituteFileUpload(t *testing.T) {
 		"key2": "value2",
 	}
 
+	uploadID := NewUploadID()
 	upload := ReconstituteFileUpload(
-		UploadID("upload-123"),
+		uploadID,
 		file,
 		"https://storage.example.com/upload",
 		fields,
@@ -205,7 +206,7 @@ func TestReconstituteFileUpload(t *testing.T) {
 		now,
 	)
 
-	require.Equal(t, UploadID("upload-123"), upload.ID())
+	require.Equal(t, uploadID, upload.ID())
 	require.Equal(t, file, upload.File())
 	require.Equal(t, "https://storage.example.com/upload", upload.UploadURL())
 	require.Equal(t, fields, upload.Fields())
@@ -215,12 +216,12 @@ func TestReconstituteFileUpload(t *testing.T) {
 }
 
 func TestReconstituteFileUploadWithNilFields(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 	now := time.Now()
 
 	upload := ReconstituteFileUpload(
-		UploadID("upload-123"),
+		NewUploadID(),
 		file,
 		"https://storage.example.com/upload",
 		nil,

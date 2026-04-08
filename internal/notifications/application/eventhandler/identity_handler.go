@@ -98,7 +98,10 @@ func parseUserID(s string) *identityDomain.UserID {
 	if s == "" {
 		return nil
 	}
-	id := identityDomain.UserID(s)
+	id, err := identityDomain.ParseUserID(s)
+	if err != nil {
+		return nil
+	}
 	return &id
 }
 

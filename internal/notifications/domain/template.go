@@ -11,24 +11,28 @@ import (
 )
 
 // TemplateID is a unique identifier for a notification template.
-type TemplateID string
+type TemplateID uuid.UUID
 
 // NewTemplateID generates a new unique TemplateID using UUID v7.
 func NewTemplateID() TemplateID {
-	return TemplateID(uuid.NewV7().String())
+	return TemplateID(uuid.NewV7())
 }
 
 // ParseTemplateID validates and converts a string to TemplateID.
 func ParseTemplateID(s string) (TemplateID, error) {
 	if s == "" {
-		return "", fmt.Errorf("template ID cannot be empty")
+		return TemplateID{}, fmt.Errorf("template ID cannot be empty")
 	}
-	return TemplateID(s), nil
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return TemplateID{}, fmt.Errorf("invalid template id: %w", err)
+	}
+	return TemplateID(u), nil
 }
 
 // String returns the string representation of TemplateID.
 func (id TemplateID) String() string {
-	return string(id)
+	return uuid.UUID(id).String()
 }
 
 // NotificationTemplate represents a reusable template for generating notifications.

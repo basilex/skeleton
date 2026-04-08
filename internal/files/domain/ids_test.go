@@ -38,15 +38,15 @@ func TestParseFileID(t *testing.T) {
 				require.Equal(t, ErrInvalidFileID, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, FileID(tt.input), id)
+				require.Equal(t, tt.input, id.String())
 			}
 		})
 	}
 }
 
 func TestFileIDString(t *testing.T) {
-	id := FileID("test-id-123")
-	require.Equal(t, "test-id-123", id.String())
+	id := NewFileID()
+	require.NotEmpty(t, id.String())
 }
 
 func TestNewUploadID(t *testing.T) {
@@ -81,15 +81,15 @@ func TestParseUploadID(t *testing.T) {
 				require.Equal(t, ErrInvalidUploadID, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, UploadID(tt.input), id)
+				require.Equal(t, tt.input, id.String())
 			}
 		})
 	}
 }
 
 func TestUploadIDString(t *testing.T) {
-	id := UploadID("upload-id-456")
-	require.Equal(t, "upload-id-456", id.String())
+	id := NewUploadID()
+	require.NotEmpty(t, id.String())
 }
 
 func TestNewProcessingID(t *testing.T) {
@@ -124,15 +124,15 @@ func TestParseProcessingID(t *testing.T) {
 				require.Equal(t, ErrInvalidProcessingID, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, ProcessingID(tt.input), id)
+				require.Equal(t, tt.input, id.String())
 			}
 		})
 	}
 }
 
 func TestProcessingIDString(t *testing.T) {
-	id := ProcessingID("processing-id-789")
-	require.Equal(t, "processing-id-789", id.String())
+	id := NewProcessingID()
+	require.NotEmpty(t, id.String())
 }
 
 func TestFileIDUniqueness(t *testing.T) {

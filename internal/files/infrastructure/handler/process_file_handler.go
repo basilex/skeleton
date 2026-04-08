@@ -40,7 +40,12 @@ func (h *ProcessFileHandler) Handle(ctx context.Context, task *tasksdomain.Task)
 		return fmt.Errorf("missing processing_id")
 	}
 
-	processing, err := h.processingRepo.GetByID(ctx, domain.ProcessingID(processingID))
+	processingUUID, err := domain.ParseProcessingID(processingID)
+	if err != nil {
+		return fmt.Errorf("parse processing id: %w", err)
+	}
+
+	processing, err := h.processingRepo.GetByID(ctx, processingUUID)
 	if err != nil {
 		return fmt.Errorf("get processing: %w", err)
 	}

@@ -57,7 +57,7 @@ func (m *mockFileRepo) GetByPath(ctx context.Context, path string) (*domain.File
 func (m *mockFileRepo) GetByOwner(ctx context.Context, ownerID string, limit, offset int) ([]*domain.File, error) {
 	var result []*domain.File
 	for _, file := range m.files {
-		if file.OwnerID() != nil && string(*file.OwnerID()) == ownerID {
+		if file.OwnerID() != nil && file.OwnerID().String() == ownerID {
 			result = append(result, file)
 		}
 	}
@@ -279,7 +279,8 @@ func TestUploadFileHandler(t *testing.T) {
 		bus := memory.New()
 		handler := NewUploadFileHandler(fileRepo, storage, bus)
 
-		userID := string(identitydomain.NewUserID())
+		user := identitydomain.NewUserID()
+		userID := user.String()
 		content := bytes.NewReader([]byte("test content"))
 
 		result, err := handler(context.Background(), UploadFileCommand{
@@ -411,7 +412,8 @@ func TestRequestUploadURLHandler(t *testing.T) {
 
 		handler := NewRequestUploadURLHandler(uploadRepo, fileRepo, storage)
 
-		userID := string(identitydomain.NewUserID())
+		user := identitydomain.NewUserID()
+		userID := user.String()
 		result, err := handler(context.Background(), RequestUploadURLCommand{
 			OwnerID:         &userID,
 			Filename:        "large-file.zip",

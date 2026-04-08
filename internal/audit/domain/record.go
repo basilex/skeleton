@@ -41,11 +41,29 @@ const (
 func (a ActorType) String() string { return string(a) }
 
 // RecordID is a unique identifier for an audit record.
-type RecordID string
+type RecordID uuid.UUID
 
 // NewRecordID generates a new unique RecordID using UUID v7.
 func NewRecordID() RecordID {
-	return RecordID(uuid.NewV7().String())
+	return RecordID(uuid.NewV7())
+}
+
+// String returns the string representation of RecordID.
+func (id RecordID) String() string {
+	return uuid.UUID(id).String()
+}
+
+// ParseRecordID parses a string into a RecordID.
+// Returns an error if the string is empty or invalid.
+func ParseRecordID(s string) (RecordID, error) {
+	if s == "" {
+		return RecordID{}, ErrInvalidRecordID
+	}
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return RecordID{}, ErrInvalidRecordID
+	}
+	return RecordID(u), nil
 }
 
 // Record represents an audit trail entry capturing who did what to which resource.

@@ -54,8 +54,10 @@ import (
 	"github.com/basilex/skeleton/pkg/config"
 	"github.com/basilex/skeleton/pkg/eventbus"
 	membus "github.com/basilex/skeleton/pkg/eventbus/memory"
+	redisbus "github.com/basilex/skeleton/pkg/eventbus/redis"
 	"github.com/basilex/skeleton/pkg/ratelimit"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 // Cache defines the interface for caching operations.
@@ -96,9 +98,9 @@ type Dependencies struct {
 	EventBus eventbus.Bus
 
 	// Infrastructure components
-	Config   *config.Config // Application configuration
-	Database *sqlx.DB       // Database connection (SQLite or PostgreSQL)
-	// RedisClient *redis.Client // Redis client (nil if not configured) - TODO: add Redis support
+	Config      *config.Config // Application configuration
+	Database    *pgxpool.Pool  // PostgreSQL connection pool
+	RedisClient *redis.Client  // Redis client (optional)
 
 	// Cache provides distributed caching functionality.
 	Cache Cache
@@ -154,26 +156,54 @@ type Dependencies struct {
 //   - goVersion: Go runtime version for status endpoint
 //
 // Returns a fully initialized Dependencies struct containing all application components.
-func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTime, goVersion string) *Dependencies {
-	// Initialize the in-memory event bus for domain event propagation.
-	bus := membus.New()
+func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis.Client, version, commit, buildTime, goVersion string) *Dependencies {
+	// Initialize event bus.
+	// Uses Redis Pub/Sub in production, in-memory for development.
+	var bus eventbus.Bus
+	if redisClient != nil {
+		bus = redisbus.New(redisClient)
+	} else {
+		bus = membus.New()
+	}
 
 	// Initialize caching infrastructure.
-	// Uses in-memory cache for development by default.
-	// In production, this should be replaced with Redis-backed cache.
-	cacheClient := newCache(cfg)
+	// Uses Redis cache in production, in-memory for development.
+	var cacheClient Cache
+	if redisClient != nil {
+		cacheClient = cache.NewRedisCache(redisClient, cfg.Cache.RedisPrefix)
+	} else {
+		cleanupInterval := time.Duration(cfg.Cache.CleanupInterval) * time.Second
+		if cleanupInterval == 0 {
+			cleanupInterval = time.Minute
+		}
+		cacheClient = cache.NewMemoryCache(cleanupInterval)
+	}
 
 	// Initialize rate limiting infrastructure.
-	// Uses token bucket algorithm for development by default.
-	// In production, this should be replaced with sliding window (Redis-backed).
-	rateLimiter := newRateLimiter(cfg)
+	// Uses Redis sliding window in production, in-memory token bucket for development.
+	var rateLimiter RateLimiter
+	if redisClient != nil {
+		config := ratelimit.Config{
+			Limit:     cfg.RateLimit.Global.Limit,
+			Window:    time.Duration(cfg.RateLimit.Global.Window) * time.Second,
+			KeyPrefix: cfg.RateLimit.KeyPrefix,
+		}
+		rateLimiter = ratelimit.NewSlidingWindow(redisClient, config)
+	} else {
+		config := ratelimit.Config{
+			Limit:     cfg.RateLimit.Global.Limit,
+			Window:    time.Duration(cfg.RateLimit.Global.Window) * time.Second,
+			KeyPrefix: cfg.RateLimit.KeyPrefix,
+		}
+		rateLimiter = ratelimit.NewTokenBucket(config)
+	}
 
 	// Identity Bounded Context
 	// Initialize repositories for the identity context.
-	userRepo := persistence.NewUserRepository(db)
-	roleRepo := persistence.NewRoleRepository(db)
+	userRepo := persistence.NewUserRepository(pool)
+	roleRepo := persistence.NewRoleRepository(pool)
 	// Initialize audit repository (shared across contexts for audit logging).
-	auditRepo := auditPersistence.NewAuditRepository(db)
+	auditRepo := auditPersistence.NewAuditRepository(pool)
 
 	// Initialize domain services for authentication and password hashing.
 	tokenService := newTokenService(cfg)
@@ -223,9 +253,9 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 
 	// Notifications Bounded Context
 	// Initialize repositories for notification persistence.
-	notificationRepo := notificationPersistence.NewNotificationRepository(db)
-	templateRepo := notificationPersistence.NewTemplateRepository(db)
-	preferencesRepo := notificationPersistence.NewPreferencesRepository(db)
+	notificationRepo := notificationPersistence.NewNotificationRepository(pool)
+	templateRepo := notificationPersistence.NewTemplateRepository(pool)
+	preferencesRepo := notificationPersistence.NewPreferencesRepository(pool)
 
 	// Initialize command handlers for notification use cases.
 	createNotificationHandler := notificationCommand.NewCreateNotificationHandler(notificationRepo, bus)
@@ -282,9 +312,9 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	notificationIdentityEventHandler := notificationEventHandler.NewIdentityEventHandler(createFromTemplateHandler)
 
 	// Files bounded context
-	fileRepo := filesPersistence.NewFileRepository(db.DB)
-	uploadRepo := filesPersistence.NewUploadRepository(db.DB)
-	processingRepo := filesPersistence.NewProcessingRepository(db.DB)
+	fileRepo := filesPersistence.NewFileRepository(pool)
+	uploadRepo := filesPersistence.NewUploadRepository(pool)
+	processingRepo := filesPersistence.NewProcessingRepository(pool)
 
 	localStorage, err := filesStorage.NewLocalStorage("./uploads", "http://localhost:8080/uploads")
 	if err != nil {
@@ -342,7 +372,8 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	return &Dependencies{
 		EventBus:                 bus,
 		Config:                   cfg,
-		Database:                 db,
+		Database:                 pool,
+		RedisClient:              redisClient,
 		Cache:                    cacheClient,
 		RateLimiter:              rateLimiter,
 		IdentityHandler:          identityHandler,
@@ -423,43 +454,4 @@ func newStatusHandler(version, commit, buildTime, goVersion, env string) *status
 	}
 	getBuildInfoHandler := query.NewGetBuildInfoHandler(buildInfo)
 	return statusHTTP.NewHandler(getBuildInfoHandler)
-}
-
-// newCache creates a cache instance based on configuration.
-// Uses in-memory cache for development and testing.
-// In production, this should be replaced with Redis-backed cache.
-//
-// Parameters:
-//   - cfg: Application configuration containing cache settings
-//
-// Returns a Cache implementation appropriate for the environment.
-func newCache(cfg *config.Config) Cache {
-	cleanupInterval := time.Duration(cfg.Cache.CleanupInterval) * time.Second
-	if cleanupInterval == 0 {
-		cleanupInterval = time.Minute
-	}
-
-	// For now, always use in-memory cache
-	// TODO: Add Redis support when Redis is integrated
-	return cache.NewMemoryCache(cleanupInterval)
-}
-
-// newRateLimiter creates a rate limiter instance based on configuration.
-// Uses token bucket for development and testing.
-// In production, this should be replaced with sliding window (Redis-backed).
-//
-// Parameters:
-//   - cfg: Application configuration containing rate limit settings
-//
-// Returns a RateLimiter implementation appropriate for the environment.
-func newRateLimiter(cfg *config.Config) RateLimiter {
-	config := ratelimit.Config{
-		Limit:     cfg.RateLimit.Global.Limit,
-		Window:    time.Duration(cfg.RateLimit.Global.Window) * time.Second,
-		KeyPrefix: cfg.RateLimit.KeyPrefix,
-	}
-
-	// For now, always use token bucket
-	// TODO: Add Redis support for sliding window
-	return ratelimit.NewTokenBucket(config)
 }

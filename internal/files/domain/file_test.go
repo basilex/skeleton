@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewFile(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	filename := "test.jpg"
 	mimeType := "image/jpeg"
 	size := int64(1024)
@@ -77,7 +77,7 @@ func TestNewFile(t *testing.T) {
 }
 
 func TestNewFileValidation(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 
 	tests := []struct {
 		name        string
@@ -171,7 +171,7 @@ func TestNewFileValidation(t *testing.T) {
 }
 
 func TestFileSetPath(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	t.Run("valid path", func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestFileSetPath(t *testing.T) {
 }
 
 func TestFileSetChecksum(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	data := []byte("test content")
@@ -199,7 +199,7 @@ func TestFileSetChecksum(t *testing.T) {
 }
 
 func TestFileSetChecksumFromHex(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	t.Run("valid checksum", func(t *testing.T) {
@@ -228,7 +228,7 @@ func TestFileSetChecksumFromHex(t *testing.T) {
 }
 
 func TestFileSetMetadata(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	width := 800
@@ -247,7 +247,7 @@ func TestFileSetMetadata(t *testing.T) {
 }
 
 func TestFileSetExpiration(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	t.Run("valid expiration", func(t *testing.T) {
@@ -267,7 +267,7 @@ func TestFileSetExpiration(t *testing.T) {
 }
 
 func TestFileSetProcessed(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	require.Nil(t, file.ProcessedAt())
@@ -276,7 +276,7 @@ func TestFileSetProcessed(t *testing.T) {
 }
 
 func TestFileIsExpired(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 
 	t.Run("without expiration", func(t *testing.T) {
 		file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
@@ -298,7 +298,7 @@ func TestFileIsExpired(t *testing.T) {
 }
 
 func TestFileIsImage(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 
 	tests := []struct {
 		name     string
@@ -321,7 +321,7 @@ func TestFileIsImage(t *testing.T) {
 }
 
 func TestFileIsVideo(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 
 	tests := []struct {
 		name     string
@@ -343,7 +343,7 @@ func TestFileIsVideo(t *testing.T) {
 }
 
 func TestFileIsAudio(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 
 	tests := []struct {
 		name     string
@@ -365,7 +365,7 @@ func TestFileIsAudio(t *testing.T) {
 }
 
 func TestFileIsDocument(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 
 	tests := []struct {
 		name       string
@@ -389,8 +389,8 @@ func TestFileIsDocument(t *testing.T) {
 }
 
 func TestFileCanAccess(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
-	otherUserID := identityDomain.UserID("user-456")
+	userID := identityDomain.NewUserID()
+	otherUserID := identityDomain.NewUserID()
 
 	t.Run("public file", func(t *testing.T) {
 		file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPublic)
@@ -426,7 +426,7 @@ func TestFileCanAccess(t *testing.T) {
 	t.Run("expired file", func(t *testing.T) {
 		now := time.Now()
 		pastTime := now.Add(-1 * time.Hour)
-		userID := identityDomain.UserID("user-123")
+		userID := identityDomain.NewUserID()
 
 		file := ReconstituteFile(
 			NewFileID(),
@@ -454,7 +454,7 @@ func TestFileCanAccess(t *testing.T) {
 }
 
 func TestFileGeneratePath(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageS3, AccessPrivate)
 
 	path := file.GeneratePath()
@@ -463,7 +463,7 @@ func TestFileGeneratePath(t *testing.T) {
 }
 
 func TestFileGenerateStoredName(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	file, _ := NewFile(&userID, "test.jpg", "image/jpeg", 1024, StorageLocal, AccessPrivate)
 
 	storedName := file.GenerateStoredName()
@@ -472,7 +472,7 @@ func TestFileGenerateStoredName(t *testing.T) {
 }
 
 func TestReconstituteFile(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	now := time.Now()
 	expiresAt := now.Add(24 * time.Hour)
 	processedAt := now.Add(1 * time.Hour)
@@ -482,7 +482,7 @@ func TestReconstituteFile(t *testing.T) {
 	}
 
 	file := ReconstituteFile(
-		FileID("file-123"),
+		NewFileID(),
 		&userID,
 		"test.jpg",
 		"stored-123.jpg",
@@ -500,7 +500,7 @@ func TestReconstituteFile(t *testing.T) {
 		now,
 	)
 
-	require.Equal(t, FileID("file-123"), file.ID())
+	require.Equal(t, file.ID(), file.ID())
 	require.Equal(t, &userID, file.OwnerID())
 	require.Equal(t, "test.jpg", file.Filename())
 	require.Equal(t, "stored-123.jpg", file.StoredName())

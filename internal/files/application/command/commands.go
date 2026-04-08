@@ -199,7 +199,7 @@ func isValidProcessingOperation(o domain.ProcessingOperation) bool {
 
 // Helper functions
 func NewFileID() string {
-	return string(domain.NewFileID())
+	return domain.NewFileID().String()
 }
 
 func ParseFileID(s string) (domain.FileID, error) {
@@ -268,7 +268,7 @@ func (h *uploadFileHandler) Upload(ctx context.Context, cmd UploadFileCommand) (
 
 	var ownerIDStr *string
 	if file.OwnerID() != nil {
-		s := string(*file.OwnerID())
+		s := file.OwnerID().String()
 		ownerIDStr = &s
 	}
 
@@ -332,7 +332,7 @@ func (h *deleteFileHandler) Delete(ctx context.Context, cmd DeleteFileCommand) e
 
 	var ownerID *string
 	if file.OwnerID() != nil {
-		s := string(*file.OwnerID())
+		s := file.OwnerID().String()
 		ownerID = &s
 	}
 
@@ -478,7 +478,7 @@ func (h *confirmUploadHandler) Confirm(ctx context.Context, cmd ConfirmUploadCom
 
 	var ownerID *string
 	if file.OwnerID() != nil {
-		s := string(*file.OwnerID())
+		s := file.OwnerID().String()
 		ownerID = &s
 	}
 

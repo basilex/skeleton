@@ -5,8 +5,6 @@ package domain
 
 import (
 	"time"
-
-	"github.com/basilex/skeleton/pkg/uuid"
 )
 
 // Role represents a role entity in the identity domain.
@@ -25,13 +23,27 @@ func NewRole(name, description string, permissions []Permission) (*Role, error) 
 		return nil, ErrRoleNotFound
 	}
 	r := &Role{
-		id:          RoleID(uuid.NewV7().String()),
+		id:          NewRoleID(),
 		name:        name,
 		description: description,
 		permissions: permissions,
 		createdAt:   time.Now().UTC(),
 	}
 	return r, nil
+}
+
+// NewRoleWithID creates a role with a specific ID (for reconstitution from persistence).
+func NewRoleWithID(id RoleID, name, description string, permissions []Permission, createdAt time.Time) (*Role, error) {
+	if name == "" {
+		return nil, ErrRoleNotFound
+	}
+	return &Role{
+		id:          id,
+		name:        name,
+		description: description,
+		permissions: permissions,
+		createdAt:   createdAt,
+	}, nil
 }
 
 // ID returns the role's unique identifier.

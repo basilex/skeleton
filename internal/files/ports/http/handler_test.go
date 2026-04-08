@@ -288,7 +288,7 @@ func TestHandler_UploadFile_WithOwner(t *testing.T) {
 	require.Equal(t, http.StatusCreated, w.Code)
 	require.NotNil(t, fileRepo.savedFile)
 	require.NotNil(t, fileRepo.savedFile.OwnerID())
-	require.Equal(t, "0192e5c8-7f0b-7d2e-8b1a-5c3e2d1f0a9b", string(*fileRepo.savedFile.OwnerID()))
+	require.Equal(t, "0192e5c8-7f0b-7d2e-8b1a-5c3e2d1f0a9b", fileRepo.savedFile.OwnerID().String())
 }
 
 func TestHandler_UploadFile_DefaultAccessLevel(t *testing.T) {

@@ -11,24 +11,28 @@ import (
 )
 
 // ScheduleID is a unique identifier for a task schedule.
-type ScheduleID string
+type ScheduleID uuid.UUID
 
 // NewScheduleID generates a new unique ScheduleID using UUID v7.
 func NewScheduleID() ScheduleID {
-	return ScheduleID(uuid.NewV7().String())
+	return ScheduleID(uuid.NewV7())
 }
 
 // ParseScheduleID validates and converts a string to ScheduleID.
 func ParseScheduleID(s string) (ScheduleID, error) {
 	if s == "" {
-		return "", fmt.Errorf("schedule ID cannot be empty")
+		return ScheduleID{}, fmt.Errorf("schedule ID cannot be empty")
 	}
-	return ScheduleID(s), nil
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return ScheduleID{}, fmt.Errorf("invalid schedule id: %w", err)
+	}
+	return ScheduleID(u), nil
 }
 
 // String returns the string representation of ScheduleID.
 func (id ScheduleID) String() string {
-	return string(id)
+	return uuid.UUID(id).String()
 }
 
 // TaskSchedule represents a scheduled task that runs on a cron expression.

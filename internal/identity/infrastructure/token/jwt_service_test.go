@@ -49,7 +49,7 @@ func TestJWTService_GenerateAndValidate(t *testing.T) {
 	svc, err := NewJWTService(privatePath, publicPath, 15, 7)
 	require.NoError(t, err)
 
-	userID := domain.UserID("019d65d6-de90-7200-b1cf-4f8745597e0a")
+	userID := domain.NewUserID()
 	perm, _ := domain.NewPermission("users:read")
 	role, _ := domain.NewRole("admin", "", []domain.Permission{perm})
 
@@ -84,7 +84,7 @@ func TestJWTService_WrongKey(t *testing.T) {
 	svc2, err := NewJWTService(privatePath2, publicPath2, 15, 7)
 	require.NoError(t, err)
 
-	userID := domain.UserID("019d65d6-de90-7200-b1cf-4f8745597e0a")
+	userID := domain.NewUserID()
 	role, _ := domain.NewRole("admin", "", nil)
 
 	token, err := svc1.GenerateAccessToken(userID, []domain.Role{*role})
@@ -100,7 +100,7 @@ func TestJWTService_ExpiredToken(t *testing.T) {
 	svc, err := NewJWTService(privatePath, publicPath, -1, 7)
 	require.NoError(t, err)
 
-	userID := domain.UserID("019d65d6-de90-7200-b1cf-4f8745597e0a")
+	userID := domain.NewUserID()
 	role, _ := domain.NewRole("admin", "", nil)
 
 	token, err := svc.GenerateAccessToken(userID, []domain.Role{*role})
@@ -116,7 +116,7 @@ func TestJWTService_MultiplePermissions(t *testing.T) {
 	svc, err := NewJWTService(privatePath, publicPath, 15, 7)
 	require.NoError(t, err)
 
-	userID := domain.UserID("019d65d6-de90-7200-b1cf-4f8745597e0a")
+	userID := domain.NewUserID()
 	p1, _ := domain.NewPermission("users:read")
 	p2, _ := domain.NewPermission("users:write")
 	p3, _ := domain.NewPermission("roles:manage")

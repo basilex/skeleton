@@ -43,7 +43,11 @@ func NewUpdatePreferencesHandler(
 func (h *UpdatePreferencesHandler) Handle(ctx context.Context, cmd UpdatePreferencesCommand) error {
 	prefs, err := h.preferencesRepo.GetByUserID(ctx, cmd.UserID)
 	if err != nil || prefs == nil {
-		prefs = notificationDomain.NewNotificationPreferences(domain.UserID(cmd.UserID))
+		userID, parseErr := domain.ParseUserID(cmd.UserID)
+		if parseErr != nil {
+			return fmt.Errorf("parse user id: %w", parseErr)
+		}
+		prefs = notificationDomain.NewNotificationPreferences(userID)
 	}
 
 	if cmd.Enabled {

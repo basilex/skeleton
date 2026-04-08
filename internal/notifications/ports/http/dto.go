@@ -154,7 +154,7 @@ type TemplateResponse struct {
 func ToNotificationResponse(n *domain.Notification) NotificationResponse {
 	var userID *string
 	if n.Recipient().UserID != nil {
-		id := string(*n.Recipient().UserID)
+		id := n.Recipient().UserID.String()
 		userID = &id
 	}
 
@@ -203,7 +203,7 @@ func ToPreferencesResponse(p *domain.NotificationPreferences) NotificationPrefer
 	}
 
 	return NotificationPreferencesResponse{
-		UserID:    string(p.UserID()),
+		UserID:    p.UserID().String(),
 		Channels:  channels,
 		CreatedAt: p.CreatedAt(),
 		UpdatedAt: p.UpdatedAt(),
@@ -232,6 +232,9 @@ func parseUserID(s *string) *identityDomain.UserID {
 	if s == nil || *s == "" {
 		return nil
 	}
-	id := identityDomain.UserID(*s)
+	id, err := identityDomain.ParseUserID(*s)
+	if err != nil {
+		return nil
+	}
 	return &id
 }

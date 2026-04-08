@@ -45,7 +45,7 @@ func TestNewRecord(t *testing.T) {
 	if record.Status() != status {
 		t.Errorf("expected status %d, got %d", status, record.Status())
 	}
-	if record.ID() == "" {
+	if record.ID() == (RecordID{}) {
 		t.Error("expected record ID to be set")
 	}
 	if record.CreatedAt().IsZero() {
@@ -54,7 +54,7 @@ func TestNewRecord(t *testing.T) {
 }
 
 func TestReconstituteRecord(t *testing.T) {
-	id := RecordID("record-123")
+	id := NewRecordID()
 	actorID := "user-456"
 	actorType := ActorSystem
 	action := ActionDelete

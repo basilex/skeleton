@@ -394,7 +394,7 @@ func TestParseNotificationID(t *testing.T) {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, NotificationID(tt.input), id)
+				require.Equal(t, tt.input, id.String())
 			}
 		})
 	}
@@ -484,7 +484,7 @@ func TestParsePriority(t *testing.T) {
 }
 
 func TestNotificationRecipientWithUserID(t *testing.T) {
-	userID := identityDomain.UserID("user-123")
+	userID := identityDomain.NewUserID()
 	recipient := Recipient{
 		UserID: &userID,
 		Email:  "test@example.com",

@@ -56,11 +56,11 @@ func (h *CreateTaskHandler) Handle(ctx context.Context, cmd CreateTaskCommand) (
 
 	task, err := domain.NewTask(cmd.TaskType, cmd.Payload, opts...)
 	if err != nil {
-		return "", fmt.Errorf("create task: %w", err)
+		return domain.TaskID{}, fmt.Errorf("create task: %w", err)
 	}
 
 	if err := h.repo.Create(ctx, task); err != nil {
-		return "", fmt.Errorf("save task: %w", err)
+		return domain.TaskID{}, fmt.Errorf("save task: %w", err)
 	}
 
 	event := domain.NewTaskCreated(task.ID(), task.Type(), task.Payload())

@@ -91,7 +91,7 @@ func (h *ListRecordsHandler) Handle(ctx context.Context, query ListRecordsQuery)
 	dtos := make([]RecordDTO, len(result.Items))
 	for i, record := range result.Items {
 		dtos[i] = RecordDTO{
-			ID:         string(record.ID()),
+			ID:         record.ID().String(),
 			ActorID:    record.ActorID(),
 			ActorType:  record.ActorType().String(),
 			Action:     record.Action().String(),

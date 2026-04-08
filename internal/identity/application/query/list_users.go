@@ -86,7 +86,7 @@ func (h *ListUsersHandler) Handle(ctx context.Context, q ListUsersQuery) (pagina
 			}
 		}
 		items[i] = UserDTO{
-			ID:        string(u.ID()),
+			ID:        u.ID().String(),
 			Email:     u.Email().String(),
 			Roles:     roleNames,
 			IsActive:  u.IsActive(),

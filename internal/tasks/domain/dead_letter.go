@@ -10,24 +10,28 @@ import (
 )
 
 // DeadLetterID is a unique identifier for a dead letter task.
-type DeadLetterID string
+type DeadLetterID uuid.UUID
 
 // NewDeadLetterID generates a new unique DeadLetterID using UUID v7.
 func NewDeadLetterID() DeadLetterID {
-	return DeadLetterID(uuid.NewV7().String())
+	return DeadLetterID(uuid.NewV7())
 }
 
 // ParseDeadLetterID validates and converts a string to DeadLetterID.
 func ParseDeadLetterID(s string) (DeadLetterID, error) {
 	if s == "" {
-		return "", nil
+		return DeadLetterID{}, nil
 	}
-	return DeadLetterID(s), nil
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return DeadLetterID{}, err
+	}
+	return DeadLetterID(u), nil
 }
 
 // String returns the string representation of DeadLetterID.
 func (id DeadLetterID) String() string {
-	return string(id)
+	return uuid.UUID(id).String()
 }
 
 // DeadLetterAction represents the action to take on a dead letter task.

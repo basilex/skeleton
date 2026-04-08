@@ -44,15 +44,15 @@ func NewCreateFromTemplateHandler(
 func (h *CreateFromTemplateHandler) Handle(ctx context.Context, cmd CreateFromTemplateCommand) (domain.NotificationID, error) {
 	template, err := h.templateRepo.GetByName(ctx, cmd.TemplateName)
 	if err != nil {
-		return "", fmt.Errorf("get template: %w", err)
+		return domain.NotificationID{}, fmt.Errorf("get template: %w", err)
 	}
 
 	if !template.IsActive() {
-		return "", fmt.Errorf("template %s is not active", cmd.TemplateName)
+		return domain.NotificationID{}, fmt.Errorf("template %s is not active", cmd.TemplateName)
 	}
 
 	if err := template.ValidateVariables(cmd.Variables); err != nil {
-		return "", fmt.Errorf("validate variables: %w", err)
+		return domain.NotificationID{}, fmt.Errorf("validate variables: %w", err)
 	}
 
 	content := domain.Content{
@@ -72,7 +72,7 @@ func (h *CreateFromTemplateHandler) Handle(ctx context.Context, cmd CreateFromTe
 		cmd.Priority,
 	)
 	if err != nil {
-		return "", fmt.Errorf("create notification: %w", err)
+		return domain.NotificationID{}, fmt.Errorf("create notification: %w", err)
 	}
 
 	if cmd.ScheduledAt != nil {
@@ -80,7 +80,7 @@ func (h *CreateFromTemplateHandler) Handle(ctx context.Context, cmd CreateFromTe
 	}
 
 	if err := h.notificationRepo.Create(ctx, notification); err != nil {
-		return "", fmt.Errorf("save notification: %w", err)
+		return domain.NotificationID{}, fmt.Errorf("save notification: %w", err)
 	}
 
 	return notification.ID(), nil

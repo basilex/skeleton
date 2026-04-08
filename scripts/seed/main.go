@@ -2,39 +2,49 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"os"
 	"time"
 
 	"github.com/basilex/skeleton/pkg/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
-	_ "modernc.org/sqlite"
 )
 
 func main() {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./data/skeleton.db"
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://user:password@localhost:5432/skeleton?sslmode=disable"
 	}
-
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		log.Fatalf("open db: %v", err)
-	}
-	defer db.Close()
 
 	ctx := context.Background()
 
-	seedRoles(ctx, db)
-	seedPermissions(ctx, db)
-	seedRolePermissions(ctx, db)
-	seedAdminUser(ctx, db)
+	poolConfig, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		log.Fatalf("parse database url: %v", err)
+	}
 
-	log.Println("seed completed")
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		log.Fatalf("connect to database: %v", err)
+	}
+	defer pool.Close()
+
+	// Test connection
+	if err := pool.Ping(ctx); err != nil {
+		log.Fatalf("ping database: %v", err)
+	}
+
+	seedRoles(ctx, pool)
+	seedPermissions(ctx, pool)
+	seedRolePermissions(ctx, pool)
+	seedAdminUser(ctx, pool)
+
+	log.Println("✓ seed completed successfully")
 }
 
-func seedRoles(ctx context.Context, db *sql.DB) {
+func seedRoles(ctx context.Context, pool *pgxpool.Pool) {
 	roles := []struct {
 		id, name, desc string
 	}{
@@ -45,7 +55,10 @@ func seedRoles(ctx context.Context, db *sql.DB) {
 
 	for _, r := range roles {
 		var exists bool
-		err := db.QueryRowContext(ctx, `SELECT COUNT(*) > 0 FROM roles WHERE name = ?`, r.name).Scan(&exists)
+		err := pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM roles WHERE name = $1)`,
+			r.name,
+		).Scan(&exists)
 		if err != nil {
 			log.Printf("check role %s: %v", r.name, err)
 			continue
@@ -54,95 +67,105 @@ func seedRoles(ctx context.Context, db *sql.DB) {
 			log.Printf("role %s already exists, skipping", r.name)
 			continue
 		}
-		_, err = db.ExecContext(ctx,
-			`INSERT INTO roles (id, name, description, created_at) VALUES (?, ?, ?, ?)`,
-			r.id, r.name, r.desc, time.Now().UTC().Format(time.RFC3339))
+
+		_, err = pool.Exec(ctx,
+			`INSERT INTO roles (id, name, description, created_at) VALUES ($1, $2, $3, $4)`,
+			r.id, r.name, r.desc, time.Now(),
+		)
 		if err != nil {
 			log.Printf("insert role %s: %v", r.name, err)
 			continue
 		}
-		log.Printf("created role: %s", r.name)
+		log.Printf("✓ created role: %s", r.name)
 	}
 }
 
-func seedPermissions(ctx context.Context, db *sql.DB) {
+func seedPermissions(ctx context.Context, pool *pgxpool.Pool) {
 	perms := []struct {
-		id, name, resource, action string
+		name, resource, action string
 	}{
-		{uuid.NewV7().String(), "users:read", "users", "read"},
-		{uuid.NewV7().String(), "users:write", "users", "write"},
-		{uuid.NewV7().String(), "roles:read", "roles", "read"},
-		{uuid.NewV7().String(), "roles:manage", "roles", "manage"},
-		{uuid.NewV7().String(), "audit:read", "audit", "read"},
+		{"users:read", "users", "read"},
+		{"users:write", "users", "write"},
+		{"users:delete", "users", "delete"},
+		{"roles:read", "roles", "read"},
+		{"roles:manage", "roles", "manage"},
+		{"files:read", "files", "read"},
+		{"files:write", "files", "write"},
+		{"files:delete", "files", "delete"},
+		{"audit:read", "audit", "read"},
+		{"notifications:read", "notifications", "read"},
+		{"notifications:write", "notifications", "write"},
 	}
 
 	for _, p := range perms {
 		var exists bool
-		err := db.QueryRowContext(ctx, `SELECT COUNT(*) > 0 FROM permissions WHERE name = ?`, p.name).Scan(&exists)
+		err := pool.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM permissions WHERE name = $1)`,
+			p.name,
+		).Scan(&exists)
 		if err != nil {
 			log.Printf("check permission %s: %v", p.name, err)
 			continue
 		}
 		if exists {
-			log.Printf("permission %s already exists, skipping", p.name)
 			continue
 		}
-		_, err = db.ExecContext(ctx,
-			`INSERT INTO permissions (id, name, resource, action) VALUES (?, ?, ?, ?)`,
-			p.id, p.name, p.resource, p.action)
+
+		_, err = pool.Exec(ctx,
+			`INSERT INTO permissions (name, description) VALUES ($1, $2)`,
+			p.name, p.name,
+		)
 		if err != nil {
 			log.Printf("insert permission %s: %v", p.name, err)
 			continue
 		}
-		log.Printf("created permission: %s", p.name)
+		log.Printf("✓ created permission: %s", p.name)
 	}
 }
 
-func seedRolePermissions(ctx context.Context, db *sql.DB) {
+func seedRolePermissions(ctx context.Context, pool *pgxpool.Pool) {
 	var superAdminID, adminID, viewerID string
-	db.QueryRowContext(ctx, `SELECT id FROM roles WHERE name = 'super_admin'`).Scan(&superAdminID)
-	db.QueryRowContext(ctx, `SELECT id FROM roles WHERE name = 'admin'`).Scan(&adminID)
-	db.QueryRowContext(ctx, `SELECT id FROM roles WHERE name = 'viewer'`).Scan(&viewerID)
+	pool.QueryRow(ctx, `SELECT id FROM roles WHERE name = 'super_admin'`).Scan(&superAdminID)
+	pool.QueryRow(ctx, `SELECT id FROM roles WHERE name = 'admin'`).Scan(&adminID)
+	pool.QueryRow(ctx, `SELECT id FROM roles WHERE name = 'viewer'`).Scan(&viewerID)
 
-	var usersRead, usersWrite, rolesRead, rolesManage, auditRead string
-	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'users:read'`).Scan(&usersRead)
-	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'users:write'`).Scan(&usersWrite)
-	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'roles:read'`).Scan(&rolesRead)
-	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'roles:manage'`).Scan(&rolesManage)
-	db.QueryRowContext(ctx, `SELECT id FROM permissions WHERE name = 'audit:read'`).Scan(&auditRead)
+	// Get permission IDs
+	permIDs := make(map[string]int)
+	for _, name := range []string{"users:read", "users:write", "users:delete", "roles:read", "roles:manage", "files:read", "files:write", "files:delete", "audit:read", "notifications:read", "notifications:write"} {
+		var id int
+		if err := pool.QueryRow(ctx, `SELECT id FROM permissions WHERE name = $1`, name).Scan(&id); err == nil {
+			permIDs[name] = id
+		}
+	}
 
+	// Super admin has all permissions (wildcard in code)
 	if superAdminID != "" {
-		log.Printf("super_admin has *:* wildcard (handled in code)")
+		log.Printf("super_admin has wildcard permission (*:*)")
 	}
 
-	if adminID != "" && usersRead != "" {
-		insertRolePerm(ctx, db, adminID, usersRead)
+	// Admin permissions
+	adminPerms := []string{"users:read", "users:write", "roles:read", "roles:manage", "files:read", "files:write", "audit:read", "notifications:read", "notifications:write"}
+	for _, permName := range adminPerms {
+		if permID, ok := permIDs[permName]; ok && adminID != "" {
+			insertRolePerm(ctx, pool, adminID, permID)
+		}
 	}
-	if adminID != "" && usersWrite != "" {
-		insertRolePerm(ctx, db, adminID, usersWrite)
-	}
-	if adminID != "" && rolesRead != "" {
-		insertRolePerm(ctx, db, adminID, rolesRead)
-	}
-	if adminID != "" && rolesManage != "" {
-		insertRolePerm(ctx, db, adminID, rolesManage)
-	}
-	if adminID != "" && auditRead != "" {
-		insertRolePerm(ctx, db, adminID, auditRead)
-	}
-	if viewerID != "" && usersRead != "" {
-		insertRolePerm(ctx, db, viewerID, usersRead)
-	}
-	if viewerID != "" && auditRead != "" {
-		insertRolePerm(ctx, db, viewerID, auditRead)
+
+	// Viewer permissions
+	viewerPerms := []string{"users:read", "files:read", "audit:read", "notifications:read"}
+	for _, permName := range viewerPerms {
+		if permID, ok := permIDs[permName]; ok && viewerID != "" {
+			insertRolePerm(ctx, pool, viewerID, permID)
+		}
 	}
 }
 
-func insertRolePerm(ctx context.Context, db *sql.DB, roleID, permID string) {
+func insertRolePerm(ctx context.Context, pool *pgxpool.Pool, roleID string, permissionID int) {
 	var exists bool
-	err := db.QueryRowContext(ctx,
-		`SELECT COUNT(*) > 0 FROM role_permissions WHERE role_id = ? AND permission_id = ?`,
-		roleID, permID).Scan(&exists)
+	err := pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM role_permissions WHERE role_id = $1 AND permission_id = $2)`,
+		roleID, permissionID,
+	).Scan(&exists)
 	if err != nil {
 		log.Printf("check role_permission: %v", err)
 		return
@@ -150,54 +173,86 @@ func insertRolePerm(ctx context.Context, db *sql.DB, roleID, permID string) {
 	if exists {
 		return
 	}
-	_, err = db.ExecContext(ctx,
-		`INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)`,
-		roleID, permID)
+
+	_, err = pool.Exec(ctx,
+		`INSERT INTO role_permissions (role_id, permission_id) VALUES ($1, $2)`,
+		roleID, permissionID,
+	)
 	if err != nil {
 		log.Printf("insert role_permission: %v", err)
 	}
 }
 
-func seedAdminUser(ctx context.Context, db *sql.DB) {
+func seedAdminUser(ctx context.Context, pool *pgxpool.Pool) {
 	email := "admin@skeleton.local"
+	var userID string
 	var exists bool
-	err := db.QueryRowContext(ctx, `SELECT COUNT(*) > 0 FROM users WHERE email = ?`, email).Scan(&exists)
-	if err != nil {
+
+	// Check if user exists
+	err := pool.QueryRow(ctx,
+		`SELECT id FROM users WHERE email = $1`,
+		email,
+	).Scan(&userID)
+	if err != nil && err != pgx.ErrNoRows {
 		log.Printf("check admin user: %v", err)
 		return
 	}
-	if exists {
-		log.Println("admin user already exists, skipping")
-		return
-	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("Admin1234!"), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("hash password: %v", err)
-		return
-	}
-
-	userID := uuid.NewV7().String()
-	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = db.ExecContext(ctx,
-		`INSERT INTO users (id, email, password_hash, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)`,
-		userID, email, string(hashedPassword), now, now)
-	if err != nil {
-		log.Printf("insert admin user: %v", err)
-		return
-	}
-	log.Printf("created admin user: %s", email)
-
-	var superAdminID string
-	db.QueryRowContext(ctx, `SELECT id FROM roles WHERE name = 'super_admin'`).Scan(&superAdminID)
-	if superAdminID != "" {
-		_, err = db.ExecContext(ctx,
-			`INSERT INTO user_roles (user_id, role_id, assigned_at) VALUES (?, ?, ?)`,
-			userID, superAdminID, now)
+	if userID != "" {
+		log.Println("admin user already exists, checking role assignment")
+	} else {
+		// Create admin user
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("Admin1234!"), bcrypt.DefaultCost)
 		if err != nil {
-			log.Printf("assign super_admin role: %v", err)
+			log.Printf("hash password: %v", err)
 			return
 		}
-		log.Println("assigned super_admin role to admin user")
+
+		userID = uuid.NewV7().String()
+		now := time.Now()
+
+		_, err = pool.Exec(ctx,
+			`INSERT INTO users (id, email, password_hash, is_active, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
+			userID, email, string(hashedPassword), true, now, now,
+		)
+		if err != nil {
+			log.Printf("insert admin user: %v", err)
+			return
+		}
+		log.Printf("✓ created admin user: %s", email)
 	}
+
+	// Assign super_admin role
+	var superAdminID string
+	err = pool.QueryRow(ctx, `SELECT id FROM roles WHERE name = 'super_admin'`).Scan(&superAdminID)
+	if err != nil {
+		log.Printf("get super_admin role: %v", err)
+		return
+	}
+
+	// Check if role already assigned
+	err = pool.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM user_roles WHERE user_id = $1 AND role_id = $2)`,
+		userID, superAdminID,
+	).Scan(&exists)
+	if err != nil {
+		log.Printf("check role assignment: %v", err)
+		return
+	}
+
+	if exists {
+		log.Println("super_admin role already assigned")
+		return
+	}
+
+	now := time.Now()
+	_, err = pool.Exec(ctx,
+		`INSERT INTO user_roles (user_id, role_id, created_at) VALUES ($1, $2, $3)`,
+		userID, superAdminID, now,
+	)
+	if err != nil {
+		log.Printf("assign super_admin role: %v", err)
+		return
+	}
+	log.Println("✓ assigned super_admin role to admin user")
 }

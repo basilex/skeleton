@@ -50,7 +50,7 @@ func (m *mockFileRepo) GetByPath(ctx context.Context, path string) (*domain.File
 func (m *mockFileRepo) GetByOwner(ctx context.Context, ownerID string, limit, offset int) ([]*domain.File, error) {
 	var result []*domain.File
 	for _, file := range m.files {
-		if file.OwnerID() != nil && string(*file.OwnerID()) == ownerID {
+		if file.OwnerID() != nil && file.OwnerID().String() == ownerID {
 			result = append(result, file)
 		}
 	}
@@ -87,7 +87,7 @@ func (m *mockFileRepo) List(ctx context.Context, filter *domain.FileFilter, limi
 	var result []*domain.File
 	for _, file := range m.files {
 		if filter != nil {
-			if filter.OwnerID != nil && (file.OwnerID() == nil || string(*file.OwnerID()) != *filter.OwnerID) {
+			if filter.OwnerID != nil && (file.OwnerID() == nil || file.OwnerID().String() != *filter.OwnerID) {
 				continue
 			}
 			if filter.MimeType != nil && file.MimeType() != *filter.MimeType {
@@ -272,7 +272,7 @@ func TestListFilesHandler(t *testing.T) {
 		_ = fileRepo.Create(context.Background(), file1)
 		_ = fileRepo.Create(context.Background(), file2)
 
-		ownerID := string(userID1)
+		ownerID := userID1.String()
 		result, err := handler(context.Background(), ListFilesQuery{
 			OwnerID: &ownerID,
 			Limit:   10,
@@ -282,7 +282,7 @@ func TestListFilesHandler(t *testing.T) {
 		require.NotNil(t, result)
 		require.Len(t, result.Items, 1)
 		require.NotNil(t, result.Items[0].OwnerID)
-		require.Equal(t, string(userID1), *result.Items[0].OwnerID)
+		require.Equal(t, userID1.String(), *result.Items[0].OwnerID)
 	})
 
 	t.Run("list with pagination", func(t *testing.T) {
@@ -431,15 +431,13 @@ func TestListProcessingsHandler(t *testing.T) {
 		processingRepo := newMockProcessingRepo()
 		handler := NewListProcessingsHandler(processingRepo)
 
-		// ListProcessings doesn't fail on invalid ID, it just returns empty list
 		result, err := handler(context.Background(), ListProcessingsQuery{
 			FileID: "invalid-id",
 			Limit:  10,
 		})
 
-		// Should not error, just return empty list
-		require.NoError(t, err)
-		require.NotNil(t, result)
-		require.Len(t, result.Items, 0)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid file ID")
+		require.Nil(t, result)
 	})
 }

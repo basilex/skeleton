@@ -96,20 +96,20 @@ curl http://localhost:8080/system/info
 # {
 #   "status": "operational",
 #   "database": {
-#     "type": "sqlite",
+#     "type": "postgresql",
 #     "status": "ok",
-#     "path": "./data/skeleton.db"
+#     "host": "localhost:5432"
 #   },
 #   "redis": {
-#     "status": "not_configured",
+#     "status": "ok",
 #     "url": "redis://localhost:6379/0"
 #   },
 #   "cache": {
-#     "type": "memory",
+#     "type": "redis",
 #     "status": "ok"
 #   },
 #   "rate_limiter": {
-#     "type": "token_bucket",
+#     "type": "sliding_window",
 #     "status": "ok"
 #   },
 #   "config": {
@@ -122,18 +122,18 @@ curl http://localhost:8080/system/info
 #### Development vs Production
 
 **Development mode:**
-- Database: SQLite (embedded)
-- Cache: In-memory (no external dependencies)
-- Rate limiter: Token bucket (local)
-- Event bus: In-memory (synchronous)
-
-**Production mode (when configured):**
-- Database: PostgreSQL (TODO)
-- Cache: Redis (distributed)
+- Database: PostgreSQL 16 (local or Docker)
+- Cache: Redis (local or Docker)
 - Rate limiter: Sliding window (Redis-backed)
-- Event bus: Redis Pub/Sub (distributed)
+- Event bus: Redis Pub/Sub
 
-See [Configuration](#configuration) for environment-specific settings.
+**Production mode:**
+- Database: PostgreSQL 16 (managed or self-hosted)
+- Cache: Redis (managed or self-hosted)
+- Rate limiter: Sliding window (Redis-backed)
+- Event bus: Redis Pub/Sub
+
+Both environments use the same stack (PostgreSQL + Redis) with different configurations.
 
 ### Auth (public)
 

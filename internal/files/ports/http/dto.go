@@ -175,7 +175,7 @@ func ToFileResponse(file *domain.File) *FileResponse {
 	}
 
 	if file.OwnerID() != nil {
-		ownerID := string(*file.OwnerID())
+		ownerID := file.OwnerID().String()
 		resp.OwnerID = &ownerID
 	}
 

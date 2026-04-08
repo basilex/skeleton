@@ -18,9 +18,16 @@ func NewBuildInfo(version, commit, buildTime, goVersion, env string) (BuildInfo,
 		return BuildInfo{}, fmt.Errorf("version is required")
 	}
 
-	bt, err := time.Parse(time.RFC3339, buildTime)
-	if err != nil {
-		return BuildInfo{}, fmt.Errorf("parse build time: %w", err)
+	// Handle "unknown" or empty buildTime for development builds
+	var bt time.Time
+	if buildTime == "unknown" || buildTime == "" {
+		bt = time.Now()
+	} else {
+		var err error
+		bt, err = time.Parse(time.RFC3339, buildTime)
+		if err != nil {
+			return BuildInfo{}, fmt.Errorf("parse build time: %w", err)
+		}
 	}
 
 	return BuildInfo{

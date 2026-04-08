@@ -32,7 +32,7 @@ func (e UserRegistered) OccurredAt() time.Time {
 
 // GetUserID returns the user ID as a string.
 func (e UserRegistered) GetUserID() string {
-	return string(e.UserID)
+	return e.UserID.String()
 }
 
 // GetEmail returns the user's email address as a string.
@@ -59,12 +59,12 @@ func (e RoleAssigned) OccurredAt() time.Time {
 
 // GetUserID returns the user ID as a string.
 func (e RoleAssigned) GetUserID() string {
-	return string(e.UserID)
+	return e.UserID.String()
 }
 
 // GetRoleID returns the role ID as a string.
 func (e RoleAssigned) GetRoleID() string {
-	return string(e.RoleID)
+	return e.RoleID.String()
 }
 
 // RoleRevoked is emitted when a role is removed from a user.
@@ -86,12 +86,12 @@ func (e RoleRevoked) OccurredAt() time.Time {
 
 // GetUserID returns the user ID as a string.
 func (e RoleRevoked) GetUserID() string {
-	return string(e.UserID)
+	return e.UserID.String()
 }
 
 // GetRoleID returns the role ID as a string.
 func (e RoleRevoked) GetRoleID() string {
-	return string(e.RoleID)
+	return e.RoleID.String()
 }
 
 // UserLoggedIn is emitted when a user successfully authenticates.
@@ -112,7 +112,7 @@ func (e UserLoggedIn) OccurredAt() time.Time {
 
 // GetUserID returns the user ID as a string.
 func (e UserLoggedIn) GetUserID() string {
-	return string(e.UserID)
+	return e.UserID.String()
 }
 
 // UserLoggedOut is emitted when a user ends their session.
@@ -133,5 +133,5 @@ func (e UserLoggedOut) OccurredAt() time.Time {
 
 // GetUserID returns the user ID as a string.
 func (e UserLoggedOut) GetUserID() string {
-	return string(e.UserID)
+	return e.UserID.String()
 }

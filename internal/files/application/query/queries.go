@@ -161,7 +161,7 @@ func ToFileDTO(file *domain.File) *FileDTO {
 	}
 
 	if file.OwnerID() != nil {
-		ownerID := string(*file.OwnerID())
+		ownerID := file.OwnerID().String()
 		dto.OwnerID = &ownerID
 	}
 

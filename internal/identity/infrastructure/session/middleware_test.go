@@ -17,10 +17,11 @@ func TestInMemoryStore_CreateAndGet(t *testing.T) {
 	store := NewInMemoryStore(60)
 	ctx := context.Background()
 
-	sess, err := store.Create(ctx, domain.UserID("user-1"), []string{"admin"}, []string{"*:*"}, "Mozilla", "127.0.0.1")
+	userID := domain.NewUserID()
+	sess, err := store.Create(ctx, userID, []string{"admin"}, []string{"*:*"}, "Mozilla", "127.0.0.1")
 	require.NoError(t, err)
 	require.NotEmpty(t, sess.ID)
-	require.Equal(t, domain.UserID("user-1"), sess.UserID)
+	require.Equal(t, userID, sess.UserID)
 	require.Equal(t, []string{"admin"}, sess.Roles)
 
 	got, err := store.Get(ctx, sess.ID)
@@ -40,7 +41,7 @@ func TestInMemoryStore_Delete(t *testing.T) {
 	store := NewInMemoryStore(60)
 	ctx := context.Background()
 
-	sess, _ := store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
+	sess, _ := store.Create(ctx, domain.NewUserID(), nil, nil, "", "")
 	err := store.Delete(ctx, sess.ID)
 	require.NoError(t, err)
 
@@ -52,11 +53,13 @@ func TestInMemoryStore_DeleteAllForUser(t *testing.T) {
 	store := NewInMemoryStore(60)
 	ctx := context.Background()
 
-	s1, _ := store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
-	s2, _ := store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
-	s3, _ := store.Create(ctx, domain.UserID("user-2"), nil, nil, "", "")
+	userID1 := domain.NewUserID()
+	userID2 := domain.NewUserID()
+	s1, _ := store.Create(ctx, userID1, nil, nil, "", "")
+	s2, _ := store.Create(ctx, userID1, nil, nil, "", "")
+	s3, _ := store.Create(ctx, userID2, nil, nil, "", "")
 
-	err := store.DeleteAllForUser(ctx, domain.UserID("user-1"))
+	err := store.DeleteAllForUser(ctx, userID1)
 	require.NoError(t, err)
 
 	_, err = store.Get(ctx, s1.ID)
@@ -71,7 +74,7 @@ func TestInMemoryStore_Touch(t *testing.T) {
 	store := NewInMemoryStore(60)
 	ctx := context.Background()
 
-	sess, _ := store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
+	sess, _ := store.Create(ctx, domain.NewUserID(), nil, nil, "", "")
 	oldExpiry := sess.ExpiresAt
 
 	time.Sleep(10 * time.Millisecond)
@@ -89,7 +92,7 @@ func TestInMemoryStore_ExpiredSession(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	sess, _ := store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
+	sess, _ := store.Create(ctx, domain.NewUserID(), nil, nil, "", "")
 	_, err := store.Get(ctx, sess.ID)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expired")
@@ -102,8 +105,8 @@ func TestInMemoryStore_CleanupExpired(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
-	store.Create(ctx, domain.UserID("user-2"), nil, nil, "", "")
+	store.Create(ctx, domain.NewUserID(), nil, nil, "", "")
+	store.Create(ctx, domain.NewUserID(), nil, nil, "", "")
 
 	count := store.CleanupExpired()
 	require.Equal(t, 2, count)
@@ -116,7 +119,8 @@ func TestMiddleware_Authenticate_Success(t *testing.T) {
 	mw := NewMiddleware(store, cfg)
 
 	ctx := context.Background()
-	sess, _ := store.Create(ctx, domain.UserID("user-1"), []string{"admin"}, []string{"users:read"}, "Mozilla", "127.0.0.1")
+	userID := domain.NewUserID()
+	sess, _ := store.Create(ctx, userID, []string{"admin"}, []string{"users:read"}, "Mozilla", "127.0.0.1")
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -128,7 +132,7 @@ func TestMiddleware_Authenticate_Success(t *testing.T) {
 	mw.Authenticate()(c)
 
 	require.Equal(t, http.StatusOK, w.Code)
-	require.Equal(t, "user-1", c.GetString("user_id"))
+	require.Equal(t, userID.String(), c.GetString("user_id"))
 	require.Equal(t, sess.ID, c.GetString("session_id"))
 	require.Equal(t, []string{"users:read"}, c.GetStringSlice("user_permissions"))
 }
@@ -178,7 +182,7 @@ func TestMiddleware_Authenticate_ExpiredSession(t *testing.T) {
 	mw := NewMiddleware(store, cfg)
 
 	ctx := context.Background()
-	sess, _ := store.Create(ctx, domain.UserID("user-1"), nil, nil, "", "")
+	sess, _ := store.Create(ctx, domain.NewUserID(), nil, nil, "", "")
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -235,9 +239,11 @@ func TestGetUserID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Set("user_id", "test-user")
 
-	require.Equal(t, domain.UserID("test-user"), GetUserID(c))
+	userID := domain.NewUserID()
+	c.Set("user_id", userID.String())
+
+	require.Equal(t, userID, GetUserID(c))
 }
 
 func TestGetSessionID(t *testing.T) {

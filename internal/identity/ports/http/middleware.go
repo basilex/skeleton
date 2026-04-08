@@ -46,7 +46,7 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 			return
 		}
 
-		c.Set(string(ContextKeyUserID), string(claims.UserID))
+		c.Set(string(ContextKeyUserID), claims.UserID.String())
 		c.Set(string(ContextKeyUserRoles), claims.Roles)
 		c.Set(string(ContextKeyPermissions), claims.Permissions)
 		c.Next()

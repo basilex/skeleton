@@ -84,7 +84,7 @@ func (s *JWTService) GenerateAccessToken(userID domain.UserID, roles []domain.Ro
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 		},
-		UserID:      string(userID),
+		UserID:      userID.String(),
 		Roles:       roleNames,
 		Permissions: permissions,
 	}
@@ -136,5 +136,5 @@ func (s *JWTService) ValidateAccessToken(tokenString string) (*domain.TokenClaim
 // ValidateRefreshToken validates a refresh token and returns the associated user ID.
 // Current implementation returns empty user ID and no error (placeholder implementation).
 func (s *JWTService) ValidateRefreshToken(_ string) (domain.UserID, error) {
-	return "", nil
+	return domain.UserID{}, nil
 }

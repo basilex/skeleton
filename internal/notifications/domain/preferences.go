@@ -12,24 +12,28 @@ import (
 )
 
 // PreferencesID is a unique identifier for notification preferences.
-type PreferencesID string
+type PreferencesID uuid.UUID
 
 // NewPreferencesID generates a new unique PreferencesID using UUID v7.
 func NewPreferencesID() PreferencesID {
-	return PreferencesID(uuid.NewV7().String())
+	return PreferencesID(uuid.NewV7())
 }
 
 // ParsePreferencesID validates and converts a string to PreferencesID.
 func ParsePreferencesID(s string) (PreferencesID, error) {
 	if s == "" {
-		return "", fmt.Errorf("preferences ID cannot be empty")
+		return PreferencesID{}, fmt.Errorf("preferences ID cannot be empty")
 	}
-	return PreferencesID(s), nil
+	u, err := uuid.Parse(s)
+	if err != nil {
+		return PreferencesID{}, fmt.Errorf("invalid preferences id: %w", err)
+	}
+	return PreferencesID(u), nil
 }
 
 // String returns the string representation of PreferencesID.
 func (id PreferencesID) String() string {
-	return string(id)
+	return uuid.UUID(id).String()
 }
 
 // Frequency represents how often notifications should be delivered.
