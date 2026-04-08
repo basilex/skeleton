@@ -2,31 +2,29 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/basilex/skeleton/internal/files/domain"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ProcessingRepository implements domain.ProcessingRepository using SQLite.
 type ProcessingRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-// NewProcessingRepository creates a new processing repository.
-func NewProcessingRepository(db *sql.DB) *ProcessingRepository {
-	return &ProcessingRepository{db: db}
+func NewProcessingRepository(pool *pgxpool.Pool) *ProcessingRepository {
+	return &ProcessingRepository{pool: pool}
 }
 
-// Create inserts a new processing record.
 func (r *ProcessingRepository) Create(ctx context.Context, processing *domain.FileProcessing) error {
 	query := `
 		INSERT INTO file_processings (
 			id, file_id, operation, options, status, result_file_id, error,
 			started_at, completed_at, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	optionsJSON, err := json.Marshal(processing.Options())
@@ -34,7 +32,8 @@ func (r *ProcessingRepository) Create(ctx context.Context, processing *domain.Fi
 		return fmt.Errorf("marshal options: %w", err)
 	}
 
-	var resultFileID, errorMsg, startedAt, completedAt *string
+	var resultFileID, errorMsg *string
+	var startedAt, completedAt *time.Time
 	if processing.ResultFileID() != nil {
 		rfid := processing.ResultFileID().String()
 		resultFileID = &rfid
@@ -43,15 +42,13 @@ func (r *ProcessingRepository) Create(ctx context.Context, processing *domain.Fi
 		errorMsg = processing.Error()
 	}
 	if processing.StartedAt() != nil {
-		sa := processing.StartedAt().Format(time.RFC3339)
-		startedAt = &sa
+		startedAt = processing.StartedAt()
 	}
 	if processing.CompletedAt() != nil {
-		ca := processing.CompletedAt().Format(time.RFC3339)
-		completedAt = &ca
+		completedAt = processing.CompletedAt()
 	}
 
-	_, err = r.db.ExecContext(ctx, query,
+	_, err = r.pool.Exec(ctx, query,
 		processing.ID().String(),
 		processing.FileID().String(),
 		string(processing.Operation()),
@@ -61,7 +58,7 @@ func (r *ProcessingRepository) Create(ctx context.Context, processing *domain.Fi
 		errorMsg,
 		startedAt,
 		completedAt,
-		processing.CreatedAt().Format(time.RFC3339),
+		processing.CreatedAt(),
 	)
 
 	if err != nil {
@@ -71,16 +68,15 @@ func (r *ProcessingRepository) Create(ctx context.Context, processing *domain.Fi
 	return nil
 }
 
-// Update updates an existing processing record.
 func (r *ProcessingRepository) Update(ctx context.Context, processing *domain.FileProcessing) error {
 	query := `
 		UPDATE file_processings SET
-			status = ?, result_file_id = ?, error = ?,
-			started_at = ?, completed_at = ?
-		WHERE id = ?
+			status = $1, result_file_id = $2, error = $3, started_at = $4, completed_at = $5
+		WHERE id = $6
 	`
 
-	var resultFileID, errorMsg, startedAt, completedAt *string
+	var resultFileID, errorMsg *string
+	var startedAt, completedAt *time.Time
 	if processing.ResultFileID() != nil {
 		rfid := processing.ResultFileID().String()
 		resultFileID = &rfid
@@ -89,15 +85,13 @@ func (r *ProcessingRepository) Update(ctx context.Context, processing *domain.Fi
 		errorMsg = processing.Error()
 	}
 	if processing.StartedAt() != nil {
-		sa := processing.StartedAt().Format(time.RFC3339)
-		startedAt = &sa
+		startedAt = processing.StartedAt()
 	}
 	if processing.CompletedAt() != nil {
-		ca := processing.CompletedAt().Format(time.RFC3339)
-		completedAt = &ca
+		completedAt = processing.CompletedAt()
 	}
 
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := r.pool.Exec(ctx, query,
 		string(processing.Status()),
 		resultFileID,
 		errorMsg,
@@ -110,38 +104,31 @@ func (r *ProcessingRepository) Update(ctx context.Context, processing *domain.Fi
 		return fmt.Errorf("update processing: %w", err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-
-	if rows == 0 {
+	if result.RowsAffected() == 0 {
 		return domain.ErrProcessingNotFound
 	}
 
 	return nil
 }
 
-// GetByID retrieves a processing record by ID.
 func (r *ProcessingRepository) GetByID(ctx context.Context, id domain.ProcessingID) (*domain.FileProcessing, error) {
 	query := `
 		SELECT id, file_id, operation, options, status, result_file_id, error,
 			started_at, completed_at, created_at
-		FROM file_processings WHERE id = ?
+		FROM file_processings WHERE id = $1
 	`
 
 	return r.scanProcessing(ctx, query, id.String())
 }
 
-// GetByFileID retrieves all processing records for a file.
 func (r *ProcessingRepository) GetByFileID(ctx context.Context, fileID domain.FileID) ([]*domain.FileProcessing, error) {
 	query := `
 		SELECT id, file_id, operation, options, status, result_file_id, error,
 			started_at, completed_at, created_at
-		FROM file_processings WHERE file_id = ? ORDER BY created_at DESC
+		FROM file_processings WHERE file_id = $1 ORDER BY created_at DESC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, fileID.String())
+	rows, err := r.pool.Query(ctx, query, fileID.String())
 	if err != nil {
 		return nil, fmt.Errorf("query processings: %w", err)
 	}
@@ -150,15 +137,14 @@ func (r *ProcessingRepository) GetByFileID(ctx context.Context, fileID domain.Fi
 	return r.scanProcessings(rows)
 }
 
-// GetPending retrieves all pending processing tasks.
 func (r *ProcessingRepository) GetPending(ctx context.Context, limit int) ([]*domain.FileProcessing, error) {
 	query := `
 		SELECT id, file_id, operation, options, status, result_file_id, error,
 			started_at, completed_at, created_at
-		FROM file_processings WHERE status = ? ORDER BY created_at ASC LIMIT ?
+		FROM file_processings WHERE status = $1 ORDER BY created_at ASC LIMIT $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, string(domain.ProcessingPending), limit)
+	rows, err := r.pool.Query(ctx, query, string(domain.ProcessingPending), limit)
 	if err != nil {
 		return nil, fmt.Errorf("query pending: %w", err)
 	}
@@ -167,15 +153,14 @@ func (r *ProcessingRepository) GetPending(ctx context.Context, limit int) ([]*do
 	return r.scanProcessings(rows)
 }
 
-// GetByStatus retrieves processing records by status.
 func (r *ProcessingRepository) GetByStatus(ctx context.Context, status domain.ProcessingStatus, limit, offset int) ([]*domain.FileProcessing, error) {
 	query := `
 		SELECT id, file_id, operation, options, status, result_file_id, error,
 			started_at, completed_at, created_at
-		FROM file_processings WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+		FROM file_processings WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, string(status), limit, offset)
+	rows, err := r.pool.Query(ctx, query, string(status), limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("query by status: %w", err)
 	}
@@ -184,32 +169,25 @@ func (r *ProcessingRepository) GetByStatus(ctx context.Context, status domain.Pr
 	return r.scanProcessings(rows)
 }
 
-// Delete deletes a processing record by ID.
 func (r *ProcessingRepository) Delete(ctx context.Context, id domain.ProcessingID) error {
-	query := `DELETE FROM file_processings WHERE id = ?`
+	query := `DELETE FROM file_processings WHERE id = $1`
 
-	result, err := r.db.ExecContext(ctx, query, id.String())
+	result, err := r.pool.Exec(ctx, query, id.String())
 	if err != nil {
 		return fmt.Errorf("delete processing: %w", err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-
-	if rows == 0 {
+	if result.RowsAffected() == 0 {
 		return domain.ErrProcessingNotFound
 	}
 
 	return nil
 }
 
-// DeleteByFileID deletes all processing records for a file.
 func (r *ProcessingRepository) DeleteByFileID(ctx context.Context, fileID domain.FileID) error {
-	query := `DELETE FROM file_processings WHERE file_id = ?`
+	query := `DELETE FROM file_processings WHERE file_id = $1`
 
-	_, err := r.db.ExecContext(ctx, query, fileID.String())
+	_, err := r.pool.Exec(ctx, query, fileID.String())
 	if err != nil {
 		return fmt.Errorf("delete processings by file: %w", err)
 	}
@@ -217,35 +195,37 @@ func (r *ProcessingRepository) DeleteByFileID(ctx context.Context, fileID domain
 	return nil
 }
 
-// Count returns the total number of processing records matching the filter.
 func (r *ProcessingRepository) Count(ctx context.Context, filter *domain.ProcessingFilter) (int64, error) {
 	query := `SELECT COUNT(*) FROM file_processings WHERE 1=1`
 	args := []interface{}{}
+	argNum := 1
 
 	if filter != nil {
 		if filter.FileID != nil {
-			query += ` AND file_id = ?`
+			query += fmt.Sprintf(` AND file_id = $%d`, argNum)
 			args = append(args, filter.FileID.String())
+			argNum++
 		}
 		if filter.Status != nil {
-			query += ` AND status = ?`
+			query += fmt.Sprintf(` AND status = $%d`, argNum)
 			args = append(args, string(*filter.Status))
+			argNum++
 		}
 		if filter.Operation != nil {
-			query += ` AND operation = ?`
+			query += fmt.Sprintf(` AND operation = $%d`, argNum)
 			args = append(args, string(*filter.Operation))
+			argNum++
 		}
 	}
 
 	var count int64
-	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count processings: %w", err)
 	}
 
 	return count, nil
 }
 
-// List retrieves processing records matching the filter with pagination.
 func (r *ProcessingRepository) List(ctx context.Context, filter *domain.ProcessingFilter, limit, offset int) ([]*domain.FileProcessing, error) {
 	query := `
 		SELECT id, file_id, operation, options, status, result_file_id, error,
@@ -253,26 +233,30 @@ func (r *ProcessingRepository) List(ctx context.Context, filter *domain.Processi
 		FROM file_processings WHERE 1=1
 	`
 	args := []interface{}{}
+	argNum := 1
 
 	if filter != nil {
 		if filter.FileID != nil {
-			query += ` AND file_id = ?`
+			query += fmt.Sprintf(` AND file_id = $%d`, argNum)
 			args = append(args, filter.FileID.String())
+			argNum++
 		}
 		if filter.Status != nil {
-			query += ` AND status = ?`
+			query += fmt.Sprintf(` AND status = $%d`, argNum)
 			args = append(args, string(*filter.Status))
+			argNum++
 		}
 		if filter.Operation != nil {
-			query += ` AND operation = ?`
+			query += fmt.Sprintf(` AND operation = $%d`, argNum)
 			args = append(args, string(*filter.Operation))
+			argNum++
 		}
 	}
 
-	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	query += fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, argNum, argNum+1)
 	args = append(args, limit, offset)
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query processings: %w", err)
 	}
@@ -281,51 +265,51 @@ func (r *ProcessingRepository) List(ctx context.Context, filter *domain.Processi
 	return r.scanProcessings(rows)
 }
 
-// scanProcessing scans a single processing record.
 func (r *ProcessingRepository) scanProcessing(ctx context.Context, query string, args ...interface{}) (*domain.FileProcessing, error) {
 	var processingID, fileID, operation, status string
 	var optionsJSON []byte
-	var resultFileID, errorMsg, startedAtStr, completedAtStr *string
-	var createdAtStr string
+	var resultFileID, errorMsg *string
+	var startedAt, completedAt *time.Time
+	var createdAt time.Time
 
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(
+	err := r.pool.QueryRow(ctx, query, args...).Scan(
 		&processingID, &fileID, &operation, &optionsJSON, &status,
-		&resultFileID, &errorMsg, &startedAtStr, &completedAtStr, &createdAtStr,
+		&resultFileID, &errorMsg, &startedAt, &completedAt, &createdAt,
 	)
 
-	if err == sql.ErrNoRows {
-		return nil, domain.ErrProcessingNotFound
-	}
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrProcessingNotFound
+		}
 		return nil, fmt.Errorf("scan processing: %w", err)
 	}
 
 	return r.reconstituteProcessing(
 		processingID, fileID, operation, optionsJSON, status,
-		resultFileID, errorMsg, startedAtStr, completedAtStr, createdAtStr,
+		resultFileID, errorMsg, startedAt, completedAt, createdAt,
 	)
 }
 
-// scanProcessings scans multiple processing records.
-func (r *ProcessingRepository) scanProcessings(rows *sql.Rows) ([]*domain.FileProcessing, error) {
+func (r *ProcessingRepository) scanProcessings(rows pgx.Rows) ([]*domain.FileProcessing, error) {
 	var processings []*domain.FileProcessing
 
 	for rows.Next() {
 		var processingID, fileID, operation, status string
 		var optionsJSON []byte
-		var resultFileID, errorMsg, startedAtStr, completedAtStr *string
-		var createdAtStr string
+		var resultFileID, errorMsg *string
+		var startedAt, completedAt *time.Time
+		var createdAt time.Time
 
 		if err := rows.Scan(
 			&processingID, &fileID, &operation, &optionsJSON, &status,
-			&resultFileID, &errorMsg, &startedAtStr, &completedAtStr, &createdAtStr,
+			&resultFileID, &errorMsg, &startedAt, &completedAt, &createdAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan row: %w", err)
 		}
 
 		processing, err := r.reconstituteProcessing(
 			processingID, fileID, operation, optionsJSON, status,
-			resultFileID, errorMsg, startedAtStr, completedAtStr, createdAtStr,
+			resultFileID, errorMsg, startedAt, completedAt, createdAt,
 		)
 		if err != nil {
 			return nil, err
@@ -341,10 +325,9 @@ func (r *ProcessingRepository) scanProcessings(rows *sql.Rows) ([]*domain.FilePr
 	return processings, nil
 }
 
-// reconstituteProcessing reconstructs a FileProcessing from database fields.
 func (r *ProcessingRepository) reconstituteProcessing(
 	processingID, fileID, operation string, optionsJSON []byte, status string,
-	resultFileID, errorMsg *string, startedAtStr, completedAtStr *string, createdAtStr string,
+	resultFileID, errorMsg *string, startedAt, completedAt *time.Time, createdAt time.Time,
 ) (*domain.FileProcessing, error) {
 	var options domain.ProcessingOptions
 	if len(optionsJSON) > 0 {
@@ -353,37 +336,27 @@ func (r *ProcessingRepository) reconstituteProcessing(
 		}
 	}
 
-	createdAt, err := time.Parse(time.RFC3339, createdAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-
-	var startedAt, completedAt *time.Time
-	if startedAtStr != nil && *startedAtStr != "" {
-		t, err := time.Parse(time.RFC3339, *startedAtStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse started_at: %w", err)
-		}
-		startedAt = &t
-	}
-
-	if completedAtStr != nil && *completedAtStr != "" {
-		t, err := time.Parse(time.RFC3339, *completedAtStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse completed_at: %w", err)
-		}
-		completedAt = &t
-	}
-
 	var rfID *domain.FileID
 	if resultFileID != nil && *resultFileID != "" {
-		fid := domain.FileID(*resultFileID)
+		fid, parseErr := domain.ParseFileID(*resultFileID)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse result file id: %w", parseErr)
+		}
 		rfID = &fid
 	}
 
+	processingIDParsed, err := domain.ParseProcessingID(processingID)
+	if err != nil {
+		return nil, fmt.Errorf("parse processing id: %w", err)
+	}
+	fileIDParsed, err := domain.ParseFileID(fileID)
+	if err != nil {
+		return nil, fmt.Errorf("parse file id: %w", err)
+	}
+
 	return domain.ReconstituteFileProcessing(
-		domain.ProcessingID(processingID),
-		domain.FileID(fileID),
+		processingIDParsed,
+		fileIDParsed,
 		domain.ProcessingOperation(operation),
 		options,
 		domain.ProcessingStatus(status),

@@ -2,65 +2,52 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 
 	"github.com/basilex/skeleton/internal/notifications/domain"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TemplateRepository implements the notification template repository interface
-// using SQL database storage.
 type TemplateRepository struct {
-	db *sqlx.DB
+	pool *pgxpool.Pool
 }
 
-// NewTemplateRepository creates a new template repository with the provided database connection.
-func NewTemplateRepository(db *sqlx.DB) *TemplateRepository {
-	return &TemplateRepository{db: db}
+func NewTemplateRepository(pool *pgxpool.Pool) *TemplateRepository {
+	return &TemplateRepository{pool: pool}
 }
 
-type templateRow struct {
-	ID        string         `db:"id"`
-	Name      string         `db:"name"`
-	Channel   string         `db:"channel"`
-	Subject   sql.NullString `db:"subject"`
-	Body      string         `db:"body"`
-	HTMLBody  sql.NullString `db:"html_body"`
-	Variables sql.NullString `db:"variables"`
-	IsActive  int            `db:"is_active"`
-	CreatedAt string         `db:"created_at"`
-	UpdatedAt string         `db:"updated_at"`
-}
-
-// Create persists a new notification template to the database.
 func (r *TemplateRepository) Create(ctx context.Context, template *domain.NotificationTemplate) error {
 	variablesJSON, err := json.Marshal(template.Variables())
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
 
+	var htmlBody *string
+	if template.HTMLBody() != "" {
+		htmlBody = new(string)
+		*htmlBody = template.HTMLBody()
+	}
+
 	query := `
 		INSERT INTO notification_templates (
 			id, name, channel, subject, body, html_body, variables, is_active, created_at, updated_at
-		) VALUES (
-			:id, :name, :channel, :subject, :body, :html_body, :variables, :is_active, :created_at, :updated_at
-		)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
-	_, err = r.db.NamedExecContext(ctx, query, map[string]interface{}{
-		"id":         template.ID().String(),
-		"name":       template.Name(),
-		"channel":    template.Channel().String(),
-		"subject":    template.Subject(),
-		"body":       template.Body(),
-		"html_body":  nullString(template.HTMLBody()),
-		"variables":  string(variablesJSON),
-		"is_active":  boolToInt(template.IsActive()),
-		"created_at": template.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		"updated_at": template.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-	})
+	_, err = r.pool.Exec(ctx, query,
+		template.ID().String(),
+		template.Name(),
+		template.Channel().String(),
+		template.Subject(),
+		template.Body(),
+		htmlBody,
+		string(variablesJSON),
+		template.IsActive(),
+		template.CreatedAt(),
+		template.UpdatedAt(),
+	)
 
 	if err != nil {
 		return fmt.Errorf("create template: %w", err)
@@ -69,37 +56,42 @@ func (r *TemplateRepository) Create(ctx context.Context, template *domain.Notifi
 	return nil
 }
 
-// Update modifies an existing notification template in the database.
 func (r *TemplateRepository) Update(ctx context.Context, template *domain.NotificationTemplate) error {
 	variablesJSON, err := json.Marshal(template.Variables())
 	if err != nil {
 		return fmt.Errorf("marshal variables: %w", err)
 	}
 
+	var htmlBody *string
+	if template.HTMLBody() != "" {
+		htmlBody = new(string)
+		*htmlBody = template.HTMLBody()
+	}
+
 	query := `
 		UPDATE notification_templates SET
-			name = :name,
-			channel = :channel,
-			subject = :subject,
-			body = :body,
-			html_body = :html_body,
-			variables = :variables,
-			is_active = :is_active,
-			updated_at = :updated_at
-		WHERE id = :id
+			name = $1,
+			channel = $2,
+			subject = $3,
+			body = $4,
+			html_body = $5,
+			variables = $6,
+			is_active = $7,
+			updated_at = $8
+		WHERE id = $9
 	`
 
-	_, err = r.db.NamedExecContext(ctx, query, map[string]interface{}{
-		"id":         template.ID().String(),
-		"name":       template.Name(),
-		"channel":    template.Channel().String(),
-		"subject":    template.Subject(),
-		"body":       template.Body(),
-		"html_body":  nullString(template.HTMLBody()),
-		"variables":  string(variablesJSON),
-		"is_active":  boolToInt(template.IsActive()),
-		"updated_at": template.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-	})
+	_, err = r.pool.Exec(ctx, query,
+		template.Name(),
+		template.Channel().String(),
+		template.Subject(),
+		template.Body(),
+		htmlBody,
+		string(variablesJSON),
+		template.IsActive(),
+		template.UpdatedAt(),
+		template.ID().String(),
+	)
 
 	if err != nil {
 		return fmt.Errorf("update template: %w", err)
@@ -108,115 +100,125 @@ func (r *TemplateRepository) Update(ctx context.Context, template *domain.Notifi
 	return nil
 }
 
-// GetByID retrieves a notification template by its unique identifier.
-// Returns domain.ErrTemplateNotFound if no matching template exists.
 func (r *TemplateRepository) GetByID(ctx context.Context, id domain.TemplateID) (*domain.NotificationTemplate, error) {
-	var row templateRow
-	err := r.db.GetContext(ctx, &row, `
+	query := `
 		SELECT id, name, channel, subject, body, html_body, variables, is_active, created_at, updated_at
 		FROM notification_templates
-		WHERE id = ?
-	`, id.String())
+		WHERE id = $1
+	`
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrTemplateNotFound
-		}
-		return nil, fmt.Errorf("get template by id: %w", err)
-	}
+	row := r.pool.QueryRow(ctx, query, id.String())
 
 	return r.scanTemplate(row)
 }
 
-// GetByName retrieves a notification template by its unique name.
-// Returns domain.ErrTemplateNotFound if no matching template exists.
 func (r *TemplateRepository) GetByName(ctx context.Context, name string) (*domain.NotificationTemplate, error) {
-	var row templateRow
-	err := r.db.GetContext(ctx, &row, `
+	query := `
 		SELECT id, name, channel, subject, body, html_body, variables, is_active, created_at, updated_at
 		FROM notification_templates
-		WHERE name = ?
-	`, name)
+		WHERE name = $1
+	`
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrTemplateNotFound
-		}
-		return nil, fmt.Errorf("get template by name: %w", err)
-	}
+	row := r.pool.QueryRow(ctx, query, name)
 
 	return r.scanTemplate(row)
 }
 
-// List retrieves all templates, optionally filtered by channel.
 func (r *TemplateRepository) List(ctx context.Context, channel *domain.Channel) ([]*domain.NotificationTemplate, error) {
-	var rows []templateRow
-	var err error
+	var query string
+	var args []interface{}
 
 	if channel != nil {
-		err = r.db.SelectContext(ctx, &rows, `
+		query = `
 			SELECT id, name, channel, subject, body, html_body, variables, is_active, created_at, updated_at
 			FROM notification_templates
-			WHERE channel = ?
+			WHERE channel = $1
 			ORDER BY name ASC
-		`, channel.String())
+		`
+		args = []interface{}{channel.String()}
 	} else {
-		err = r.db.SelectContext(ctx, &rows, `
+		query = `
 			SELECT id, name, channel, subject, body, html_body, variables, is_active, created_at, updated_at
 			FROM notification_templates
 			ORDER BY name ASC
-		`)
+		`
+		args = []interface{}{}
 	}
 
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)
 	}
+	defer rows.Close()
 
-	templates := make([]*domain.NotificationTemplate, len(rows))
-	for i, row := range rows {
-		t, err := r.scanTemplate(row)
+	templates := make([]*domain.NotificationTemplate, 0)
+	for rows.Next() {
+		t, err := r.scanTemplateFromRows(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan template: %w", err)
 		}
-		templates[i] = t
+		templates = append(templates, t)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return templates, nil
 }
 
-// Delete removes a notification template from the database.
 func (r *TemplateRepository) Delete(ctx context.Context, id domain.TemplateID) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM notification_templates WHERE id = ?`, id.String())
+	_, err := r.pool.Exec(ctx, `DELETE FROM notification_templates WHERE id = $1`, id.String())
 	if err != nil {
 		return fmt.Errorf("delete template: %w", err)
 	}
 	return nil
 }
 
-// scanTemplate converts a database row into a domain NotificationTemplate entity.
-func (r *TemplateRepository) scanTemplate(row templateRow) (*domain.NotificationTemplate, error) {
-	channel, err := domain.ParseChannel(row.Channel)
+func (r *TemplateRepository) scanTemplate(row pgx.Row) (*domain.NotificationTemplate, error) {
+	var id, name, channel, body string
+	var subject, htmlBody *string
+	var variablesBytes []byte
+	var isActive bool
+	var createdAt, updatedAt string
+
+	err := row.Scan(
+		&id, &name, &channel, &subject, &body, &htmlBody, &variablesBytes, &isActive, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrTemplateNotFound
+		}
+		return nil, fmt.Errorf("scan template: %w", err)
+	}
+
+	channelEnum, err := domain.ParseChannel(channel)
 	if err != nil {
 		return nil, fmt.Errorf("parse channel: %w", err)
 	}
 
 	var variables []string
-	if row.Variables.Valid && row.Variables.String != "" {
-		if err := json.Unmarshal([]byte(row.Variables.String), &variables); err != nil {
+	if len(variablesBytes) > 0 {
+		if err := json.Unmarshal(variablesBytes, &variables); err != nil {
 			return nil, fmt.Errorf("unmarshal variables: %w", err)
 		}
 	}
 
 	opts := []domain.TemplateOption{}
-	if row.HTMLBody.Valid && row.HTMLBody.String != "" {
-		opts = append(opts, domain.WithHTMLBody(row.HTMLBody.String))
+	if htmlBody != nil && *htmlBody != "" {
+		opts = append(opts, domain.WithHTMLBody(*htmlBody))
+	}
+
+	var subjectStr string
+	if subject != nil {
+		subjectStr = *subject
 	}
 
 	template, err := domain.NewNotificationTemplate(
-		row.Name,
-		channel,
-		row.Subject.String,
-		row.Body,
+		name,
+		channelEnum,
+		subjectStr,
+		body,
 		variables,
 		opts...,
 	)
@@ -224,17 +226,64 @@ func (r *TemplateRepository) scanTemplate(row templateRow) (*domain.Notification
 		return nil, fmt.Errorf("create template: %w", err)
 	}
 
-	if row.IsActive == 0 {
+	if !isActive {
 		_ = template.Deactivate()
 	}
 
 	return template, nil
 }
 
-// boolToInt converts a boolean to an integer for database storage.
-func boolToInt(b bool) int {
-	if b {
-		return 1
+func (r *TemplateRepository) scanTemplateFromRows(rows pgx.Rows) (*domain.NotificationTemplate, error) {
+	var id, name, channel, body string
+	var subject, htmlBody *string
+	var variablesBytes []byte
+	var isActive bool
+	var createdAt, updatedAt string
+
+	err := rows.Scan(
+		&id, &name, &channel, &subject, &body, &htmlBody, &variablesBytes, &isActive, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan template: %w", err)
 	}
-	return 0
+
+	channelEnum, err := domain.ParseChannel(channel)
+	if err != nil {
+		return nil, fmt.Errorf("parse channel: %w", err)
+	}
+
+	var variables []string
+	if len(variablesBytes) > 0 {
+		if err := json.Unmarshal(variablesBytes, &variables); err != nil {
+			return nil, fmt.Errorf("unmarshal variables: %w", err)
+		}
+	}
+
+	opts := []domain.TemplateOption{}
+	if htmlBody != nil && *htmlBody != "" {
+		opts = append(opts, domain.WithHTMLBody(*htmlBody))
+	}
+
+	var subjectStr string
+	if subject != nil {
+		subjectStr = *subject
+	}
+
+	template, err := domain.NewNotificationTemplate(
+		name,
+		channelEnum,
+		subjectStr,
+		body,
+		variables,
+		opts...,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create template: %w", err)
+	}
+
+	if !isActive {
+		_ = template.Deactivate()
+	}
+
+	return template, nil
 }

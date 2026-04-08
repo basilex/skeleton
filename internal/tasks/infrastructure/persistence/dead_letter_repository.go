@@ -1,29 +1,23 @@
-// Package persistence provides database repository implementations for the tasks domain.
-// This package contains SQLite-based repositories for tasks, schedules, and dead letters.
 package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/basilex/skeleton/internal/tasks/domain"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// DeadLetterRepository implements the dead letter repository interface
-// using SQL database storage for failed tasks.
 type DeadLetterRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-// NewDeadLetterRepository creates a new dead letter repository with the provided database connection.
-func NewDeadLetterRepository(db *sql.DB) *DeadLetterRepository {
-	return &DeadLetterRepository{db: db}
+func NewDeadLetterRepository(pool *pgxpool.Pool) *DeadLetterRepository {
+	return &DeadLetterRepository{pool: pool}
 }
 
-// Create persists a new dead letter record to the database.
 func (r *DeadLetterRepository) Create(ctx context.Context, deadLetter *domain.DeadLetterTask) error {
 	originalTaskJSON, err := json.Marshal(deadLetter.OriginalTask())
 	if err != nil {
@@ -33,28 +27,29 @@ func (r *DeadLetterRepository) Create(ctx context.Context, deadLetter *domain.De
 	query := `
 		INSERT INTO dead_letters (
 			id, original_task_id, original_task, failed_at, reason, reviewed, reviewed_at, reviewed_by, action, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
-	var reviewedAt, reviewedBy interface{}
+	var reviewedAt *time.Time
+	var reviewedBy *string
 	if deadLetter.ReviewedAt() != nil {
-		reviewedAt = deadLetter.ReviewedAt().Format(time.RFC3339)
+		reviewedAt = deadLetter.ReviewedAt()
 	}
 	if deadLetter.ReviewedBy() != nil {
-		reviewedBy = *deadLetter.ReviewedBy()
+		reviewedBy = deadLetter.ReviewedBy()
 	}
 
-	_, err = r.db.ExecContext(ctx, query,
+	_, err = r.pool.Exec(ctx, query,
 		deadLetter.ID().String(),
 		deadLetter.OriginalTask().ID().String(),
 		originalTaskJSON,
-		deadLetter.FailedAt().Format(time.RFC3339),
+		deadLetter.FailedAt(),
 		deadLetter.Reason(),
 		deadLetter.IsReviewed(),
 		reviewedAt,
 		reviewedBy,
 		deadLetter.Action().String(),
-		deadLetter.CreatedAt().Format(time.RFC3339),
+		deadLetter.CreatedAt(),
 	)
 
 	if err != nil {
@@ -64,30 +59,47 @@ func (r *DeadLetterRepository) Create(ctx context.Context, deadLetter *domain.De
 	return nil
 }
 
-// GetByID retrieves a dead letter record by its unique identifier.
-// Returns domain.ErrDeadLetterNotFound if no matching record exists.
 func (r *DeadLetterRepository) GetByID(ctx context.Context, id domain.DeadLetterID) (*domain.DeadLetterTask, error) {
 	query := `
 		SELECT id, original_task_id, original_task, failed_at, reason, reviewed, reviewed_at, reviewed_by, action, created_at
-		FROM dead_letters WHERE id = ?
+		FROM dead_letters WHERE id = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, id.String())
+	row := r.pool.QueryRow(ctx, query, id.String())
 
-	return r.scanDeadLetter(row)
+	var idStr, originalTaskID, reason, action string
+	var originalTaskJSON []byte
+	var failedAt, createdAt time.Time
+	var reviewed bool
+	var reviewedAt *time.Time
+	var reviewedBy *string
+
+	err := row.Scan(
+		&idStr, &originalTaskID, &originalTaskJSON, &failedAt, &reason, &reviewed, &reviewedAt, &reviewedBy, &action, &createdAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan dead letter: %w", err)
+	}
+
+	var task domain.Task
+	if err := json.Unmarshal(originalTaskJSON, &task); err != nil {
+		return nil, fmt.Errorf("unmarshal original task: %w", err)
+	}
+
+	dl := domain.NewDeadLetterTask(&task, reason)
+
+	return dl, nil
 }
 
-// List retrieves dead letter records with pagination.
-// Results are ordered by failure time in descending order.
 func (r *DeadLetterRepository) List(ctx context.Context, limit int, offset int) ([]*domain.DeadLetterTask, error) {
 	query := `
 		SELECT id, original_task_id, original_task, failed_at, reason, reviewed, reviewed_at, reviewed_by, action, created_at
 		FROM dead_letters
 		ORDER BY failed_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $1 OFFSET $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	rows, err := r.pool.Query(ctx, query, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("query dead letters: %w", err)
 	}
@@ -95,30 +107,45 @@ func (r *DeadLetterRepository) List(ctx context.Context, limit int, offset int) 
 
 	var deadLetters []*domain.DeadLetterTask
 	for rows.Next() {
-		dl, err := r.scanDeadLetterFromRows(rows)
+		var idStr, originalTaskID, reason, action string
+		var originalTaskJSON []byte
+		var failedAt, createdAt time.Time
+		var reviewed bool
+		var reviewedAt *time.Time
+		var reviewedBy *string
+
+		err := rows.Scan(
+			&idStr, &originalTaskID, &originalTaskJSON, &failedAt, &reason, &reviewed, &reviewedAt, &reviewedBy, &action, &createdAt,
+		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan dead letter: %w", err)
 		}
+
+		var task domain.Task
+		if err := json.Unmarshal(originalTaskJSON, &task); err != nil {
+			return nil, fmt.Errorf("unmarshal original task: %w", err)
+		}
+
+		dl := domain.NewDeadLetterTask(&task, reason)
+
 		deadLetters = append(deadLetters, dl)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return deadLetters, nil
 }
 
-// MarkReviewed marks a dead letter as reviewed with the specified action.
 func (r *DeadLetterRepository) MarkReviewed(ctx context.Context, id domain.DeadLetterID, action domain.DeadLetterAction, reviewedBy *string) error {
 	query := `
-		UPDATE dead_letters SET
-			reviewed = ?,
-			reviewed_at = ?,
-			reviewed_by = ?,
-			action = ?
-		WHERE id = ?
+		UPDATE dead_letters SET reviewed = $1, reviewed_at = $2, reviewed_by = $3, action = $4 WHERE id = $5
 	`
 
-	reviewedAt := time.Now().Format(time.RFC3339)
+	reviewedAt := time.Now()
 
-	_, err := r.db.ExecContext(ctx, query, true, reviewedAt, reviewedBy, action.String(), id.String())
+	_, err := r.pool.Exec(ctx, query, true, reviewedAt, reviewedBy, action.String(), id.String())
 	if err != nil {
 		return fmt.Errorf("update dead letter: %w", err)
 	}
@@ -126,65 +153,11 @@ func (r *DeadLetterRepository) MarkReviewed(ctx context.Context, id domain.DeadL
 	return nil
 }
 
-// Delete removes a dead letter record from the database.
 func (r *DeadLetterRepository) Delete(ctx context.Context, id domain.DeadLetterID) error {
-	query := `DELETE FROM dead_letters WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id.String())
+	query := `DELETE FROM dead_letters WHERE id = $1`
+	_, err := r.pool.Exec(ctx, query, id.String())
 	if err != nil {
 		return fmt.Errorf("delete dead letter: %w", err)
 	}
 	return nil
-}
-
-// scanDeadLetter converts a database row into a domain DeadLetterTask entity.
-func (r *DeadLetterRepository) scanDeadLetter(row *sql.Row) (*domain.DeadLetterTask, error) {
-	var id, originalTaskID, reason, action string
-	var originalTaskJSON []byte
-	var failedAtStr, createdAtStr string
-	var reviewed bool
-	var reviewedAtStr, reviewedBy sql.NullString
-
-	err := row.Scan(
-		&id, &originalTaskID, &originalTaskJSON, &failedAtStr, &reason, &reviewed, &reviewedAtStr, &reviewedBy, &action, &createdAtStr,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrDeadLetterNotFound
-		}
-		return nil, fmt.Errorf("scan dead letter: %w", err)
-	}
-
-	var task domain.Task
-	if err := json.Unmarshal(originalTaskJSON, &task); err != nil {
-		return nil, fmt.Errorf("unmarshal original task: %w", err)
-	}
-
-	dl := domain.NewDeadLetterTask(&task, reason)
-
-	return dl, nil
-}
-
-// scanDeadLetterFromRows converts database rows into domain DeadLetterTask entities.
-func (r *DeadLetterRepository) scanDeadLetterFromRows(rows *sql.Rows) (*domain.DeadLetterTask, error) {
-	var id, originalTaskID, reason, action string
-	var originalTaskJSON []byte
-	var failedAtStr, createdAtStr string
-	var reviewed bool
-	var reviewedAtStr, reviewedBy sql.NullString
-
-	err := rows.Scan(
-		&id, &originalTaskID, &originalTaskJSON, &failedAtStr, &reviewed, &reviewedAtStr, &reviewedBy, &action, &createdAtStr,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("scan dead letter: %w", err)
-	}
-
-	var task domain.Task
-	if err := json.Unmarshal(originalTaskJSON, &task); err != nil {
-		return nil, fmt.Errorf("unmarshal original task: %w", err)
-	}
-
-	dl := domain.NewDeadLetterTask(&task, reason)
-
-	return dl, nil
 }

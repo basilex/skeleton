@@ -2,29 +2,27 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/basilex/skeleton/internal/files/domain"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// UploadRepository implements domain.UploadRepository using SQLite.
 type UploadRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-// NewUploadRepository creates a new upload repository.
-func NewUploadRepository(db *sql.DB) *UploadRepository {
-	return &UploadRepository{db: db}
+func NewUploadRepository(pool *pgxpool.Pool) *UploadRepository {
+	return &UploadRepository{pool: pool}
 }
 
-// Create inserts a new upload record.
 func (r *UploadRepository) Create(ctx context.Context, upload *domain.FileUpload) error {
 	query := `
 		INSERT INTO file_uploads (id, file_id, upload_url, fields, status, expires_at, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 
 	fieldsJSON, err := json.Marshal(upload.Fields())
@@ -32,14 +30,14 @@ func (r *UploadRepository) Create(ctx context.Context, upload *domain.FileUpload
 		return fmt.Errorf("marshal fields: %w", err)
 	}
 
-	_, err = r.db.ExecContext(ctx, query,
+	_, err = r.pool.Exec(ctx, query,
 		upload.ID().String(),
 		upload.File().ID().String(),
 		upload.UploadURL(),
 		fieldsJSON,
 		string(upload.Status()),
-		upload.ExpiresAt().Format(time.RFC3339),
-		upload.CreatedAt().Format(time.RFC3339),
+		upload.ExpiresAt(),
+		upload.CreatedAt(),
 	)
 
 	if err != nil {
@@ -49,7 +47,6 @@ func (r *UploadRepository) Create(ctx context.Context, upload *domain.FileUpload
 	return nil
 }
 
-// GetByID retrieves an upload by ID.
 func (r *UploadRepository) GetByID(ctx context.Context, id domain.UploadID) (*domain.FileUpload, error) {
 	query := `
 		SELECT u.id, u.file_id, u.upload_url, u.fields, u.status, u.expires_at, u.created_at,
@@ -57,29 +54,28 @@ func (r *UploadRepository) GetByID(ctx context.Context, id domain.UploadID) (*do
 		       f.storage_provider, f.checksum, f.access_level, f.uploaded_at, f.created_at
 		FROM file_uploads u
 		JOIN files f ON u.file_id = f.id
-		WHERE u.id = ?
+		WHERE u.id = $1
 	`
 
 	var uploadID, fileID, uploadURL, status string
 	var fieldsJSON []byte
-	var expiresAt, createdAt string
+	var expiresAt, createdAt time.Time
 
-	// File fields
 	var filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
-	var ownerID sql.NullString
+	var ownerID *string
 	var size int64
-	var uploadedAt, fileCreatedAt string
+	var uploadedAt, fileCreatedAt time.Time
 
-	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
+	err := r.pool.QueryRow(ctx, query, id.String()).Scan(
 		&uploadID, &fileID, &uploadURL, &fieldsJSON, &status, &expiresAt, &createdAt,
 		&ownerID, &filename, &storedName, &mimeType, &size, &path,
 		&storageProvider, &checksum, &accessLevel, &uploadedAt, &fileCreatedAt,
 	)
 
-	if err == sql.ErrNoRows {
-		return nil, domain.ErrUploadNotFound
-	}
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrUploadNotFound
+		}
 		return nil, fmt.Errorf("scan upload: %w", err)
 	}
 
@@ -87,7 +83,6 @@ func (r *UploadRepository) GetByID(ctx context.Context, id domain.UploadID) (*do
 		ownerID, filename, storedName, mimeType, size, path, storageProvider, checksum, accessLevel, uploadedAt, fileCreatedAt)
 }
 
-// GetByFileID retrieves an upload for a specific file.
 func (r *UploadRepository) GetByFileID(ctx context.Context, fileID domain.FileID) (*domain.FileUpload, error) {
 	query := `
 		SELECT u.id, u.file_id, u.upload_url, u.fields, u.status, u.expires_at, u.created_at,
@@ -95,29 +90,28 @@ func (r *UploadRepository) GetByFileID(ctx context.Context, fileID domain.FileID
 		       f.storage_provider, f.checksum, f.access_level, f.uploaded_at, f.created_at
 		FROM file_uploads u
 		JOIN files f ON u.file_id = f.id
-		WHERE u.file_id = ? ORDER BY u.created_at DESC LIMIT 1
+		WHERE u.file_id = $1 ORDER BY u.created_at DESC LIMIT 1
 	`
 
 	var uploadID, fileIDStr, uploadURL, status string
 	var fieldsJSON []byte
-	var expiresAt, createdAt string
+	var expiresAt, createdAt time.Time
 
-	// File fields
 	var filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
-	var ownerID sql.NullString
+	var ownerID *string
 	var size int64
-	var uploadedAt, fileCreatedAt string
+	var uploadedAt, fileCreatedAt time.Time
 
-	err := r.db.QueryRowContext(ctx, query, fileID.String()).Scan(
+	err := r.pool.QueryRow(ctx, query, fileID.String()).Scan(
 		&uploadID, &fileIDStr, &uploadURL, &fieldsJSON, &status, &expiresAt, &createdAt,
 		&ownerID, &filename, &storedName, &mimeType, &size, &path,
 		&storageProvider, &checksum, &accessLevel, &uploadedAt, &fileCreatedAt,
 	)
 
-	if err == sql.ErrNoRows {
-		return nil, domain.ErrUploadNotFound
-	}
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrUploadNotFound
+		}
 		return nil, fmt.Errorf("scan upload: %w", err)
 	}
 
@@ -125,28 +119,21 @@ func (r *UploadRepository) GetByFileID(ctx context.Context, fileID domain.FileID
 		ownerID, filename, storedName, mimeType, size, path, storageProvider, checksum, accessLevel, uploadedAt, fileCreatedAt)
 }
 
-// UpdateStatus updates the upload status.
 func (r *UploadRepository) UpdateStatus(ctx context.Context, id domain.UploadID, status domain.UploadStatus) error {
-	query := `UPDATE file_uploads SET status = ? WHERE id = ?`
+	query := `UPDATE file_uploads SET status = $1 WHERE id = $2`
 
-	result, err := r.db.ExecContext(ctx, query, string(status), id.String())
+	result, err := r.pool.Exec(ctx, query, string(status), id.String())
 	if err != nil {
 		return fmt.Errorf("update upload status: %w", err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-
-	if rows == 0 {
+	if result.RowsAffected() == 0 {
 		return domain.ErrUploadNotFound
 	}
 
 	return nil
 }
 
-// GetExpired retrieves expired uploads.
 func (r *UploadRepository) GetExpired(ctx context.Context, before time.Time, limit int) ([]*domain.FileUpload, error) {
 	query := `
 		SELECT u.id, u.file_id, u.upload_url, u.fields, u.status, u.expires_at, u.created_at,
@@ -154,10 +141,10 @@ func (r *UploadRepository) GetExpired(ctx context.Context, before time.Time, lim
 		       f.storage_provider, f.checksum, f.access_level, f.uploaded_at, f.created_at
 		FROM file_uploads u
 		JOIN files f ON u.file_id = f.id
-		WHERE u.expires_at < ? ORDER BY u.expires_at ASC LIMIT ?
+		WHERE u.expires_at < $1 ORDER BY u.expires_at ASC LIMIT $2
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, before.Format(time.RFC3339), limit)
+	rows, err := r.pool.Query(ctx, query, before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query expired uploads: %w", err)
 	}
@@ -168,13 +155,12 @@ func (r *UploadRepository) GetExpired(ctx context.Context, before time.Time, lim
 	for rows.Next() {
 		var uploadID, fileID, uploadURL, status string
 		var fieldsJSON []byte
-		var expiresAt, createdAt string
+		var expiresAt, createdAt time.Time
 
-		// File fields
 		var filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
-		var ownerID sql.NullString
+		var ownerID *string
 		var size int64
-		var uploadedAt, fileCreatedAt string
+		var uploadedAt, fileCreatedAt time.Time
 
 		if err := rows.Scan(
 			&uploadID, &fileID, &uploadURL, &fieldsJSON, &status, &expiresAt, &createdAt,
@@ -200,32 +186,25 @@ func (r *UploadRepository) GetExpired(ctx context.Context, before time.Time, lim
 	return uploads, nil
 }
 
-// Delete deletes an upload by ID.
 func (r *UploadRepository) Delete(ctx context.Context, id domain.UploadID) error {
-	query := `DELETE FROM file_uploads WHERE id = ?`
+	query := `DELETE FROM file_uploads WHERE id = $1`
 
-	result, err := r.db.ExecContext(ctx, query, id.String())
+	result, err := r.pool.Exec(ctx, query, id.String())
 	if err != nil {
 		return fmt.Errorf("delete upload: %w", err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-
-	if rows == 0 {
+	if result.RowsAffected() == 0 {
 		return domain.ErrUploadNotFound
 	}
 
 	return nil
 }
 
-// DeleteByFileID deletes an upload by file ID.
 func (r *UploadRepository) DeleteByFileID(ctx context.Context, fileID domain.FileID) error {
-	query := `DELETE FROM file_uploads WHERE file_id = ?`
+	query := `DELETE FROM file_uploads WHERE file_id = $1`
 
-	_, err := r.db.ExecContext(ctx, query, fileID.String())
+	_, err := r.pool.Exec(ctx, query, fileID.String())
 	if err != nil {
 		return fmt.Errorf("delete upload by file: %w", err)
 	}
@@ -233,12 +212,11 @@ func (r *UploadRepository) DeleteByFileID(ctx context.Context, fileID domain.Fil
 	return nil
 }
 
-// reconstituteUpload reconstructs a FileUpload from database fields.
 func (r *UploadRepository) reconstituteUpload(
 	uploadID, fileID, uploadURL string, fieldsJSON []byte, status string,
-	expiresAtStr, createdAtStr string,
-	ownerID sql.NullString, filename, storedName, mimeType string, size int64, path string,
-	storageProvider, checksum, accessLevel string, uploadedAtStr, fileCreatedAtStr string,
+	expiresAt, createdAt time.Time,
+	ownerID *string, filename, storedName, mimeType string, size int64, path string,
+	storageProvider, checksum, accessLevel string, uploadedAt, fileCreatedAt time.Time,
 ) (*domain.FileUpload, error) {
 	var fields map[string]string
 	if len(fieldsJSON) > 0 {
@@ -247,30 +225,14 @@ func (r *UploadRepository) reconstituteUpload(
 		}
 	}
 
-	expiresAt, err := time.Parse(time.RFC3339, expiresAtStr)
+	fileIDParsed, err := domain.ParseFileID(fileID)
 	if err != nil {
-		return nil, fmt.Errorf("parse expires_at: %w", err)
+		return nil, fmt.Errorf("parse file id: %w", err)
 	}
 
-	createdAt, err := time.Parse(time.RFC3339, createdAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-
-	uploadedAt, err := time.Parse(time.RFC3339, uploadedAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse uploaded_at: %w", err)
-	}
-
-	fileCreatedAt, err := time.Parse(time.RFC3339, fileCreatedAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse file_created_at: %w", err)
-	}
-
-	// Reconstitute file
 	file := domain.ReconstituteFile(
-		domain.FileID(fileID),
-		nil, // owner ID will be set separately if needed
+		fileIDParsed,
+		nil,
 		filename,
 		storedName,
 		mimeType,
@@ -281,14 +243,19 @@ func (r *UploadRepository) reconstituteUpload(
 		domain.FileMetadata{},
 		domain.AccessLevel(accessLevel),
 		uploadedAt,
-		nil, // expires at
-		nil, // processed at
+		nil,
+		nil,
 		fileCreatedAt,
 		fileCreatedAt,
 	)
 
+	uploadIDParsed, err := domain.ParseUploadID(uploadID)
+	if err != nil {
+		return nil, fmt.Errorf("parse upload id: %w", err)
+	}
+
 	upload := domain.ReconstituteFileUpload(
-		domain.UploadID(uploadID),
+		uploadIDParsed,
 		file,
 		uploadURL,
 		fields,

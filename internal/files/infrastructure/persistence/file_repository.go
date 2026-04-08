@@ -2,35 +2,49 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/basilex/skeleton/internal/files/domain"
 	identitydomain "github.com/basilex/skeleton/internal/identity/domain"
+	"github.com/georgysavva/scany/v2/pgxscan"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// FileRepository implements domain.FileRepository using SQLite.
 type FileRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
+	psql sq.StatementBuilderType
 }
 
-// NewFileRepository creates a new file repository.
-func NewFileRepository(db *sql.DB) *FileRepository {
-	return &FileRepository{db: db}
+func NewFileRepository(pool *pgxpool.Pool) *FileRepository {
+	return &FileRepository{
+		pool: pool,
+		psql: sq.StatementBuilder.PlaceholderFormat(sq.Dollar),
+	}
 }
 
-// Create inserts a new file record.
+type fileDTO struct {
+	ID              string     `db:"id"`
+	OwnerID         *string    `db:"owner_id"`
+	Filename        string     `db:"filename"`
+	StoredName      string     `db:"stored_name"`
+	MimeType        string     `db:"mime_type"`
+	Size            int64      `db:"size"`
+	Path            string     `db:"path"`
+	StorageProvider string     `db:"storage_provider"`
+	Checksum        string     `db:"checksum"`
+	Metadata        []byte     `db:"metadata"`
+	AccessLevel     string     `db:"access_level"`
+	UploadedAt      time.Time  `db:"uploaded_at"`
+	ExpiresAt       *time.Time `db:"expires_at"`
+	ProcessedAt     *time.Time `db:"processed_at"`
+	CreatedAt       time.Time  `db:"created_at"`
+	UpdatedAt       time.Time  `db:"updated_at"`
+}
+
 func (r *FileRepository) Create(ctx context.Context, file *domain.File) error {
-	query := `
-		INSERT INTO files (
-			id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
-			uploaded_at, expires_at, processed_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
 	metadataJSON, err := json.Marshal(file.Metadata())
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
@@ -38,39 +52,24 @@ func (r *FileRepository) Create(ctx context.Context, file *domain.File) error {
 
 	var ownerID *string
 	if file.OwnerID() != nil {
-		oid := string(*file.OwnerID())
+		oid := file.OwnerID().String()
 		ownerID = &oid
 	}
 
-	var expiresAt, processedAt *string
-	if file.ExpiresAt() != nil {
-		e := file.ExpiresAt().Format(time.RFC3339)
-		expiresAt = &e
-	}
-	if file.ProcessedAt() != nil {
-		p := file.ProcessedAt().Format(time.RFC3339)
-		processedAt = &p
+	query, args, err := r.psql.Insert("files").
+		Columns("id", "owner_id", "filename", "stored_name", "mime_type", "size", "path",
+			"storage_provider", "checksum", "metadata", "access_level",
+			"uploaded_at", "expires_at", "processed_at", "created_at", "updated_at").
+		Values(file.ID().String(), ownerID, file.Filename(), file.StoredName(), file.MimeType(),
+			file.Size(), file.Path(), string(file.StorageProvider()), file.Checksum(),
+			metadataJSON, string(file.AccessLevel()), file.UploadedAt(), file.ExpiresAt(),
+			file.ProcessedAt(), file.CreatedAt(), file.UpdatedAt()).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build insert query: %w", err)
 	}
 
-	_, err = r.db.ExecContext(ctx, query,
-		file.ID().String(),
-		ownerID,
-		file.Filename(),
-		file.StoredName(),
-		file.MimeType(),
-		file.Size(),
-		file.Path(),
-		string(file.StorageProvider()),
-		file.Checksum(),
-		metadataJSON,
-		string(file.AccessLevel()),
-		file.UploadedAt().Format(time.RFC3339),
-		expiresAt,
-		processedAt,
-		file.CreatedAt().Format(time.RFC3339),
-		file.UpdatedAt().Format(time.RFC3339),
-	)
-
+	_, err = r.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("insert file: %w", err)
 	}
@@ -78,418 +77,266 @@ func (r *FileRepository) Create(ctx context.Context, file *domain.File) error {
 	return nil
 }
 
-// GetByID retrieves a file by ID.
 func (r *FileRepository) GetByID(ctx context.Context, id domain.FileID) (*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+	var dto fileDTO
+	err := pgxscan.Get(ctx, r.pool, &dto,
+		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
 			storage_provider, checksum, metadata, access_level,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files WHERE id = ?
-	`
-
-	var fileID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
-	var ownerID sql.NullString
-	var size int64
-	var metadataJSON []byte
-	var uploadedAt, createdAt, updatedAt string
-	var expiresAt, processedAt *string
-
-	err := r.db.QueryRowContext(ctx, query, id.String()).Scan(
-		&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &path,
-		&storageProvider, &checksum, &metadataJSON, &accessLevel,
-		&uploadedAt, &expiresAt, &processedAt, &createdAt, &updatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domain.ErrFileNotFound
-	}
+		FROM files WHERE id = $1`,
+		id.String())
 	if err != nil {
-		return nil, fmt.Errorf("scan file: %w", err)
+		if pgxscan.NotFound(err) {
+			return nil, domain.ErrFileNotFound
+		}
+		return nil, fmt.Errorf("get file by id: %w", err)
 	}
 
-	var ownerIDStr string
-	if ownerID.Valid {
-		ownerIDStr = ownerID.String
-	}
-
-	return r.reconstituteFile(
-		fileID, ownerIDStr, filename, storedName, mimeType, size, path,
-		storageProvider, checksum, metadataJSON, accessLevel,
-		uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
-	)
+	return r.dtoToDomain(dto)
 }
 
-// Update updates an existing file record.
 func (r *FileRepository) Update(ctx context.Context, file *domain.File) error {
-	query := `
-		UPDATE files SET
-			filename = ?, stored_name = ?, mime_type = ?, size = ?, path = ?,
-			storage_provider = ?, checksum = ?, metadata = ?, access_level = ?,
-			expires_at = ?, processed_at = ?, updated_at = ?
-		WHERE id = ?
-	`
-
 	metadataJSON, err := json.Marshal(file.Metadata())
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
 
-	var expiresAt, processedAt *string
-	if file.ExpiresAt() != nil {
-		e := file.ExpiresAt().Format(time.RFC3339)
-		expiresAt = &e
-	}
-	if file.ProcessedAt() != nil {
-		p := file.ProcessedAt().Format(time.RFC3339)
-		processedAt = &p
+	query, args, err := r.psql.Update("files").
+		Set("filename", file.Filename()).
+		Set("stored_name", file.StoredName()).
+		Set("mime_type", file.MimeType()).
+		Set("size", file.Size()).
+		Set("path", file.Path()).
+		Set("storage_provider", string(file.StorageProvider())).
+		Set("checksum", file.Checksum()).
+		Set("metadata", metadataJSON).
+		Set("access_level", string(file.AccessLevel())).
+		Set("expires_at", file.ExpiresAt()).
+		Set("processed_at", file.ProcessedAt()).
+		Set("updated_at", time.Now()).
+		Where(sq.Eq{"id": file.ID().String()}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build update query: %w", err)
 	}
 
-	result, err := r.db.ExecContext(ctx, query,
-		file.Filename(),
-		file.StoredName(),
-		file.MimeType(),
-		file.Size(),
-		file.Path(),
-		string(file.StorageProvider()),
-		file.Checksum(),
-		metadataJSON,
-		string(file.AccessLevel()),
-		expiresAt,
-		processedAt,
-		time.Now().Format(time.RFC3339),
-		file.ID().String(),
-	)
-
+	result, err := r.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("update file: %w", err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-
-	if rows == 0 {
+	if result.RowsAffected() == 0 {
 		return domain.ErrFileNotFound
 	}
 
 	return nil
 }
 
-// Delete deletes a file by ID.
 func (r *FileRepository) Delete(ctx context.Context, id domain.FileID) error {
-	query := `DELETE FROM files WHERE id = ?`
-
-	result, err := r.db.ExecContext(ctx, query, id.String())
+	result, err := r.pool.Exec(ctx, `DELETE FROM files WHERE id = $1`, id.String())
 	if err != nil {
 		return fmt.Errorf("delete file: %w", err)
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-
-	if rows == 0 {
+	if result.RowsAffected() == 0 {
 		return domain.ErrFileNotFound
 	}
 
 	return nil
 }
 
-// GetByPath retrieves a file by storage path.
 func (r *FileRepository) GetByPath(ctx context.Context, path string) (*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+	var dto fileDTO
+	err := pgxscan.Get(ctx, r.pool, &dto,
+		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
 			storage_provider, checksum, metadata, access_level,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files WHERE path = ?
-	`
-
-	var fileID, filename, storedName, mimeType, filePath, storageProvider, checksum, accessLevel string
-	var ownerID sql.NullString
-	var size int64
-	var metadataJSON []byte
-	var uploadedAt, createdAt, updatedAt string
-	var expiresAt, processedAt *string
-
-	err := r.db.QueryRowContext(ctx, query, path).Scan(
-		&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &filePath,
-		&storageProvider, &checksum, &metadataJSON, &accessLevel,
-		&uploadedAt, &expiresAt, &processedAt, &createdAt, &updatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, domain.ErrFileNotFound
-	}
+		FROM files WHERE path = $1`,
+		path)
 	if err != nil {
-		return nil, fmt.Errorf("scan file: %w", err)
+		if pgxscan.NotFound(err) {
+			return nil, domain.ErrFileNotFound
+		}
+		return nil, fmt.Errorf("get file by path: %w", err)
 	}
 
-	var ownerIDStr string
-	if ownerID.Valid {
-		ownerIDStr = ownerID.String
-	}
-
-	return r.reconstituteFile(
-		fileID, ownerIDStr, filename, storedName, mimeType, size, filePath,
-		storageProvider, checksum, metadataJSON, accessLevel,
-		uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
-	)
+	return r.dtoToDomain(dto)
 }
 
-// GetByOwner retrieves files by owner ID with pagination.
 func (r *FileRepository) GetByOwner(ctx context.Context, ownerID string, limit, offset int) ([]*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+	var dtos []fileDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
 			storage_provider, checksum, metadata, access_level,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
 		FROM files 
-		WHERE owner_id = ?
+		WHERE owner_id = $1
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, ownerID, limit, offset)
+		LIMIT $2 OFFSET $3`,
+		ownerID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("query files: %w", err)
 	}
-	defer rows.Close()
 
-	return r.scanFiles(rows)
+	return r.dtosToDomains(dtos)
 }
 
-// GetExpired retrieves expired files.
 func (r *FileRepository) GetExpired(ctx context.Context, before time.Time, limit int) ([]*domain.File, error) {
-	query := `
-		SELECT id, owner_id, filename, stored_name, mime_type, size, path,
+	var dtos []fileDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
 			storage_provider, checksum, metadata, access_level,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
 		FROM files 
-		WHERE expires_at IS NOT NULL AND expires_at < ?
+		WHERE expires_at IS NOT NULL AND expires_at < $1
 		ORDER BY expires_at ASC
-		LIMIT ?
-	`
-
-	rows, err := r.db.QueryContext(ctx, query, before.Format(time.RFC3339), limit)
+		LIMIT $2`,
+		before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("query expired files: %w", err)
 	}
-	defer rows.Close()
 
-	return r.scanFiles(rows)
+	return r.dtosToDomains(dtos)
 }
 
-// List retrieves files matching the filter with pagination.
 func (r *FileRepository) List(ctx context.Context, filter *domain.FileFilter, limit, offset int) ([]*domain.File, error) {
-	query := `SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-		storage_provider, checksum, metadata, access_level,
-		uploaded_at, expires_at, processed_at, created_at, updated_at
-		FROM files WHERE 1=1`
-	args := []interface{}{}
+	q := r.psql.Select("id", "owner_id", "filename", "stored_name", "mime_type", "size", "path",
+		"storage_provider", "checksum", "metadata", "access_level",
+		"uploaded_at", "expires_at", "processed_at", "created_at", "updated_at").
+		From("files")
 
 	if filter != nil {
 		if filter.OwnerID != nil {
-			query += ` AND owner_id = ?`
-			args = append(args, *filter.OwnerID)
+			q = q.Where(sq.Eq{"owner_id": *filter.OwnerID})
 		}
 		if filter.MimeType != nil {
-			query += ` AND mime_type LIKE ?`
-			args = append(args, *filter.MimeType+`%`)
+			q = q.Where(sq.ILike{"mime_type": *filter.MimeType + "%"})
 		}
 		if filter.AccessLevel != nil {
-			query += ` AND access_level = ?`
-			args = append(args, string(*filter.AccessLevel))
+			q = q.Where(sq.Eq{"access_level": string(*filter.AccessLevel)})
 		}
 		if filter.UploadedFrom != nil {
-			query += ` AND uploaded_at >= ?`
-			args = append(args, filter.UploadedFrom.Format(time.RFC3339))
+			q = q.Where(sq.GtOrEq{"uploaded_at": *filter.UploadedFrom})
 		}
 		if filter.UploadedTo != nil {
-			query += ` AND uploaded_at <= ?`
-			args = append(args, filter.UploadedTo.Format(time.RFC3339))
+			q = q.Where(sq.LtOrEq{"uploaded_at": *filter.UploadedTo})
 		}
 	}
 
-	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
-	args = append(args, limit, offset)
+	q = q.OrderBy("created_at DESC").Limit(uint64(limit)).Offset(uint64(offset))
 
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	query, args, err := q.ToSql()
 	if err != nil {
+		return nil, fmt.Errorf("build query: %w", err)
+	}
+
+	var dtos []fileDTO
+	if err := pgxscan.Select(ctx, r.pool, &dtos, query, args...); err != nil {
 		return nil, fmt.Errorf("query files: %w", err)
 	}
-	defer rows.Close()
 
-	return r.scanFiles(rows)
+	return r.dtosToDomains(dtos)
 }
 
-// DeleteBatch deletes multiple files by IDs.
 func (r *FileRepository) DeleteBatch(ctx context.Context, ids []domain.FileID) error {
 	if len(ids) == 0 {
 		return nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `DELETE FROM files WHERE id = ?`)
-	if err != nil {
-		return fmt.Errorf("prepare stmt: %w", err)
-	}
-	defer stmt.Close()
+	defer tx.Rollback(ctx)
 
 	for _, id := range ids {
-		if _, err := stmt.ExecContext(ctx, id.String()); err != nil {
+		_, err := tx.Exec(ctx, `DELETE FROM files WHERE id = $1`, id.String())
+		if err != nil {
 			return fmt.Errorf("delete file %s: %w", id, err)
 		}
 	}
 
-	return tx.Commit()
+	return tx.Commit(ctx)
 }
 
-// Count returns the total number of files matching the filter.
 func (r *FileRepository) Count(ctx context.Context, filter *domain.FileFilter) (int64, error) {
-	query := `SELECT COUNT(*) FROM files WHERE 1=1`
-	args := []interface{}{}
+	q := r.psql.Select("COUNT(*)").From("files")
 
 	if filter != nil {
 		if filter.OwnerID != nil {
-			query += ` AND owner_id = ?`
-			args = append(args, *filter.OwnerID)
+			q = q.Where(sq.Eq{"owner_id": *filter.OwnerID})
 		}
 		if filter.MimeType != nil {
-			query += ` AND mime_type LIKE ?`
-			args = append(args, *filter.MimeType+`%`)
+			q = q.Where(sq.ILike{"mime_type": *filter.MimeType + "%"})
 		}
 		if filter.AccessLevel != nil {
-			query += ` AND access_level = ?`
-			args = append(args, string(*filter.AccessLevel))
+			q = q.Where(sq.Eq{"access_level": string(*filter.AccessLevel)})
 		}
 	}
 
+	query, args, err := q.ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("build query: %w", err)
+	}
+
 	var count int64
-	if err := r.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+	if err := r.pool.QueryRow(ctx, query, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count files: %w", err)
 	}
 
 	return count, nil
 }
 
-// scanFiles scans multiple files from rows.
-func (r *FileRepository) scanFiles(rows *sql.Rows) ([]*domain.File, error) {
-	var files []*domain.File
-
-	for rows.Next() {
-		var fileID, filename, storedName, mimeType, path, storageProvider, checksum, accessLevel string
-		var ownerID sql.NullString
-		var size int64
-		var metadataJSON []byte
-		var uploadedAt, createdAt, updatedAt string
-		var expiresAt, processedAt *string
-
-		if err := rows.Scan(
-			&fileID, &ownerID, &filename, &storedName, &mimeType, &size, &path,
-			&storageProvider, &checksum, &metadataJSON, &accessLevel,
-			&uploadedAt, &expiresAt, &processedAt, &createdAt, &updatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan row: %w", err)
-		}
-
-		var ownerIDStr string
-		if ownerID.Valid {
-			ownerIDStr = ownerID.String
-		}
-
-		file, err := r.reconstituteFile(
-			fileID, ownerIDStr, filename, storedName, mimeType, size, path,
-			storageProvider, checksum, metadataJSON, accessLevel,
-			uploadedAt, expiresAt, processedAt, createdAt, updatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		files = append(files, file)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("rows error: %w", err)
-	}
-
-	return files, nil
-}
-
-// reconstituteFile reconstructs a File from database fields.
-func (r *FileRepository) reconstituteFile(
-	fileID, ownerID, filename, storedName, mimeType string, size int64, path string,
-	storageProvider, checksum string, metadataJSON []byte, accessLevel string,
-	uploadedAtStr string, expiresAtStr, processedAtStr *string,
-	createdAtStr, updatedAtStr string,
-) (*domain.File, error) {
+func (r *FileRepository) dtoToDomain(dto fileDTO) (*domain.File, error) {
 	var metadata domain.FileMetadata
-	if len(metadataJSON) > 0 {
-		if err := json.Unmarshal(metadataJSON, &metadata); err != nil {
+	if len(dto.Metadata) > 0 {
+		if err := json.Unmarshal(dto.Metadata, &metadata); err != nil {
 			return nil, fmt.Errorf("unmarshal metadata: %w", err)
 		}
 	}
 
-	uploadedAt, err := time.Parse(time.RFC3339, uploadedAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse uploaded_at: %w", err)
-	}
-
-	createdAt, err := time.Parse(time.RFC3339, createdAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
-	}
-
-	updatedAt, err := time.Parse(time.RFC3339, updatedAtStr)
-	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
-	}
-
-	var expiresAt, processedAt *time.Time
-	if expiresAtStr != nil && *expiresAtStr != "" {
-		t, err := time.Parse(time.RFC3339, *expiresAtStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse expires_at: %w", err)
-		}
-		expiresAt = &t
-	}
-
-	if processedAtStr != nil && *processedAtStr != "" {
-		t, err := time.Parse(time.RFC3339, *processedAtStr)
-		if err != nil {
-			return nil, fmt.Errorf("parse processed_at: %w", err)
-		}
-		processedAt = &t
-	}
-
 	var ownerIDPtr *identitydomain.UserID
-	if ownerID != "" {
-		uid := identitydomain.UserID(ownerID)
+	if dto.OwnerID != nil && *dto.OwnerID != "" {
+		uid, parseErr := identitydomain.ParseUserID(*dto.OwnerID)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse user id: %w", parseErr)
+		}
 		ownerIDPtr = &uid
 	}
 
+	fileIDParsed, err := domain.ParseFileID(dto.ID)
+	if err != nil {
+		return nil, fmt.Errorf("parse file id: %w", err)
+	}
+
 	return domain.ReconstituteFile(
-		domain.FileID(fileID),
+		fileIDParsed,
 		ownerIDPtr,
-		filename,
-		storedName,
-		mimeType,
-		size,
-		path,
-		domain.StorageProvider(storageProvider),
-		checksum,
+		dto.Filename,
+		dto.StoredName,
+		dto.MimeType,
+		dto.Size,
+		dto.Path,
+		domain.StorageProvider(dto.StorageProvider),
+		dto.Checksum,
 		metadata,
-		domain.AccessLevel(accessLevel),
-		uploadedAt,
-		expiresAt,
-		processedAt,
-		createdAt,
-		updatedAt,
+		domain.AccessLevel(dto.AccessLevel),
+		dto.UploadedAt,
+		dto.ExpiresAt,
+		dto.ProcessedAt,
+		dto.CreatedAt,
+		dto.UpdatedAt,
 	), nil
+}
+
+func (r *FileRepository) dtosToDomains(dtos []fileDTO) ([]*domain.File, error) {
+	files := make([]*domain.File, 0, len(dtos))
+	for _, dto := range dtos {
+		file, err := r.dtoToDomain(dto)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file)
+	}
+	return files, nil
 }

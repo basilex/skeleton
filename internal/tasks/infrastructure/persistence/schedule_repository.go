@@ -2,47 +2,43 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/basilex/skeleton/internal/tasks/domain"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ScheduleRepository implements the task schedule repository interface
-// using SQL database storage.
 type ScheduleRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
-// NewScheduleRepository creates a new schedule repository with the provided database connection.
-func NewScheduleRepository(db *sql.DB) *ScheduleRepository {
-	return &ScheduleRepository{db: db}
+func NewScheduleRepository(pool *pgxpool.Pool) *ScheduleRepository {
+	return &ScheduleRepository{pool: pool}
 }
 
-// Create persists a new task schedule to the database.
 func (r *ScheduleRepository) Create(ctx context.Context, schedule *domain.TaskSchedule) error {
 	payload, err := json.Marshal(schedule.Payload())
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	var lastRunAt, nextRunAt interface{}
-	if schedule.LastRunAt() != nil {
-		lastRunAt = schedule.LastRunAt().Format(time.RFC3339)
-	}
-	if schedule.NextRunAt() != nil {
-		nextRunAt = schedule.NextRunAt().Format(time.RFC3339)
-	}
-
 	query := `
 		INSERT INTO task_schedules (
 			id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 
-	_, err = r.db.ExecContext(ctx, query,
+	var lastRunAt, nextRunAt *time.Time
+	if schedule.LastRunAt() != nil {
+		lastRunAt = schedule.LastRunAt()
+	}
+	if schedule.NextRunAt() != nil {
+		nextRunAt = schedule.NextRunAt()
+	}
+
+	_, err = r.pool.Exec(ctx, query,
 		schedule.ID().String(),
 		schedule.Name(),
 		schedule.TaskType().String(),
@@ -52,8 +48,8 @@ func (r *ScheduleRepository) Create(ctx context.Context, schedule *domain.TaskSc
 		lastRunAt,
 		nextRunAt,
 		schedule.IsActive(),
-		schedule.CreatedAt().Format(time.RFC3339),
-		schedule.UpdatedAt().Format(time.RFC3339),
+		schedule.CreatedAt(),
+		schedule.UpdatedAt(),
 	)
 
 	if err != nil {
@@ -63,36 +59,35 @@ func (r *ScheduleRepository) Create(ctx context.Context, schedule *domain.TaskSc
 	return nil
 }
 
-// Update modifies an existing task schedule in the database.
 func (r *ScheduleRepository) Update(ctx context.Context, schedule *domain.TaskSchedule) error {
 	payload, err := json.Marshal(schedule.Payload())
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	var lastRunAt, nextRunAt interface{}
-	if schedule.LastRunAt() != nil {
-		lastRunAt = schedule.LastRunAt().Format(time.RFC3339)
-	}
-	if schedule.NextRunAt() != nil {
-		nextRunAt = schedule.NextRunAt().Format(time.RFC3339)
-	}
-
 	query := `
 		UPDATE task_schedules SET
-			name = ?,
-			task_type = ?,
-			payload = ?,
-			cron = ?,
-			timezone = ?,
-			last_run_at = ?,
-			next_run_at = ?,
-			is_active = ?,
-			updated_at = ?
-		WHERE id = ?
+			name = $1,
+			task_type = $2,
+			payload = $3,
+			cron = $4,
+			timezone = $5,
+			last_run_at = $6,
+			next_run_at = $7,
+			is_active = $8,
+			updated_at = $9
+		WHERE id = $10
 	`
 
-	_, err = r.db.ExecContext(ctx, query,
+	var lastRunAt, nextRunAt *time.Time
+	if schedule.LastRunAt() != nil {
+		lastRunAt = schedule.LastRunAt()
+	}
+	if schedule.NextRunAt() != nil {
+		nextRunAt = schedule.NextRunAt()
+	}
+
+	_, err = r.pool.Exec(ctx, query,
 		schedule.Name(),
 		schedule.TaskType().String(),
 		payload,
@@ -101,7 +96,7 @@ func (r *ScheduleRepository) Update(ctx context.Context, schedule *domain.TaskSc
 		lastRunAt,
 		nextRunAt,
 		schedule.IsActive(),
-		schedule.UpdatedAt().Format(time.RFC3339),
+		schedule.UpdatedAt(),
 		schedule.ID().String(),
 	)
 
@@ -112,41 +107,94 @@ func (r *ScheduleRepository) Update(ctx context.Context, schedule *domain.TaskSc
 	return nil
 }
 
-// GetByID retrieves a task schedule by its unique identifier.
-// Returns domain.ErrScheduleNotFound if no matching schedule exists.
 func (r *ScheduleRepository) GetByID(ctx context.Context, id domain.ScheduleID) (*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
-		FROM task_schedules WHERE id = ?
+		FROM task_schedules WHERE id = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, id.String())
+	row := r.pool.QueryRow(ctx, query, id.String())
 
-	return r.scanSchedule(row)
+	var idStr, name, taskType, cron, timezone string
+	var payload []byte
+	var lastRunAt, nextRunAt *time.Time
+	var isActive bool
+	var createdAt, updatedAt time.Time
+
+	err := row.Scan(
+		&idStr, &name, &taskType, &payload, &cron, &timezone, &lastRunAt, &nextRunAt, &isActive, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan schedule: %w", err)
+	}
+
+	var taskPayload domain.TaskPayload
+	if err := json.Unmarshal(payload, &taskPayload); err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	parsedType, _ := domain.ParseTaskType(taskType)
+
+	schedule, err := domain.NewTaskSchedule(name, parsedType, cron, taskPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isActive {
+		schedule.Deactivate()
+	}
+
+	return schedule, nil
 }
 
-// GetByName retrieves a task schedule by its unique name.
-// Returns domain.ErrScheduleNotFound if no matching schedule exists.
 func (r *ScheduleRepository) GetByName(ctx context.Context, name string) (*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
-		FROM task_schedules WHERE name = ?
+		FROM task_schedules WHERE name = $1
 	`
 
-	row := r.db.QueryRowContext(ctx, query, name)
+	row := r.pool.QueryRow(ctx, query, name)
 
-	return r.scanSchedule(row)
+	var idStr, taskType, cron, timezone string
+	var payload []byte
+	var lastRunAt, nextRunAt *time.Time
+	var isActive bool
+	var createdAt, updatedAt time.Time
+
+	err := row.Scan(
+		&idStr, &name, &taskType, &payload, &cron, &timezone, &lastRunAt, &nextRunAt, &isActive, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan schedule: %w", err)
+	}
+
+	var taskPayload domain.TaskPayload
+	if err := json.Unmarshal(payload, &taskPayload); err != nil {
+		return nil, fmt.Errorf("unmarshal payload: %w", err)
+	}
+
+	parsedType, _ := domain.ParseTaskType(taskType)
+
+	schedule, err := domain.NewTaskSchedule(name, parsedType, cron, taskPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isActive {
+		schedule.Deactivate()
+	}
+
+	return schedule, nil
 }
 
-// GetActiveSchedules retrieves all active schedules ordered by name.
 func (r *ScheduleRepository) GetActiveSchedules(ctx context.Context) ([]*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
-		FROM task_schedules WHERE is_active = 1
+		FROM task_schedules WHERE is_active = true
 		ORDER BY name ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query schedules: %w", err)
 	}
@@ -154,24 +202,52 @@ func (r *ScheduleRepository) GetActiveSchedules(ctx context.Context) ([]*domain.
 
 	var schedules []*domain.TaskSchedule
 	for rows.Next() {
-		schedule, err := r.scanScheduleFromRows(rows)
+		var idStr, name, taskType, cron, timezone string
+		var payload []byte
+		var lastRunAt, nextRunAt *time.Time
+		var isActive bool
+		var createdAt, updatedAt time.Time
+
+		err := rows.Scan(
+			&idStr, &name, &taskType, &payload, &cron, &timezone, &lastRunAt, &nextRunAt, &isActive, &createdAt, &updatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan schedule: %w", err)
+		}
+
+		var taskPayload domain.TaskPayload
+		if err := json.Unmarshal(payload, &taskPayload); err != nil {
+			return nil, fmt.Errorf("unmarshal payload: %w", err)
+		}
+
+		parsedType, _ := domain.ParseTaskType(taskType)
+
+		schedule, err := domain.NewTaskSchedule(name, parsedType, cron, taskPayload)
 		if err != nil {
 			return nil, err
 		}
+
+		if !isActive {
+			schedule.Deactivate()
+		}
+
 		schedules = append(schedules, schedule)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return schedules, nil
 }
 
-// List retrieves all schedules ordered by name.
 func (r *ScheduleRepository) List(ctx context.Context) ([]*domain.TaskSchedule, error) {
 	query := `
 		SELECT id, name, task_type, payload, cron, timezone, last_run_at, next_run_at, is_active, created_at, updated_at
 		FROM task_schedules ORDER BY name ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.pool.Query(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("query schedules: %w", err)
 	}
@@ -179,93 +255,50 @@ func (r *ScheduleRepository) List(ctx context.Context) ([]*domain.TaskSchedule, 
 
 	var schedules []*domain.TaskSchedule
 	for rows.Next() {
-		schedule, err := r.scanScheduleFromRows(rows)
+		var idStr, name, taskType, cron, timezone string
+		var payload []byte
+		var lastRunAt, nextRunAt *time.Time
+		var isActive bool
+		var createdAt, updatedAt time.Time
+
+		err := rows.Scan(
+			&idStr, &name, &taskType, &payload, &cron, &timezone, &lastRunAt, &nextRunAt, &isActive, &createdAt, &updatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("scan schedule: %w", err)
+		}
+
+		var taskPayload domain.TaskPayload
+		if err := json.Unmarshal(payload, &taskPayload); err != nil {
+			return nil, fmt.Errorf("unmarshal payload: %w", err)
+		}
+
+		parsedType, _ := domain.ParseTaskType(taskType)
+
+		schedule, err := domain.NewTaskSchedule(name, parsedType, cron, taskPayload)
 		if err != nil {
 			return nil, err
 		}
+
+		if !isActive {
+			schedule.Deactivate()
+		}
+
 		schedules = append(schedules, schedule)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return schedules, nil
 }
 
-// Delete removes a task schedule from the database.
 func (r *ScheduleRepository) Delete(ctx context.Context, id domain.ScheduleID) error {
-	query := `DELETE FROM task_schedules WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id.String())
+	query := `DELETE FROM task_schedules WHERE id = $1`
+	_, err := r.pool.Exec(ctx, query, id.String())
 	if err != nil {
 		return fmt.Errorf("delete schedule: %w", err)
 	}
 	return nil
-}
-
-// scanSchedule converts a database row into a domain TaskSchedule entity.
-func (r *ScheduleRepository) scanSchedule(row *sql.Row) (*domain.TaskSchedule, error) {
-	var id, name, taskType, cron, timezone string
-	var payload []byte
-	var lastRunAt, nextRunAt []byte
-	var isActive bool
-	var createdAt, updatedAt string
-
-	err := row.Scan(
-		&id, &name, &taskType, &payload, &cron, &timezone, &lastRunAt, &nextRunAt, &isActive, &createdAt, &updatedAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrScheduleNotFound
-		}
-		return nil, fmt.Errorf("scan schedule: %w", err)
-	}
-
-	var taskPayload domain.TaskPayload
-	if err := json.Unmarshal(payload, &taskPayload); err != nil {
-		return nil, fmt.Errorf("unmarshal payload: %w", err)
-	}
-
-	parsedType, _ := domain.ParseTaskType(taskType)
-
-	schedule, err := domain.NewTaskSchedule(name, parsedType, cron, taskPayload)
-	if err != nil {
-		return nil, err
-	}
-
-	if !isActive {
-		schedule.Deactivate()
-	}
-
-	return schedule, nil
-}
-
-// scanScheduleFromRows converts database rows into a domain TaskSchedule entity.
-func (r *ScheduleRepository) scanScheduleFromRows(rows *sql.Rows) (*domain.TaskSchedule, error) {
-	var id, name, taskType, cron, timezone string
-	var payload []byte
-	var lastRunAt, nextRunAt []byte
-	var isActive bool
-	var createdAt, updatedAt string
-
-	err := rows.Scan(
-		&id, &name, &taskType, &payload, &cron, &timezone, &lastRunAt, &nextRunAt, &isActive, &createdAt, &updatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("scan schedule: %w", err)
-	}
-
-	var taskPayload domain.TaskPayload
-	if err := json.Unmarshal(payload, &taskPayload); err != nil {
-		return nil, fmt.Errorf("unmarshal payload: %w", err)
-	}
-
-	parsedType, _ := domain.ParseTaskType(taskType)
-
-	schedule, err := domain.NewTaskSchedule(name, parsedType, cron, taskPayload)
-	if err != nil {
-		return nil, err
-	}
-
-	if !isActive {
-		schedule.Deactivate()
-	}
-
-	return schedule, nil
 }

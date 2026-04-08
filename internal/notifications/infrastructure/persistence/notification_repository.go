@@ -2,52 +2,24 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	identityDomain "github.com/basilex/skeleton/internal/identity/domain"
 	"github.com/basilex/skeleton/internal/notifications/domain"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// NotificationRepository implements the notification repository interface
-// using SQL database storage.
 type NotificationRepository struct {
-	db *sqlx.DB
+	pool *pgxpool.Pool
 }
 
-// NewNotificationRepository creates a new notification repository with the provided database connection.
-func NewNotificationRepository(db *sqlx.DB) *NotificationRepository {
-	return &NotificationRepository{db: db}
+func NewNotificationRepository(pool *pgxpool.Pool) *NotificationRepository {
+	return &NotificationRepository{pool: pool}
 }
 
-type notificationRow struct {
-	ID            string         `db:"id"`
-	UserID        sql.NullString `db:"user_id"`
-	Email         sql.NullString `db:"email"`
-	Phone         sql.NullString `db:"phone"`
-	DeviceToken   sql.NullString `db:"device_token"`
-	Channel       string         `db:"channel"`
-	Subject       sql.NullString `db:"subject"`
-	Content       string         `db:"content"`
-	HTMLContent   sql.NullString `db:"html_content"`
-	Status        string         `db:"status"`
-	Priority      string         `db:"priority"`
-	ScheduledAt   sql.NullString `db:"scheduled_at"`
-	SentAt        sql.NullString `db:"sent_at"`
-	DeliveredAt   sql.NullString `db:"delivered_at"`
-	FailedAt      sql.NullString `db:"failed_at"`
-	FailureReason sql.NullString `db:"failure_reason"`
-	Attempts      int            `db:"attempts"`
-	MaxAttempts   int            `db:"max_attempts"`
-	Metadata      sql.NullString `db:"metadata"`
-	CreatedAt     string         `db:"created_at"`
-	UpdatedAt     string         `db:"updated_at"`
-}
-
-// Create persists a new notification to the database.
 func (r *NotificationRepository) Create(ctx context.Context, notification *domain.Notification) error {
 	metadataJSON, err := json.Marshal(notification.Metadata())
 	if err != nil {
@@ -58,31 +30,28 @@ func (r *NotificationRepository) Create(ctx context.Context, notification *domai
 		INSERT INTO notifications (
 			id, user_id, email, phone, device_token, channel, subject, content, html_content,
 			status, priority, scheduled_at, attempts, max_attempts, metadata, created_at, updated_at
-		) VALUES (
-			:id, :user_id, :email, :phone, :device_token, :channel, :subject, :content, :html_content,
-			:status, :priority, :scheduled_at, :attempts, :max_attempts, :metadata, :created_at, :updated_at
-		)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`
 
-	_, err = r.db.NamedExecContext(ctx, query, map[string]interface{}{
-		"id":           notification.ID().String(),
-		"user_id":      nullStringFromUserID(notification.Recipient().UserID),
-		"email":        nullString(notification.Recipient().Email),
-		"phone":        nullString(notification.Recipient().Phone),
-		"device_token": nullString(notification.Recipient().DeviceToken),
-		"channel":      notification.Channel().String(),
-		"subject":      nullString(notification.Subject()),
-		"content":      notification.Content().Text,
-		"html_content": nullString(notification.Content().HTML),
-		"status":       notification.Status().String(),
-		"priority":     notification.Priority().String(),
-		"scheduled_at": nullTime(notification.ScheduledAt()),
-		"attempts":     notification.Attempts(),
-		"max_attempts": notification.MaxAttempts(),
-		"metadata":     string(metadataJSON),
-		"created_at":   notification.CreatedAt().Format(time.RFC3339),
-		"updated_at":   notification.UpdatedAt().Format(time.RFC3339),
-	})
+	_, err = r.pool.Exec(ctx, query,
+		notification.ID().String(),
+		nullStringFromUserID(notification.Recipient().UserID),
+		notification.Recipient().Email,
+		notification.Recipient().Phone,
+		notification.Recipient().DeviceToken,
+		notification.Channel().String(),
+		notification.Subject(),
+		notification.Content().Text,
+		notification.Content().HTML,
+		notification.Status().String(),
+		notification.Priority().String(),
+		notification.ScheduledAt(),
+		notification.Attempts(),
+		notification.MaxAttempts(),
+		string(metadataJSON),
+		notification.CreatedAt().Format(time.RFC3339),
+		notification.UpdatedAt().Format(time.RFC3339),
+	)
 
 	if err != nil {
 		return fmt.Errorf("create notification: %w", err)
@@ -91,7 +60,6 @@ func (r *NotificationRepository) Create(ctx context.Context, notification *domai
 	return nil
 }
 
-// Update modifies an existing notification in the database.
 func (r *NotificationRepository) Update(ctx context.Context, notification *domain.Notification) error {
 	metadataJSON, err := json.Marshal(notification.Metadata())
 	if err != nil {
@@ -100,30 +68,30 @@ func (r *NotificationRepository) Update(ctx context.Context, notification *domai
 
 	query := `
 		UPDATE notifications SET
-			status = :status,
-			sent_at = :sent_at,
-			delivered_at = :delivered_at,
-			failed_at = :failed_at,
-			failure_reason = :failure_reason,
-			attempts = :attempts,
-			scheduled_at = :scheduled_at,
-			metadata = :metadata,
-			updated_at = :updated_at
-		WHERE id = :id
+			status = $1,
+			sent_at = $2,
+			delivered_at = $3,
+			failed_at = $4,
+			failure_reason = $5,
+			attempts = $6,
+			scheduled_at = $7,
+			metadata = $8,
+			updated_at = $9
+		WHERE id = $10
 	`
 
-	_, err = r.db.NamedExecContext(ctx, query, map[string]interface{}{
-		"id":             notification.ID().String(),
-		"status":         notification.Status().String(),
-		"sent_at":        nullTime(notification.SentAt()),
-		"delivered_at":   nullTime(notification.DeliveredAt()),
-		"failed_at":      nullTime(notification.FailedAt()),
-		"failure_reason": nullString(notification.FailureReason()),
-		"attempts":       notification.Attempts(),
-		"scheduled_at":   nullTime(notification.ScheduledAt()),
-		"metadata":       string(metadataJSON),
-		"updated_at":     notification.UpdatedAt().Format(time.RFC3339),
-	})
+	_, err = r.pool.Exec(ctx, query,
+		notification.Status().String(),
+		notification.SentAt(),
+		notification.DeliveredAt(),
+		notification.FailedAt(),
+		notification.FailureReason(),
+		notification.Attempts(),
+		notification.ScheduledAt(),
+		string(metadataJSON),
+		notification.UpdatedAt().Format(time.RFC3339),
+		notification.ID().String(),
+	)
 
 	if err != nil {
 		return fmt.Errorf("update notification: %w", err)
@@ -132,238 +100,294 @@ func (r *NotificationRepository) Update(ctx context.Context, notification *domai
 	return nil
 }
 
-// GetByID retrieves a notification by its unique identifier.
-// Returns domain.ErrNotificationNotFound if no matching notification exists.
 func (r *NotificationRepository) GetByID(ctx context.Context, id domain.NotificationID) (*domain.Notification, error) {
-	var row notificationRow
-	err := r.db.GetContext(ctx, &row, `
+	query := `
 		SELECT id, user_id, email, phone, device_token, channel, subject, content, html_content,
 			   status, priority, scheduled_at, sent_at, delivered_at, failed_at, failure_reason,
 			   attempts, max_attempts, metadata, created_at, updated_at
-		FROM notifications WHERE id = ?
-	`, id.String())
+		FROM notifications WHERE id = $1
+	`
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrNotificationNotFound
-		}
-		return nil, fmt.Errorf("get notification by id: %w", err)
-	}
+	row := r.pool.QueryRow(ctx, query, id.String())
 
 	return r.scanNotification(row)
 }
 
-// GetByStatus retrieves notifications by status with a limit, ordered by priority and creation time.
 func (r *NotificationRepository) GetByStatus(ctx context.Context, status domain.Status, limit int) ([]*domain.Notification, error) {
-	var rows []notificationRow
-	err := r.db.SelectContext(ctx, &rows, `
+	query := `
 		SELECT id, user_id, email, phone, device_token, channel, subject, content, html_content,
 			   status, priority, scheduled_at, sent_at, delivered_at, failed_at, failure_reason,
 			   attempts, max_attempts, metadata, created_at, updated_at
 		FROM notifications
-		WHERE status = ?
+		WHERE status = $1
 		ORDER BY priority DESC, created_at ASC
-		LIMIT ?
-	`, status.String(), limit)
+		LIMIT $2
+	`
 
+	rows, err := r.pool.Query(ctx, query, status.String(), limit)
 	if err != nil {
 		return nil, fmt.Errorf("get notifications by status: %w", err)
 	}
+	defer rows.Close()
 
-	notifications := make([]*domain.Notification, len(rows))
-	for i, row := range rows {
-		n, err := r.scanNotification(row)
+	notifications := make([]*domain.Notification, 0)
+	for rows.Next() {
+		n, err := r.scanNotificationFromRows(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan notification: %w", err)
 		}
-		notifications[i] = n
+		notifications = append(notifications, n)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return notifications, nil
 }
 
-// GetPendingByUser retrieves all pending, queued, or sending notifications for a user.
 func (r *NotificationRepository) GetPendingByUser(ctx context.Context, userID string) ([]*domain.Notification, error) {
-	var rows []notificationRow
-	err := r.db.SelectContext(ctx, &rows, `
+	query := `
 		SELECT id, user_id, email, phone, device_token, channel, subject, content, html_content,
 			   status, priority, scheduled_at, sent_at, delivered_at, failed_at, failure_reason,
 			   attempts, max_attempts, metadata, created_at, updated_at
 		FROM notifications
-		WHERE user_id = ? AND status IN (?, ?, ?)
+		WHERE user_id = $1 AND status IN ($2, $3, $4)
 		ORDER BY created_at ASC
-	`, userID, domain.StatusPending, domain.StatusQueued, domain.StatusSending)
+	`
 
+	rows, err := r.pool.Query(ctx, query, userID, domain.StatusPending, domain.StatusQueued, domain.StatusSending)
 	if err != nil {
 		return nil, fmt.Errorf("get pending notifications by user: %w", err)
 	}
+	defer rows.Close()
 
-	notifications := make([]*domain.Notification, len(rows))
-	for i, row := range rows {
-		n, err := r.scanNotification(row)
+	notifications := make([]*domain.Notification, 0)
+	for rows.Next() {
+		n, err := r.scanNotificationFromRows(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan notification: %w", err)
 		}
-		notifications[i] = n
+		notifications = append(notifications, n)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return notifications, nil
 }
 
-// GetScheduled retrieves scheduled notifications ready to be sent.
 func (r *NotificationRepository) GetScheduled(ctx context.Context, before time.Time, limit int) ([]*domain.Notification, error) {
-	var rows []notificationRow
-	err := r.db.SelectContext(ctx, &rows, `
+	query := `
 		SELECT id, user_id, email, phone, device_token, channel, subject, content, html_content,
 			   status, priority, scheduled_at, sent_at, delivered_at, failed_at, failure_reason,
 			   attempts, max_attempts, metadata, created_at, updated_at
 		FROM notifications
-		WHERE status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?
+		WHERE status = $1 AND scheduled_at IS NOT NULL AND scheduled_at <= $2
 		ORDER BY scheduled_at ASC
-		LIMIT ?
-	`, domain.StatusPending, before.Format(time.RFC3339), limit)
+		LIMIT $3
+	`
 
+	rows, err := r.pool.Query(ctx, query, domain.StatusPending, before, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get scheduled notifications: %w", err)
 	}
+	defer rows.Close()
 
-	notifications := make([]*domain.Notification, len(rows))
-	for i, row := range rows {
-		n, err := r.scanNotification(row)
+	notifications := make([]*domain.Notification, 0)
+	for rows.Next() {
+		n, err := r.scanNotificationFromRows(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan notification: %w", err)
 		}
-		notifications[i] = n
+		notifications = append(notifications, n)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return notifications, nil
 }
 
-// GetStalled retrieves notifications stuck in sending status for too long.
 func (r *NotificationRepository) GetStalled(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Notification, error) {
 	cutoff := time.Now().Add(-olderThan)
-	var rows []notificationRow
-	err := r.db.SelectContext(ctx, &rows, `
+	query := `
 		SELECT id, user_id, email, phone, device_token, channel, subject, content, html_content,
 			   status, priority, scheduled_at, sent_at, delivered_at, failed_at, failure_reason,
 			   attempts, max_attempts, metadata, created_at, updated_at
 		FROM notifications
-		WHERE status = ? AND updated_at < ?
+		WHERE status = $1 AND updated_at < $2
 		ORDER BY updated_at ASC
-		LIMIT ?
-	`, domain.StatusSending, cutoff.Format(time.RFC3339), limit)
+		LIMIT $3
+	`
 
+	rows, err := r.pool.Query(ctx, query, domain.StatusSending, cutoff.Format(time.RFC3339), limit)
 	if err != nil {
 		return nil, fmt.Errorf("get stalled notifications: %w", err)
 	}
+	defer rows.Close()
 
-	notifications := make([]*domain.Notification, len(rows))
-	for i, row := range rows {
-		n, err := r.scanNotification(row)
+	notifications := make([]*domain.Notification, 0)
+	for rows.Next() {
+		n, err := r.scanNotificationFromRows(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan notification: %w", err)
 		}
-		notifications[i] = n
+		notifications = append(notifications, n)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
 	}
 
 	return notifications, nil
 }
 
-// Delete removes a notification from the database.
 func (r *NotificationRepository) Delete(ctx context.Context, id domain.NotificationID) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM notifications WHERE id = ?`, id.String())
+	_, err := r.pool.Exec(ctx, `DELETE FROM notifications WHERE id = $1`, id.String())
 	if err != nil {
 		return fmt.Errorf("delete notification: %w", err)
 	}
 	return nil
 }
 
-// DeleteCompleted removes completed (delivered or failed) notifications older than the specified duration.
-// Returns the number of notifications deleted.
 func (r *NotificationRepository) DeleteCompleted(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
-	result, err := r.db.ExecContext(ctx, `
+	result, err := r.pool.Exec(ctx, `
 		DELETE FROM notifications
-		WHERE status IN (?, ?) AND updated_at < ?
+		WHERE status IN ($1, $2) AND updated_at < $3
 	`, domain.StatusDelivered, domain.StatusFailed, cutoff.Format(time.RFC3339))
 	if err != nil {
 		return 0, fmt.Errorf("delete completed notifications: %w", err)
 	}
 
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("rows affected: %w", err)
-	}
-
-	return affected, nil
+	return result.RowsAffected(), nil
 }
 
-// scanNotification converts a database row into a domain Notification entity.
-func (r *NotificationRepository) scanNotification(row notificationRow) (*domain.Notification, error) {
-	recipient := domain.Recipient{}
-	if row.UserID.Valid {
-		userID := identityDomain.UserID(row.UserID.String)
-		recipient.UserID = &userID
-	}
-	if row.Email.Valid {
-		recipient.Email = row.Email.String
-	}
-	if row.Phone.Valid {
-		recipient.Phone = row.Phone.String
-	}
-	if row.DeviceToken.Valid {
-		recipient.DeviceToken = row.DeviceToken.String
+func (r *NotificationRepository) scanNotification(row pgx.Row) (*domain.Notification, error) {
+	var id, channel, content, status, priority string
+	var subject, htmlContent, failureReason *string
+	var userID, email, phone, deviceToken *string
+	var scheduledAt, sentAt, deliveredAt, failedAt *time.Time
+	var createdAt, updatedAt time.Time
+	var attempts, maxAttempts int
+	var metadataBytes []byte
+
+	err := row.Scan(
+		&id, &userID, &email, &phone, &deviceToken, &channel, &subject, &content, &htmlContent,
+		&status, &priority, &scheduledAt, &sentAt, &deliveredAt, &failedAt, &failureReason,
+		&attempts, &maxAttempts, &metadataBytes, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrNotificationNotFound
+		}
+		return nil, fmt.Errorf("scan notification: %w", err)
 	}
 
-	channel, err := domain.ParseChannel(row.Channel)
+	return r.reconstituteNotification(
+		id, userID, email, phone, deviceToken, channel, subject, content, htmlContent,
+		status, priority, scheduledAt, sentAt, deliveredAt, failedAt, failureReason,
+		attempts, maxAttempts, metadataBytes, createdAt, updatedAt,
+	)
+}
+
+func (r *NotificationRepository) scanNotificationFromRows(rows pgx.Rows) (*domain.Notification, error) {
+	var id, channel, content, status, priority string
+	var subject, htmlContent, failureReason *string
+	var userID, email, phone, deviceToken *string
+	var scheduledAt, sentAt, deliveredAt, failedAt *time.Time
+	var createdAt, updatedAt time.Time
+	var attempts, maxAttempts int
+	var metadataBytes []byte
+
+	err := rows.Scan(
+		&id, &userID, &email, &phone, &deviceToken, &channel, &subject, &content, &htmlContent,
+		&status, &priority, &scheduledAt, &sentAt, &deliveredAt, &failedAt, &failureReason,
+		&attempts, &maxAttempts, &metadataBytes, &createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("scan notification: %w", err)
+	}
+
+	return r.reconstituteNotification(
+		id, userID, email, phone, deviceToken, channel, subject, content, htmlContent,
+		status, priority, scheduledAt, sentAt, deliveredAt, failedAt, failureReason,
+		attempts, maxAttempts, metadataBytes, createdAt, updatedAt,
+	)
+}
+
+func (r *NotificationRepository) reconstituteNotification(
+	id string, userID, email, phone, deviceToken *string, channel string, subject *string,
+	content string, htmlContent *string, status, priority string,
+	scheduledAt, sentAt, deliveredAt, failedAt *time.Time, failureReason *string,
+	attempts, maxAttempts int, metadataBytes []byte, createdAt, updatedAt time.Time,
+) (*domain.Notification, error) {
+	recipient := domain.Recipient{}
+	if userID != nil {
+		uid, parseErr := identityDomain.ParseUserID(*userID)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse user id: %w", parseErr)
+		}
+		recipient.UserID = &uid
+	}
+	if email != nil {
+		recipient.Email = *email
+	}
+	if phone != nil {
+		recipient.Phone = *phone
+	}
+	if deviceToken != nil {
+		recipient.DeviceToken = *deviceToken
+	}
+
+	channelEnum, err := domain.ParseChannel(channel)
 	if err != nil {
 		return nil, fmt.Errorf("parse channel: %w", err)
 	}
 
-	content := domain.Content{Text: row.Content}
-	if row.HTMLContent.Valid {
-		content.HTML = row.HTMLContent.String
+	contentObj := domain.Content{Text: content}
+	if htmlContent != nil {
+		contentObj.HTML = *htmlContent
 	}
 
-	status, err := domain.ParseStatus(row.Status)
+	statusEnum, err := domain.ParseStatus(status)
 	if err != nil {
 		return nil, fmt.Errorf("parse status: %w", err)
 	}
 
-	priority, err := domain.ParsePriority(row.Priority)
+	priorityEnum, err := domain.ParsePriority(priority)
 	if err != nil {
 		return nil, fmt.Errorf("parse priority: %w", err)
 	}
 
 	metadata := make(map[string]string)
-	if row.Metadata.Valid && row.Metadata.String != "" {
-		if err := json.Unmarshal([]byte(row.Metadata.String), &metadata); err != nil {
+	if len(metadataBytes) > 0 {
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
 			return nil, fmt.Errorf("unmarshal metadata: %w", err)
 		}
 	}
 
 	opts := []domain.NotificationOption{
-		domain.WithMaxAttempts(row.MaxAttempts),
+		domain.WithMaxAttempts(maxAttempts),
 	}
-	if row.ScheduledAt.Valid {
-		t, err := time.Parse(time.RFC3339, row.ScheduledAt.String)
-		if err != nil {
-			return nil, fmt.Errorf("parse scheduled_at: %w", err)
-		}
-		opts = append(opts, domain.WithScheduledAt(t))
+	if scheduledAt != nil {
+		opts = append(opts, domain.WithScheduledAt(*scheduledAt))
 	}
 
-	var subject string
-	if row.Subject.Valid {
-		subject = row.Subject.String
+	var subj string
+	if subject != nil {
+		subj = *subject
 	}
 
 	notification, err := domain.NewNotification(
 		recipient,
-		channel,
-		subject,
-		content,
-		priority,
+		channelEnum,
+		subj,
+		contentObj,
+		priorityEnum,
 		opts...,
 	)
 	if err != nil {
@@ -376,11 +400,11 @@ func (r *NotificationRepository) scanNotification(row notificationRow) (*domain.
 		}
 	}
 
-	for i := 0; i < row.Attempts; i++ {
+	for i := 0; i < attempts; i++ {
 		notification.IncrementAttempts()
 	}
 
-	switch status {
+	switch statusEnum {
 	case domain.StatusQueued:
 		_ = notification.Queue()
 	case domain.StatusSending:
@@ -397,8 +421,8 @@ func (r *NotificationRepository) scanNotification(row notificationRow) (*domain.
 		_ = notification.MarkDelivered()
 	case domain.StatusFailed:
 		reason := ""
-		if row.FailureReason.Valid {
-			reason = row.FailureReason.String
+		if failureReason != nil {
+			reason = *failureReason
 		}
 		_ = notification.MarkFailed(reason)
 	}
@@ -406,26 +430,10 @@ func (r *NotificationRepository) scanNotification(row notificationRow) (*domain.
 	return notification, nil
 }
 
-// nullString converts a string to a sql.NullString for database storage.
-func nullString(s string) sql.NullString {
-	if s == "" {
-		return sql.NullString{Valid: false}
-	}
-	return sql.NullString{String: s, Valid: true}
-}
-
-// nullStringFromUserID converts a user ID pointer to a sql.NullString for database storage.
-func nullStringFromUserID(userID *identityDomain.UserID) sql.NullString {
+func nullStringFromUserID(userID *identityDomain.UserID) *string {
 	if userID == nil {
-		return sql.NullString{Valid: false}
+		return nil
 	}
-	return sql.NullString{String: string(*userID), Valid: true}
-}
-
-// nullTime converts a time pointer to a sql.NullString for database storage.
-func nullTime(t *time.Time) sql.NullString {
-	if t == nil {
-		return sql.NullString{Valid: false}
-	}
-	return sql.NullString{String: t.Format(time.RFC3339), Valid: true}
+	uid := userID.String()
+	return &uid
 }

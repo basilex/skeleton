@@ -2,36 +2,56 @@ package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/basilex/skeleton/internal/tasks/domain"
+	"github.com/georgysavva/scany/v2/pgxscan"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// TaskRepository implements the task repository interface using SQL database storage.
 type TaskRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
+	psql sq.StatementBuilderType
 }
 
-// NewTaskRepository creates a new task repository with the provided database connection.
-func NewTaskRepository(db *sql.DB) *TaskRepository {
-	return &TaskRepository{db: db}
+func NewTaskRepository(pool *pgxpool.Pool) *TaskRepository {
+	return &TaskRepository{
+		pool: pool,
+		psql: sq.StatementBuilder.PlaceholderFormat(sq.Dollar),
+	}
 }
 
-// Create persists a new task to the database.
+type taskDTO struct {
+	ID           string     `db:"id"`
+	Type         string     `db:"type"`
+	Status       string     `db:"status"`
+	Priority     string     `db:"priority"`
+	Payload      []byte     `db:"payload"`
+	Result       []byte     `db:"result"`
+	ErrorCode    string     `db:"error_code"`
+	ErrorMessage string     `db:"error_message"`
+	ErrorDetails []byte     `db:"error_details"`
+	Attempts     int        `db:"attempts"`
+	MaxAttempts  int        `db:"max_attempts"`
+	ScheduledAt  time.Time  `db:"scheduled_at"`
+	StartedAt    *time.Time `db:"started_at"`
+	CompletedAt  *time.Time `db:"completed_at"`
+	CreatedAt    time.Time  `db:"created_at"`
+	UpdatedAt    time.Time  `db:"updated_at"`
+}
+
 func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	payload, err := json.Marshal(task.Payload())
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
 	}
 
-	var result *domain.TaskResult
 	var resultJSON []byte
 	if task.Result() != nil {
-		result = task.Result()
-		resultJSON, err = json.Marshal(result)
+		resultJSON, err = json.Marshal(task.Result())
 		if err != nil {
 			return fmt.Errorf("marshal result: %w", err)
 		}
@@ -41,64 +61,36 @@ func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	var errorJSON []byte
 	if task.Error() != nil {
 		taskError = task.Error()
-		errorJSON, err = json.Marshal(taskError)
+		errorJSON, err = json.Marshal(taskError.Details)
 		if err != nil {
-			return fmt.Errorf("marshal error: %w", err)
+			return fmt.Errorf("marshal error details: %w", err)
 		}
-	}
-
-	query := `
-		INSERT INTO tasks (
-			id, type, status, priority, payload, result, error_code, error_message, error_details,
-			attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`
-
-	var startedAt, completedAt interface{}
-	if task.StartedAt() != nil {
-		startedAt = task.StartedAt().Format(time.RFC3339)
-	}
-	if task.CompletedAt() != nil {
-		completedAt = task.CompletedAt().Format(time.RFC3339)
 	}
 
 	errorCode := ""
 	errorMessage := ""
-	errorDetails := errorJSON
 	if taskError != nil {
 		errorCode = taskError.Code
 		errorMessage = taskError.Message
 	}
 
-	var resultBytes interface{}
-	if resultJSON != nil {
-		resultBytes = resultJSON
+	query, args, err := r.psql.Insert("tasks").
+		Columns("id", "type", "status", "priority", "payload", "result",
+			"error_code", "error_message", "error_details",
+			"attempts", "max_attempts", "scheduled_at", "started_at",
+			"completed_at", "created_at", "updated_at").
+		Values(task.ID().String(), task.Type().String(), task.Status().String(),
+			task.Priority().String(), payload, resultJSON,
+			errorCode, errorMessage, errorJSON,
+			task.Attempts(), task.MaxAttempts(), task.ScheduledAt(),
+			task.StartedAt(), task.CompletedAt(),
+			task.CreatedAt(), task.UpdatedAt()).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build insert query: %w", err)
 	}
 
-	var errorBytes interface{}
-	if errorDetails != nil {
-		errorBytes = errorDetails
-	}
-
-	_, err = r.db.ExecContext(ctx, query,
-		task.ID().String(),
-		task.Type().String(),
-		task.Status().String(),
-		task.Priority().String(),
-		payload,
-		resultBytes,
-		errorCode,
-		errorMessage,
-		errorBytes,
-		task.Attempts(),
-		task.MaxAttempts(),
-		task.ScheduledAt().Format(time.RFC3339),
-		startedAt,
-		completedAt,
-		task.CreatedAt().Format(time.RFC3339),
-		task.UpdatedAt().Format(time.RFC3339),
-	)
-
+	_, err = r.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("insert task: %w", err)
 	}
@@ -106,7 +98,6 @@ func (r *TaskRepository) Create(ctx context.Context, task *domain.Task) error {
 	return nil
 }
 
-// Update modifies an existing task in the database.
 func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 	payload, err := json.Marshal(task.Payload())
 	if err != nil {
@@ -133,57 +124,26 @@ func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 		}
 	}
 
-	var startedAt, completedAt interface{}
-	if task.StartedAt() != nil {
-		startedAt = task.StartedAt().Format(time.RFC3339)
+	query, args, err := r.psql.Update("tasks").
+		Set("status", task.Status().String()).
+		Set("priority", task.Priority().String()).
+		Set("payload", payload).
+		Set("result", resultJSON).
+		Set("error_code", errorCode).
+		Set("error_message", errorMessage).
+		Set("error_details", errorJSON).
+		Set("attempts", task.Attempts()).
+		Set("scheduled_at", task.ScheduledAt()).
+		Set("started_at", task.StartedAt()).
+		Set("completed_at", task.CompletedAt()).
+		Set("updated_at", task.UpdatedAt()).
+		Where(sq.Eq{"id": task.ID().String()}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build update query: %w", err)
 	}
-	if task.CompletedAt() != nil {
-		completedAt = task.CompletedAt().Format(time.RFC3339)
-	}
 
-	var resultBytes interface{}
-	if resultJSON != nil {
-		resultBytes = resultJSON
-	}
-
-	var errorBytes interface{}
-	if errorJSON != nil {
-		errorBytes = errorJSON
-	}
-
-	query := `
-		UPDATE tasks SET
-			status = ?,
-			priority = ?,
-			payload = ?,
-			result = ?,
-			error_code = ?,
-			error_message = ?,
-			error_details = ?,
-			attempts = ?,
-			scheduled_at = ?,
-			started_at = ?,
-			completed_at = ?,
-			updated_at = ?
-		WHERE id = ?
-	`
-
-	_, err = r.db.ExecContext(ctx, query,
-		task.Status().String(),
-		task.Priority().String(),
-		payload,
-		resultBytes,
-		errorCode,
-		errorMessage,
-		errorBytes,
-		task.Attempts(),
-		task.ScheduledAt().Format(time.RFC3339),
-		startedAt,
-		completedAt,
-		task.UpdatedAt().Format(time.RFC3339),
-		task.ID().String(),
-	)
-
+	_, err = r.pool.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("update task: %w", err)
 	}
@@ -191,203 +151,164 @@ func (r *TaskRepository) Update(ctx context.Context, task *domain.Task) error {
 	return nil
 }
 
-// GetByID retrieves a task by its unique identifier.
-// Returns domain.ErrTaskNotFound if no matching task exists.
 func (r *TaskRepository) GetByID(ctx context.Context, id domain.TaskID) (*domain.Task, error) {
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dto taskDTO
+	err := pgxscan.Get(ctx, r.pool, &dto,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
-		FROM tasks WHERE id = ?
-	`
-
-	row := r.db.QueryRowContext(ctx, query, id.String())
-
-	var taskID, taskType, status, priority string
-	var payload, resultJSON, errorCode, errorMessage, errorDetails []byte
-	var startedAt, completedAt []byte
-	var attempts, maxAttempts int
-	var scheduledAt, createdAt, updatedAt string
-
-	err := row.Scan(
-		&taskID, &taskType, &status, &priority, &payload, &resultJSON, &errorCode, &errorMessage, &errorDetails,
-		&attempts, &maxAttempts, &scheduledAt, &startedAt, &completedAt, &createdAt, &updatedAt,
-	)
+		FROM tasks WHERE id = $1`,
+		id.String())
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrTaskNotFound
-		}
-		return nil, fmt.Errorf("scan task: %w", err)
+		return nil, fmt.Errorf("get task: %w", err)
 	}
 
-	var taskPayload domain.TaskPayload
-	if err := json.Unmarshal(payload, &taskPayload); err != nil {
-		return nil, fmt.Errorf("unmarshal payload: %w", err)
-	}
-
-	parsedType, _ := domain.ParseTaskType(taskType)
-
-	task, err := domain.NewTask(parsedType, taskPayload)
-	if err != nil {
-		return nil, err
-	}
-
-	return task, nil
+	return r.dtoToDomain(dto)
 }
 
-// GetPendingTasks retrieves tasks that are ready for execution, ordered by priority.
 func (r *TaskRepository) GetPendingTasks(ctx context.Context, limit int) ([]*domain.Task, error) {
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dtos []taskDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
 		FROM tasks
-		WHERE status = ? AND scheduled_at <= ?
+		WHERE status = $1 AND scheduled_at <= $2
 		ORDER BY priority DESC, created_at ASC
-		LIMIT ?
-	`
+		LIMIT $3`,
+		domain.TaskStatusPending, time.Now(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
 
-	return r.getTasksByQuery(ctx, query, domain.TaskStatusPending, time.Now().Format(time.RFC3339), limit)
+	return r.dtosToDomains(dtos)
 }
 
-// GetTasksByStatus retrieves tasks by status with a limit.
 func (r *TaskRepository) GetTasksByStatus(ctx context.Context, status domain.TaskStatus, limit int) ([]*domain.Task, error) {
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dtos []taskDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
 		FROM tasks
-		WHERE status = ?
+		WHERE status = $1
 		ORDER BY created_at DESC
-		LIMIT ?
-	`
+		LIMIT $2`,
+		status.String(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
 
-	return r.getTasksByQuery(ctx, query, status.String(), limit)
+	return r.dtosToDomains(dtos)
 }
 
-// GetTasksByType retrieves tasks by type with a limit.
 func (r *TaskRepository) GetTasksByType(ctx context.Context, taskType domain.TaskType, limit int) ([]*domain.Task, error) {
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dtos []taskDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
 		FROM tasks
-		WHERE type = ?
+		WHERE type = $1
 		ORDER BY created_at DESC
-		LIMIT ?
-	`
+		LIMIT $2`,
+		taskType.String(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
 
-	return r.getTasksByQuery(ctx, query, taskType.String(), limit)
+	return r.dtosToDomains(dtos)
 }
 
-// GetScheduledTasks retrieves tasks scheduled for execution before the specified time.
 func (r *TaskRepository) GetScheduledTasks(ctx context.Context, before time.Time, limit int) ([]*domain.Task, error) {
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dtos []taskDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
 		FROM tasks
-		WHERE status = ? AND scheduled_at <= ?
+		WHERE status = $1 AND scheduled_at <= $2
 		ORDER BY scheduled_at ASC
-		LIMIT ?
-	`
+		LIMIT $3`,
+		domain.TaskStatusPending, before, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
 
-	return r.getTasksByQuery(ctx, query, domain.TaskStatusPending, before.Format(time.RFC3339), limit)
+	return r.dtosToDomains(dtos)
 }
 
-// GetActiveTasks retrieves all currently running tasks.
 func (r *TaskRepository) GetActiveTasks(ctx context.Context) ([]*domain.Task, error) {
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dtos []taskDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
 		FROM tasks
-		WHERE status = ?
-		ORDER BY started_at ASC
-	`
+		WHERE status = $1
+		ORDER BY started_at ASC`,
+		domain.TaskStatusRunning)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
 
-	tasks, err := r.getTasksByQuery(ctx, query, domain.TaskStatusRunning, 1000)
-	return tasks, err
+	return r.dtosToDomains(dtos)
 }
 
-// GetStalledTasks retrieves tasks that have been running longer than the specified duration.
 func (r *TaskRepository) GetStalledTasks(ctx context.Context, olderThan time.Duration, limit int) ([]*domain.Task, error) {
 	cutoff := time.Now().Add(-olderThan)
-	query := `
-		SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
+	var dtos []taskDTO
+	err := pgxscan.Select(ctx, r.pool, &dtos,
+		`SELECT id, type, status, priority, payload, result, error_code, error_message, error_details,
 			   attempts, max_attempts, scheduled_at, started_at, completed_at, created_at, updated_at
 		FROM tasks
-		WHERE status = ? AND started_at < ?
+		WHERE status = $1 AND started_at < $2
 		ORDER BY started_at ASC
-		LIMIT ?
-	`
+		LIMIT $3`,
+		domain.TaskStatusRunning, cutoff, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query tasks: %w", err)
+	}
 
-	return r.getTasksByQuery(ctx, query, domain.TaskStatusRunning, cutoff.Format(time.RFC3339), limit)
+	return r.dtosToDomains(dtos)
 }
 
-// Delete removes a task from the database.
 func (r *TaskRepository) Delete(ctx context.Context, id domain.TaskID) error {
-	query := `DELETE FROM tasks WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id.String())
+	_, err := r.pool.Exec(ctx, `DELETE FROM tasks WHERE id = $1`, id.String())
 	if err != nil {
 		return fmt.Errorf("delete task: %w", err)
 	}
 	return nil
 }
 
-// DeleteCompletedTasks removes completed tasks older than the specified duration.
-// Returns the number of tasks deleted.
 func (r *TaskRepository) DeleteCompletedTasks(ctx context.Context, olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan)
-	query := `DELETE FROM tasks WHERE status = ? AND completed_at < ?`
-	result, err := r.db.ExecContext(ctx, query, domain.TaskStatusCompleted, cutoff.Format(time.RFC3339))
+	result, err := r.pool.Exec(ctx, `DELETE FROM tasks WHERE status = $1 AND completed_at < $2`,
+		domain.TaskStatusCompleted, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("delete completed tasks: %w", err)
 	}
-	return result.RowsAffected()
+	return result.RowsAffected(), nil
 }
 
-// getTasksByQuery executes a query and returns the resulting tasks.
-func (r *TaskRepository) getTasksByQuery(ctx context.Context, query string, args ...interface{}) ([]*domain.Task, error) {
-	rows, err := r.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("query tasks: %w", err)
-	}
-	defer rows.Close()
-
-	var tasks []*domain.Task
-	for rows.Next() {
-		task, err := r.scanTask(rows)
-		if err != nil {
-			return nil, err
-		}
-		tasks = append(tasks, task)
-	}
-
-	return tasks, nil
-}
-
-// scanTask converts database rows into a domain Task entity.
-func (r *TaskRepository) scanTask(rows *sql.Rows) (*domain.Task, error) {
-	var taskID, taskType, status, priority string
-	var payload, resultJSON, errorCode, errorMessage, errorDetails []byte
-	var startedAt, completedAt []byte
-	var attempts, maxAttempts int
-	var scheduledAt, createdAt, updatedAt string
-
-	err := rows.Scan(
-		&taskID, &taskType, &status, &priority, &payload, &resultJSON, &errorCode, &errorMessage, &errorDetails,
-		&attempts, &maxAttempts, &scheduledAt, &startedAt, &completedAt, &createdAt, &updatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("scan task: %w", err)
-	}
-
-	var taskPayload domain.TaskPayload
-	if err := json.Unmarshal(payload, &taskPayload); err != nil {
+func (r *TaskRepository) dtoToDomain(dto taskDTO) (*domain.Task, error) {
+	var payload domain.TaskPayload
+	if err := json.Unmarshal(dto.Payload, &payload); err != nil {
 		return nil, fmt.Errorf("unmarshal payload: %w", err)
 	}
 
-	parsedType, _ := domain.ParseTaskType(taskType)
+	parsedType, _ := domain.ParseTaskType(dto.Type)
 
-	task, err := domain.NewTask(parsedType, taskPayload)
+	task, err := domain.NewTask(parsedType, payload)
 	if err != nil {
 		return nil, err
 	}
 
 	return task, nil
+}
+
+func (r *TaskRepository) dtosToDomains(dtos []taskDTO) ([]*domain.Task, error) {
+	tasks := make([]*domain.Task, 0, len(dtos))
+	for _, dto := range dtos {
+		task, err := r.dtoToDomain(dto)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, nil
 }

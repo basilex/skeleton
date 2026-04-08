@@ -1,58 +1,36 @@
-// Package persistence provides database repository implementations for the notifications domain.
-// This package contains SQLite-based repositories for notifications, templates, and preferences.
 package persistence
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 
 	identityDomain "github.com/basilex/skeleton/internal/identity/domain"
 	"github.com/basilex/skeleton/internal/notifications/domain"
-	"github.com/jmoiron/sqlx"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// PreferencesRepository implements the notification preferences repository interface
-// using SQL database storage.
 type PreferencesRepository struct {
-	db *sqlx.DB
+	pool *pgxpool.Pool
 }
 
-// NewPreferencesRepository creates a new preferences repository with the provided database connection.
-func NewPreferencesRepository(db *sqlx.DB) *PreferencesRepository {
-	return &PreferencesRepository{db: db}
+func NewPreferencesRepository(pool *pgxpool.Pool) *PreferencesRepository {
+	return &PreferencesRepository{pool: pool}
 }
 
-type preferencesRow struct {
-	ID          string `db:"id"`
-	UserID      string `db:"user_id"`
-	Preferences string `db:"preferences"`
-	CreatedAt   string `db:"created_at"`
-	UpdatedAt   string `db:"updated_at"`
-}
-
-// GetByUserID retrieves notification preferences for a specific user.
-// Returns domain.ErrPreferencesNotFound if no preferences exist.
 func (r *PreferencesRepository) GetByUserID(ctx context.Context, userID string) (*domain.NotificationPreferences, error) {
-	var row preferencesRow
-	err := r.db.GetContext(ctx, &row, `
+	query := `
 		SELECT id, user_id, preferences, created_at, updated_at
-		FROM notification_preferences
-		WHERE user_id = ?
-	`, userID)
+		FROM notification_preference
+		WHERE user_id = $1
+	`
 
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, domain.ErrPreferencesNotFound
-		}
-		return nil, fmt.Errorf("get preferences by user id: %w", err)
-	}
+	row := r.pool.QueryRow(ctx, query, userID)
 
 	return r.scanPreferences(row)
 }
 
-// Upsert creates or updates notification preferences for a user.
 func (r *PreferencesRepository) Upsert(ctx context.Context, preferences *domain.NotificationPreferences) error {
 	preferencesJSON, err := r.marshalPreferences(preferences)
 	if err != nil {
@@ -60,20 +38,20 @@ func (r *PreferencesRepository) Upsert(ctx context.Context, preferences *domain.
 	}
 
 	query := `
-		INSERT INTO notification_preferences (id, user_id, preferences, created_at, updated_at)
-		VALUES (:id, :user_id, :preferences, :created_at, :updated_at)
+		INSERT INTO notification_preference (id, user_id, preferences, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT(user_id) DO UPDATE SET
-			preferences = excluded.preferences,
-			updated_at = excluded.updated_at
+			preferences = EXCLUDED.preferences,
+			updated_at = EXCLUDED.updated_at
 	`
 
-	_, err = r.db.NamedExecContext(ctx, query, map[string]interface{}{
-		"id":          preferences.ID().String(),
-		"user_id":     string(preferences.UserID()),
-		"preferences": preferencesJSON,
-		"created_at":  preferences.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		"updated_at":  preferences.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-	})
+	_, err = r.pool.Exec(ctx, query,
+		preferences.ID().String(),
+		preferences.UserID().String(),
+		preferencesJSON,
+		preferences.CreatedAt(),
+		preferences.UpdatedAt(),
+	)
 
 	if err != nil {
 		return fmt.Errorf("upsert preferences: %w", err)
@@ -82,19 +60,32 @@ func (r *PreferencesRepository) Upsert(ctx context.Context, preferences *domain.
 	return nil
 }
 
-// Delete removes notification preferences for a user.
 func (r *PreferencesRepository) Delete(ctx context.Context, userID string) error {
-	_, err := r.db.ExecContext(ctx, `DELETE FROM notification_preferences WHERE user_id = ?`, userID)
+	_, err := r.pool.Exec(ctx, `DELETE FROM notification_preference WHERE user_id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("delete preferences: %w", err)
 	}
 	return nil
 }
 
-// scanPreferences converts a database row into a domain NotificationPreferences entity.
-func (r *PreferencesRepository) scanPreferences(row preferencesRow) (*domain.NotificationPreferences, error) {
-	userID := identityDomain.UserID(row.UserID)
-	preferences := domain.NewNotificationPreferences(userID)
+func (r *PreferencesRepository) scanPreferences(row pgx.Row) (*domain.NotificationPreferences, error) {
+	var id, userID string
+	var preferencesBytes []byte
+	var createdAt, updatedAt string
+
+	err := row.Scan(&id, &userID, &preferencesBytes, &createdAt, &updatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, domain.ErrPreferencesNotFound
+		}
+		return nil, fmt.Errorf("scan preferences: %w", err)
+	}
+
+	uid, err := identityDomain.ParseUserID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("parse user id: %w", err)
+	}
+	preferences := domain.NewNotificationPreferences(uid)
 
 	var data struct {
 		Channels map[string]struct {
@@ -108,7 +99,7 @@ func (r *PreferencesRepository) scanPreferences(row preferencesRow) (*domain.Not
 		} `json:"channels"`
 	}
 
-	if err := json.Unmarshal([]byte(row.Preferences), &data); err != nil {
+	if err := json.Unmarshal(preferencesBytes, &data); err != nil {
 		return nil, fmt.Errorf("unmarshal preferences: %w", err)
 	}
 
@@ -139,7 +130,6 @@ func (r *PreferencesRepository) scanPreferences(row preferencesRow) (*domain.Not
 	return preferences, nil
 }
 
-// marshalPreferences serializes preferences to JSON for storage.
 func (r *PreferencesRepository) marshalPreferences(preferences *domain.NotificationPreferences) (string, error) {
 	data := struct {
 		Channels map[string]struct {
