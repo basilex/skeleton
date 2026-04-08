@@ -7,6 +7,7 @@ import (
 
 	"github.com/basilex/skeleton/internal/invoicing/domain"
 	orderingDomain "github.com/basilex/skeleton/internal/ordering/domain"
+	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
 type OrderEventHandler struct {
@@ -53,13 +54,11 @@ func (h *OrderEventHandler) HandleOrderConfirmed(ctx context.Context, event orde
 	return nil
 }
 
-func (h *OrderEventHandler) Register(bus interface {
-	Subscribe(eventName string, handler interface{})
-}) {
+func (h *OrderEventHandler) Register(bus eventbus.Bus) {
 	bus.Subscribe("ordering.order_confirmed", h.handleOrderConfirmed)
 }
 
-func (h *OrderEventHandler) handleOrderConfirmed(ctx context.Context, event interface{}) error {
+func (h *OrderEventHandler) handleOrderConfirmed(ctx context.Context, event eventbus.Event) error {
 	e, ok := event.(orderingDomain.OrderConfirmed)
 	if !ok {
 		return fmt.Errorf("invalid event type: expected OrderConfirmed")

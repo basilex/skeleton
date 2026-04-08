@@ -20,11 +20,24 @@ import (
 	"fmt"
 	"time"
 
+	accountingCommand "github.com/basilex/skeleton/internal/accounting/application/command"
+	accountingQuery "github.com/basilex/skeleton/internal/accounting/application/query"
+	accountingEventHandler "github.com/basilex/skeleton/internal/accounting/infrastructure/eventhandler"
+	accountingPersistence "github.com/basilex/skeleton/internal/accounting/infrastructure/persistence"
+	accountingHTTP "github.com/basilex/skeleton/internal/accounting/ports/http"
 	auditCommand "github.com/basilex/skeleton/internal/audit/application/command"
 	auditQuery "github.com/basilex/skeleton/internal/audit/application/query"
 	auditEventHandler "github.com/basilex/skeleton/internal/audit/infrastructure/eventhandler"
 	auditPersistence "github.com/basilex/skeleton/internal/audit/infrastructure/persistence"
 	auditHTTP "github.com/basilex/skeleton/internal/audit/ports/http"
+	catalogCommand "github.com/basilex/skeleton/internal/catalog/application/command"
+	catalogQuery "github.com/basilex/skeleton/internal/catalog/application/query"
+	catalogPersistence "github.com/basilex/skeleton/internal/catalog/infrastructure/persistence"
+	catalogHTTP "github.com/basilex/skeleton/internal/catalog/ports/http"
+	documentsCommand "github.com/basilex/skeleton/internal/documents/application/command"
+	documentsQuery "github.com/basilex/skeleton/internal/documents/application/query"
+	documentsPersistence "github.com/basilex/skeleton/internal/documents/infrastructure/persistence"
+	documentsHTTP "github.com/basilex/skeleton/internal/documents/ports/http"
 	filesCommand "github.com/basilex/skeleton/internal/files/application/command"
 	filesQuery "github.com/basilex/skeleton/internal/files/application/query"
 	filesHandler "github.com/basilex/skeleton/internal/files/infrastructure/handler"
@@ -39,6 +52,16 @@ import (
 	"github.com/basilex/skeleton/internal/identity/infrastructure/session"
 	"github.com/basilex/skeleton/internal/identity/infrastructure/token"
 	identityHTTP "github.com/basilex/skeleton/internal/identity/ports/http"
+	inventoryCommand "github.com/basilex/skeleton/internal/inventory/application/command"
+	inventoryQuery "github.com/basilex/skeleton/internal/inventory/application/query"
+	inventoryEventHandler "github.com/basilex/skeleton/internal/inventory/infrastructure/eventhandler"
+	inventoryPersistence "github.com/basilex/skeleton/internal/inventory/infrastructure/persistence"
+	inventoryHTTP "github.com/basilex/skeleton/internal/inventory/ports/http"
+	invoicingCommand "github.com/basilex/skeleton/internal/invoicing/application/command"
+	invoicingQuery "github.com/basilex/skeleton/internal/invoicing/application/query"
+	invoicingEventHandler "github.com/basilex/skeleton/internal/invoicing/infrastructure/eventhandler"
+	invoicingPersistence "github.com/basilex/skeleton/internal/invoicing/infrastructure/persistence"
+	invoicingHTTP "github.com/basilex/skeleton/internal/invoicing/ports/http"
 	notificationCommand "github.com/basilex/skeleton/internal/notifications/application/command"
 	notificationEventHandler "github.com/basilex/skeleton/internal/notifications/application/eventhandler"
 	notificationQuery "github.com/basilex/skeleton/internal/notifications/application/query"
@@ -46,6 +69,14 @@ import (
 	"github.com/basilex/skeleton/internal/notifications/infrastructure/sender"
 	"github.com/basilex/skeleton/internal/notifications/infrastructure/worker"
 	notificationHTTP "github.com/basilex/skeleton/internal/notifications/ports/http"
+	orderingCommand "github.com/basilex/skeleton/internal/ordering/application/command"
+	orderingQuery "github.com/basilex/skeleton/internal/ordering/application/query"
+	orderingPersistence "github.com/basilex/skeleton/internal/ordering/infrastructure/persistence"
+	orderingHTTP "github.com/basilex/skeleton/internal/ordering/ports/http"
+	partiesCommand "github.com/basilex/skeleton/internal/parties/application/command"
+	partiesQuery "github.com/basilex/skeleton/internal/parties/application/query"
+	partiesPersistence "github.com/basilex/skeleton/internal/parties/infrastructure/persistence"
+	partiesHTTP "github.com/basilex/skeleton/internal/parties/ports/http"
 	"github.com/basilex/skeleton/internal/status/application/query"
 	statusDomain "github.com/basilex/skeleton/internal/status/domain"
 	statusHTTP "github.com/basilex/skeleton/internal/status/ports/http"
@@ -128,10 +159,30 @@ type Dependencies struct {
 	NotificationWorker *worker.NotificationWorker
 	// NotificationEventHandler processes identity events for automatic notifications.
 	NotificationEventHandler *notificationEventHandler.IdentityEventHandler
+	// PartiesHandler handles party management endpoints (customers, suppliers, partners, employees).
+	PartiesHandler *partiesHTTP.Handler
+	// AccountingHandler handles accounting endpoints (accounts, transactions).
+	AccountingHandler *accountingHTTP.Handler
+	// OrderingHandler handles ordering endpoints (orders, quotes).
+	OrderingHandler *orderingHTTP.Handler
+	// CatalogHandler handles catalog endpoints (items, categories).
+	CatalogHandler *catalogHTTP.Handler
+	// InvoicingHandler handles invoicing endpoints (invoices, payments).
+	InvoicingHandler *invoicingHTTP.Handler
+	// DocumentsHandler handles documents endpoints (PDF generation, signatures).
+	DocumentsHandler *documentsHTTP.Handler
+	// InventoryHandler handles inventory endpoints (warehouses, stock, movements).
+	InventoryHandler *inventoryHTTP.Handler
 	// FilesHandler handles all file-related HTTP endpoints.
 	FilesHandler *filesHTTP.Handler
 	// ProcessFileHandler handles file processing tasks.
 	ProcessFileHandler *filesHandler.ProcessFileHandler
+	// InventoryOrderEventHandler handles order events for inventory management (stock reservations).
+	InventoryOrderEventHandler *inventoryEventHandler.OrderEventHandler
+	// InvoicingOrderEventHandler handles order events for automatic invoice creation.
+	InvoicingOrderEventHandler *invoicingEventHandler.OrderEventHandler
+	// AccountingInvoiceEventHandler handles invoice events for automatic journal entries.
+	AccountingInvoiceEventHandler *accountingEventHandler.InvoiceEventHandler
 }
 
 // wireDependencies constructs the complete dependency graph for the application.
@@ -289,6 +340,197 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 		listTemplatesHandler,
 	)
 
+	// Parties Bounded Context
+	// Initialize repositories for parties persistence.
+	customerRepo := partiesPersistence.NewCustomerRepository(pool)
+	supplierRepo := partiesPersistence.NewSupplierRepository(pool)
+	// TODO: Add partner and employee when handlers are implemented
+	// partnerRepo := partiesPersistence.NewPartnerRepository(pool)
+	// employeeRepo := partiesPersistence.NewEmployeeRepository(pool)
+
+	// Initialize command handlers for parties use cases.
+	createCustomerHandler := partiesCommand.NewCreateCustomerHandler(customerRepo, bus)
+	updateCustomerHandler := partiesCommand.NewUpdateCustomerHandler(customerRepo)
+	createSupplierHandler := partiesCommand.NewCreateSupplierHandler(supplierRepo, bus)
+	// Initialize query handlers for parties use cases.
+	getCustomerHandler := partiesQuery.NewGetCustomerHandler(customerRepo)
+	listCustomersHandler := partiesQuery.NewListCustomersHandler(customerRepo)
+	getSupplierHandler := partiesQuery.NewGetSupplierHandler(supplierRepo)
+	listSuppliersHandler := partiesQuery.NewListSuppliersHandler(supplierRepo)
+
+	// Initialize HTTP handler for parties endpoints.
+	partiesHandler := partiesHTTP.NewHandler(
+		createCustomerHandler,
+		updateCustomerHandler,
+		getCustomerHandler,
+		listCustomersHandler,
+		createSupplierHandler,
+		getSupplierHandler,
+		listSuppliersHandler,
+	)
+
+	// Accounting Bounded Context
+	// Initialize repositories for accounting persistence.
+	accountRepo := accountingPersistence.NewAccountRepository(pool)
+	transactionRepo := accountingPersistence.NewTransactionRepository(pool)
+
+	// Initialize command handlers for accounting use cases.
+	createAccountHandler := accountingCommand.NewCreateAccountHandler(accountRepo, bus)
+	recordTransactionHandler := accountingCommand.NewRecordTransactionHandler(accountRepo, transactionRepo, bus)
+	// Initialize query handlers for accounting use cases.
+	getAccountHandler := accountingQuery.NewGetAccountHandler(accountRepo)
+	listAccountsHandler := accountingQuery.NewListAccountsHandler(accountRepo)
+
+	// Initialize HTTP handler for accounting endpoints.
+	accountingHandler := accountingHTTP.NewHandler(
+		createAccountHandler,
+		recordTransactionHandler,
+		getAccountHandler,
+		listAccountsHandler,
+	)
+
+	// Invoicing Bounded Context
+	// Initialize repositories for invoicing persistence.
+	invoiceRepo := invoicingPersistence.NewInvoiceRepository(pool)
+
+	// Initialize command handlers for invoicing use cases.
+	createInvoiceHandler := invoicingCommand.NewCreateInvoiceHandler(invoiceRepo, bus)
+	addInvoiceLineHandler := invoicingCommand.NewAddInvoiceLineHandler(invoiceRepo)
+	sendInvoiceHandler := invoicingCommand.NewSendInvoiceHandler(invoiceRepo, bus)
+	recordPaymentHandler := invoicingCommand.NewRecordPaymentHandler(invoiceRepo, bus)
+	cancelInvoiceHandler := invoicingCommand.NewCancelInvoiceHandler(invoiceRepo)
+	// Initialize query handlers for invoicing use cases.
+	getInvoiceHandler := invoicingQuery.NewGetInvoiceHandler(invoiceRepo)
+	listInvoicesHandler := invoicingQuery.NewListInvoicesHandler(invoiceRepo)
+
+	// Initialize HTTP handler for invoicing endpoints.
+	invoicingHandler := invoicingHTTP.NewHandler(
+		createInvoiceHandler,
+		addInvoiceLineHandler,
+		sendInvoiceHandler,
+		recordPaymentHandler,
+		cancelInvoiceHandler,
+		getInvoiceHandler,
+		listInvoicesHandler,
+	)
+
+	// Documents Bounded Context
+	// Initialize repositories for documents persistence.
+	documentRepo := documentsPersistence.NewDocumentRepository(pool)
+	docTemplateRepo := documentsPersistence.NewTemplateRepository(pool)
+
+	// Initialize command handlers for documents use cases.
+	createDocumentHandler := documentsCommand.NewCreateDocumentHandler(documentRepo, bus)
+	generateDocumentHandler := documentsCommand.NewGenerateDocumentHandler(documentRepo, docTemplateRepo, bus)
+	addSignatureHandler := documentsCommand.NewAddSignatureHandler(documentRepo)
+	signDocumentHandler := documentsCommand.NewSignDocumentHandler(documentRepo, bus)
+	// Initialize query handlers for documents use cases.
+	getDocumentHandler := documentsQuery.NewGetDocumentHandler(documentRepo)
+	listDocumentsHandler := documentsQuery.NewListDocumentsHandler(documentRepo)
+	docGetTemplateHandler := documentsQuery.NewGetTemplateHandler(docTemplateRepo)
+
+	// Initialize HTTP handler for documents endpoints.
+	documentsHandler := documentsHTTP.NewHandler(
+		createDocumentHandler,
+		generateDocumentHandler,
+		addSignatureHandler,
+		signDocumentHandler,
+		getDocumentHandler,
+		listDocumentsHandler,
+		docGetTemplateHandler,
+	)
+
+	// Ordering Bounded Context
+	// Initialize repositories for ordering persistence.
+	orderRepo := orderingPersistence.NewOrderRepository(pool)
+
+	// Initialize command handlers for ordering use cases.
+	createOrderHandler := orderingCommand.NewCreateOrderHandler(orderRepo, bus)
+	addOrderLineHandler := orderingCommand.NewAddOrderLineHandler(orderRepo)
+	updateOrderStatusHandler := orderingCommand.NewUpdateOrderStatusHandler(orderRepo)
+	// Initialize query handlers for ordering use cases.
+	getOrderHandler := orderingQuery.NewGetOrderHandler(orderRepo)
+	listOrdersHandler := orderingQuery.NewListOrdersHandler(orderRepo)
+
+	// Initialize HTTP handler for ordering endpoints.
+	orderingHandler := orderingHTTP.NewHandler(
+		createOrderHandler,
+		addOrderLineHandler,
+		updateOrderStatusHandler,
+		getOrderHandler,
+		listOrdersHandler,
+	)
+
+	// Catalog Bounded Context
+	// Initialize repositories for catalog persistence.
+	itemRepo := catalogPersistence.NewItemRepository(pool)
+	_ = catalogPersistence.NewCategoryRepository(pool) // Category repository for future category management
+
+	// Initialize command handlers for catalog use cases.
+	createItemHandler := catalogCommand.NewCreateItemHandler(itemRepo)
+	updateItemHandler := catalogCommand.NewUpdateItemHandler(itemRepo)
+	// Initialize query handlers for catalog use cases.
+	getItemHandler := catalogQuery.NewGetItemHandler(itemRepo)
+	listItemsHandler := catalogQuery.NewListItemsHandler(itemRepo)
+
+	// Initialize HTTP handler for catalog endpoints.
+	catalogHandler := catalogHTTP.NewHandler(
+		createItemHandler,
+		updateItemHandler,
+		getItemHandler,
+		listItemsHandler,
+	)
+
+	// Inventory Bounded Context
+	// Initialize repositories for inventory persistence.
+	warehouseRepo := inventoryPersistence.NewWarehouseRepository(pool)
+	stockRepo := inventoryPersistence.NewStockRepository(pool)
+	stockMovementRepo := inventoryPersistence.NewStockMovementRepository(pool)
+	stockReservationRepo := inventoryPersistence.NewStockReservationRepository(pool)
+
+	// Initialize command handlers for inventory use cases.
+	createWarehouseHandler := inventoryCommand.NewCreateWarehouseHandler(warehouseRepo, bus)
+	updateWarehouseHandler := inventoryCommand.NewUpdateWarehouseHandler(warehouseRepo, bus)
+	createStockHandler := inventoryCommand.NewCreateStockHandler(stockRepo)
+	adjustStockHandler := inventoryCommand.NewAdjustStockHandler(stockRepo, stockMovementRepo, bus)
+	receiptStockHandler := inventoryCommand.NewReceiptStockHandler(stockRepo, stockMovementRepo)
+	issueStockHandler := inventoryCommand.NewIssueStockHandler(stockRepo, stockMovementRepo)
+	transferStockHandler := inventoryCommand.NewTransferStockHandler(stockRepo, stockMovementRepo)
+	reserveStockHandler := inventoryCommand.NewReserveStockHandler(stockRepo, stockReservationRepo)
+	fulfillReservationHandler := inventoryCommand.NewFulfillReservationHandler(stockRepo, stockReservationRepo)
+	cancelReservationHandler := inventoryCommand.NewCancelReservationHandler(stockRepo, stockReservationRepo)
+	// Initialize query handlers for inventory use cases.
+	getWarehouseHandler := inventoryQuery.NewGetWarehouseHandler(warehouseRepo)
+	listWarehousesHandler := inventoryQuery.NewListWarehousesHandler(warehouseRepo)
+	getStockHandler := inventoryQuery.NewGetStockHandler(stockRepo)
+	listStockHandler := inventoryQuery.NewListStockHandler(stockRepo)
+	getStockMovementHandler := inventoryQuery.NewGetStockMovementHandler(stockMovementRepo)
+	listStockMovementsHandler := inventoryQuery.NewListStockMovementsHandler(stockMovementRepo)
+	getReservationHandler := inventoryQuery.NewGetReservationHandler(stockReservationRepo)
+	listReservationsHandler := inventoryQuery.NewListReservationsHandler(stockReservationRepo)
+
+	// Initialize HTTP handler for inventory endpoints.
+	inventoryHandler := inventoryHTTP.NewHandler(
+		createWarehouseHandler,
+		updateWarehouseHandler,
+		getWarehouseHandler,
+		listWarehousesHandler,
+		createStockHandler,
+		adjustStockHandler,
+		receiptStockHandler,
+		issueStockHandler,
+		transferStockHandler,
+		reserveStockHandler,
+		fulfillReservationHandler,
+		cancelReservationHandler,
+		getStockHandler,
+		listStockHandler,
+		getStockMovementHandler,
+		listStockMovementsHandler,
+		getReservationHandler,
+		listReservationsHandler,
+	)
+
 	// Initialize notification sender infrastructure.
 	// Notification sender (console for development - logs to console)
 	// In production, replace with real SMTP/AWS SES/Twilio implementations
@@ -362,32 +604,54 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 		imageProcessor,
 	)
 
+	// Cross-Context Event Handlers
+	// Initialize event handlers for cross-context integration.
+	inventoryOrderEventHandler := inventoryEventHandler.NewOrderEventHandler(stockRepo, stockReservationRepo)
+	invoicingOrderEventHandler := invoicingEventHandler.NewOrderEventHandler(invoiceRepo)
+	accountingInvoiceEventHandler := accountingEventHandler.NewInvoiceEventHandler(accountRepo, transactionRepo)
+
 	// Register domain event handlers with the event bus.
 	// Register audit event handler to record identity events.
 	auditIdentityEventHandler.Register(bus)
 	// Register notification event handler to send automatic notifications.
 	notificationIdentityEventHandler.Register(bus)
+	// Register inventory event handler for stock reservations on order events.
+	inventoryOrderEventHandler.Register(bus)
+	// Register invoicing event handler for automatic invoice creation on order events.
+	invoicingOrderEventHandler.Register(bus)
+	// Register accounting event handler for automatic journal entries on invoice events.
+	accountingInvoiceEventHandler.Register(bus)
 
 	// Return the complete dependency graph.
 	return &Dependencies{
-		EventBus:                 bus,
-		Config:                   cfg,
-		Database:                 pool,
-		RedisClient:              redisClient,
-		Cache:                    cacheClient,
-		RateLimiter:              rateLimiter,
-		IdentityHandler:          identityHandler,
-		AuthMiddleware:           authMiddleware,
-		RBACMiddleware:           rbacMiddleware,
-		SessionMiddleware:        sessionMiddleware,
-		StatusHandler:            statusHandler,
-		AuditHandler:             auditHandler,
-		AuditEventHandler:        auditIdentityEventHandler,
-		NotificationHandler:      notificationHandler,
-		NotificationWorker:       notificationWorker,
-		NotificationEventHandler: notificationIdentityEventHandler,
-		FilesHandler:             filesHTTPHandler,
-		ProcessFileHandler:       processFileHandler,
+		EventBus:                      bus,
+		Config:                        cfg,
+		Database:                      pool,
+		RedisClient:                   redisClient,
+		Cache:                         cacheClient,
+		RateLimiter:                   rateLimiter,
+		IdentityHandler:               identityHandler,
+		AuthMiddleware:                authMiddleware,
+		RBACMiddleware:                rbacMiddleware,
+		SessionMiddleware:             sessionMiddleware,
+		StatusHandler:                 statusHandler,
+		AuditHandler:                  auditHandler,
+		AuditEventHandler:             auditIdentityEventHandler,
+		NotificationHandler:           notificationHandler,
+		NotificationWorker:            notificationWorker,
+		NotificationEventHandler:      notificationIdentityEventHandler,
+		PartiesHandler:                partiesHandler,
+		AccountingHandler:             accountingHandler,
+		InvoicingHandler:              invoicingHandler,
+		DocumentsHandler:              documentsHandler,
+		InventoryHandler:              inventoryHandler,
+		OrderingHandler:               orderingHandler,
+		CatalogHandler:                catalogHandler,
+		FilesHandler:                  filesHTTPHandler,
+		ProcessFileHandler:            processFileHandler,
+		InventoryOrderEventHandler:    inventoryOrderEventHandler,
+		InvoicingOrderEventHandler:    invoicingOrderEventHandler,
+		AccountingInvoiceEventHandler: accountingInvoiceEventHandler,
 	}
 }
 

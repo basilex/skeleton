@@ -6,6 +6,7 @@ import (
 
 	"github.com/basilex/skeleton/internal/accounting/domain"
 	invoicingDomain "github.com/basilex/skeleton/internal/invoicing/domain"
+	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
 type InvoiceEventHandler struct {
@@ -57,13 +58,11 @@ func (h *InvoiceEventHandler) HandleInvoiceCreated(ctx context.Context, event in
 	return nil
 }
 
-func (h *InvoiceEventHandler) Register(bus interface {
-	Subscribe(eventName string, handler interface{})
-}) {
+func (h *InvoiceEventHandler) Register(bus eventbus.Bus) {
 	bus.Subscribe("invoicing.invoice_created", h.handleInvoiceCreated)
 }
 
-func (h *InvoiceEventHandler) handleInvoiceCreated(ctx context.Context, event interface{}) error {
+func (h *InvoiceEventHandler) handleInvoiceCreated(ctx context.Context, event eventbus.Event) error {
 	e, ok := event.(invoicingDomain.InvoiceCreated)
 	if !ok {
 		return fmt.Errorf("invalid event type: expected InvoiceCreated")

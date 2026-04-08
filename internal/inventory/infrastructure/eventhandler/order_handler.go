@@ -6,6 +6,7 @@ import (
 
 	"github.com/basilex/skeleton/internal/inventory/domain"
 	orderingDomain "github.com/basilex/skeleton/internal/ordering/domain"
+	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
 type OrderEventHandler struct {
@@ -81,15 +82,13 @@ func (h *OrderEventHandler) HandleOrderCompleted(ctx context.Context, event orde
 	return nil
 }
 
-func (h *OrderEventHandler) Register(bus interface {
-	Subscribe(eventName string, handler interface{})
-}) {
+func (h *OrderEventHandler) Register(bus eventbus.Bus) {
 	bus.Subscribe("ordering.order_confirmed", h.handleOrderConfirmed)
 	bus.Subscribe("ordering.order_cancelled", h.handleOrderCancelled)
 	bus.Subscribe("ordering.order_completed", h.handleOrderCompleted)
 }
 
-func (h *OrderEventHandler) handleOrderConfirmed(ctx context.Context, event interface{}) error {
+func (h *OrderEventHandler) handleOrderConfirmed(ctx context.Context, event eventbus.Event) error {
 	e, ok := event.(orderingDomain.OrderConfirmed)
 	if !ok {
 		return fmt.Errorf("invalid event type: expected OrderConfirmed")
@@ -97,7 +96,7 @@ func (h *OrderEventHandler) handleOrderConfirmed(ctx context.Context, event inte
 	return h.HandleOrderConfirmed(ctx, e)
 }
 
-func (h *OrderEventHandler) handleOrderCancelled(ctx context.Context, event interface{}) error {
+func (h *OrderEventHandler) handleOrderCancelled(ctx context.Context, event eventbus.Event) error {
 	e, ok := event.(orderingDomain.OrderCancelled)
 	if !ok {
 		return fmt.Errorf("invalid event type: expected OrderCancelled")
@@ -105,7 +104,7 @@ func (h *OrderEventHandler) handleOrderCancelled(ctx context.Context, event inte
 	return h.HandleOrderCancelled(ctx, e)
 }
 
-func (h *OrderEventHandler) handleOrderCompleted(ctx context.Context, event interface{}) error {
+func (h *OrderEventHandler) handleOrderCompleted(ctx context.Context, event eventbus.Event) error {
 	e, ok := event.(orderingDomain.OrderCompleted)
 	if !ok {
 		return fmt.Errorf("invalid event type: expected OrderCompleted")
