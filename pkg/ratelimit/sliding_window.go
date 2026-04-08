@@ -105,3 +105,8 @@ func (sw *SlidingWindow) prefixedKey(key string) string {
 	}
 	return sw.config.KeyPrefix + ":" + key
 }
+
+// Type returns the rate limiter type identifier.
+func (sw *SlidingWindow) Type() string {
+	return "sliding_window"
+}

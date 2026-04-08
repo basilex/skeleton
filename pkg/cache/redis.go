@@ -194,3 +194,8 @@ func (c *RedisCache) Clear(ctx context.Context) error {
 func (c *RedisCache) Close() error {
 	return c.client.Close()
 }
+
+// Type returns the cache type identifier.
+func (c *RedisCache) Type() string {
+	return "redis"
+}

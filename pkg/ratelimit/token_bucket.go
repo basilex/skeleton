@@ -103,3 +103,8 @@ func min(a, b float64) float64 {
 	}
 	return b
 }
+
+// Type returns the rate limiter type identifier.
+func (tb *TokenBucket) Type() string {
+	return "token_bucket"
+}

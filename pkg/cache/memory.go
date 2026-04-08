@@ -226,3 +226,8 @@ func (c *MemoryCache) Close() error {
 	close(c.stopCh)
 	return nil
 }
+
+// Type returns the cache type identifier.
+func (c *MemoryCache) Type() string {
+	return "memory"
+}

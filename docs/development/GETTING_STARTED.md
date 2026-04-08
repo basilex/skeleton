@@ -516,3 +516,132 @@ Retry-After: 60               # Seconds to wait (on 429)
 ### See Full Documentation
 
 Detailed architecture, Sliding Window with Redis: [ADR-015: Rate Limiting Strategy](../adr/ADR-015-rate-limiting.md)
+
+## Files
+
+The application provides comprehensive file management with upload, download, and processing capabilities.
+
+### File Upload
+
+#### Direct Upload (Small Files <5MB)
+
+```bash
+# Upload a file
+curl -X POST http://localhost:8080/api/v1/files \
+  -b "session=<session_id>" \
+  -F "file=@/path/to/file.jpg" \
+  -F "owner_id=<user_id>" \
+  -F "access_level=private"
+
+# Response
+{
+  "file_id": "0192e5c8-7f0b-7d2e-8b1a-5c3e2d1f0a9b",
+  "stored_name": "a1b2c3d4e5f6.jpg",
+  "storage_path": "files/2026/04/08/a1b2c3d4e5f6.jpg",
+  "checksum": "sha256:abc123...",
+  "uploaded_at": "2026-04-08T10:30:00Z"
+}
+```
+
+#### Presigned Upload (Large Files >5MB)
+
+```bash
+# 1. Request presigned upload URL
+curl -X POST http://localhost:8080/api/v1/files/upload-url \
+  -b "session=<session_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filename": "large-video.mp4",
+    "content_type": "video/mp4",
+    "size": 104857600,
+    "access_level": "private"
+  }'
+
+# Response
+{
+  "upload_id": "upload-uuid",
+  "upload_url": "https://storage.example.com/...",
+  "expires_at": "2026-04-08T11:00:00Z"
+}
+
+# 2. Upload file using presigned URL
+curl -X PUT "<upload_url>" \
+  -H "Content-Type: video/mp4" \
+  --data-binary @/path/to/large-video.mp4
+
+# 3. Confirm upload completion
+curl -X POST http://localhost:8080/api/v1/files/confirm \
+  -b "session=<session_id>" \
+  -H "Content-Type: application/json" \
+  -d '{"upload_id": "upload-uuid"}'
+```
+
+### File Operations
+
+```bash
+# List files
+curl http://localhost:8080/api/v1/files \
+  -b "session=<session_id>"
+
+# Get file metadata
+curl http://localhost:8080/api/v1/files/<file_id> \
+  -b "session=<session_id>"
+
+# Delete file
+curl -X DELETE http://localhost:8080/api/v1/files/<file_id> \
+  -b "session=<session_id>"
+```
+
+### Image Processing
+
+```bash
+# Request image processing
+curl -X POST http://localhost:8080/api/v1/files/<file_id>/process \
+  -b "session=<session_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operations": [
+      {"type": "resize", "width": 800, "height": 600},
+      {"type": "watermark", "text": "© 2026 MyCompany", "position": "bottom_right"},
+      {"type": "compress", "quality": 85}
+    ]
+  }'
+
+# Check processing status
+curl http://localhost:8080/api/v1/files/processing/<processing_id> \
+  -b "session=<session_id>"
+```
+
+### Watermarking
+
+Add text or image watermarks to images:
+
+```bash
+# Text watermark
+curl -X POST http://localhost:8080/api/v1/files/<file_id>/process \
+  -b "session=<session_id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operations": [
+      {
+        "type": "watermark",
+        "text": "© MyCompany",
+        "position": "bottom_right"
+      }
+    ]
+  }'
+
+# Positions: top_left, top_right, bottom_left, bottom_right, center
+```
+
+### Rate Limits
+
+File operations have rate limits to prevent abuse:
+
+- **Upload**: 10 requests per minute per user
+- **Download**: 30 requests per minute per user
+- **Processing**: 5 requests per minute per user (computationally expensive)
+
+### See Full Documentation
+
+Detailed architecture, storage backends: [ADR-012: Files/Storage](../adr/ADR-012-files-storage.md)

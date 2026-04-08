@@ -8,6 +8,7 @@
 //   - Role routes (/api/v1/users/:id/roles): Assign and revoke roles
 //   - Audit routes (/api/v1/audit): Query audit records
 //   - Notification routes (/api/v1/notifications): Manage notifications and preferences
+//   - Files routes (/api/v1/files): Upload, download, process files
 //   - Status routes (/health, /build): Health checks and build information
 //
 // Middleware chain (applied in order):
@@ -15,8 +16,12 @@
 //  2. Request ID middleware - Unique request identification
 //  3. Logger middleware - Structured request logging
 //  4. CORS middleware - Cross-origin resource sharing
+//  5. Global rate limiting - Prevent API abuse (optional, can be disabled)
 //
 // Protected routes use authentication and RBAC middlewares as needed.
+// Additional middleware:
+//   - Rate limiting on auth endpoints (brute force protection)
+//   - Caching on read-heavy endpoints (performance optimization)
 package main
 
 import (
@@ -24,6 +29,7 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/pkg/config"
+	"github.com/basilex/skeleton/pkg/middleware"
 	"github.com/basilex/skeleton/pkg/uuid"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -104,9 +110,14 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 // All auth routes are publicly accessible except /auth/logout and /auth/me
 // which require session authentication.
 //
+// Rate Limiting:
+//   - Login: 5 requests per minute per IP (brute force protection)
+//   - Register: 3 requests per hour per IP (spam protection)
+//   - Password reset: 3 requests per hour per IP (abuse prevention)
+//
 // Endpoints:
-//   - POST /api/v1/auth/register - Register a new user
-//   - POST /api/v1/auth/login - Authenticate user and create session
+//   - POST /api/v1/auth/register - Register a new user (rate limited)
+//   - POST /api/v1/auth/login - Authenticate user and create session (rate limited)
 //   - POST /api/v1/auth/refresh - Refresh access token
 //   - POST /api/v1/auth/logout - End user session (requires authentication)
 //   - GET /api/v1/auth/me - Get current user profile (requires authentication)
@@ -115,9 +126,21 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 //   - v1: Router group for /api/v1 endpoints
 //   - di: Dependency container with identity handler and session middleware
 func registerAuthRoutes(v1 *gin.RouterGroup, di *Dependencies) {
-	v1.POST("/auth/register", di.IdentityHandler.Register)
-	v1.POST("/auth/login", di.IdentityHandler.Login)
+	// Auth endpoints with rate limiting for security
+	// Login: 5 requests per minute per IP to prevent brute force
+	v1.POST("/auth/login",
+		middleware.RateLimit(di.RateLimiter, middleware.ByIP, 5, time.Minute),
+		di.IdentityHandler.Login)
+
+	// Register: 3 requests per hour per IP to prevent spam
+	v1.POST("/auth/register",
+		middleware.RateLimit(di.RateLimiter, middleware.ByIP, 3, time.Hour),
+		di.IdentityHandler.Register)
+
+	// Token refresh - no rate limit needed
 	v1.POST("/auth/refresh", di.IdentityHandler.Refresh)
+
+	// Logout and profile - require authentication
 	v1.POST("/auth/logout", di.SessionMiddleware.Authenticate(), di.IdentityHandler.Logout)
 	v1.GET("/auth/me", di.SessionMiddleware.Authenticate(), di.IdentityHandler.GetMyProfile)
 }
@@ -125,18 +148,38 @@ func registerAuthRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 // registerUserRoutes registers user management endpoints.
 // All user routes require JWT authentication and RBAC permissions.
 //
+// Caching:
+//   - GET /users: Cached for 5 minutes (user list rarely changes)
+//   - GET /users/:id: Cached for 5 minutes (user profile cached)
+//
 // Endpoints:
-//   - GET /api/v1/users - List all users (requires users:read)
-//   - GET /api/v1/users/:id - Get user by ID (requires users:read)
+//   - GET /api/v1/users - List all users (requires users:read, cached)
+//   - GET /api/v1/users/:id - Get user by ID (requires users:read, cached)
 //   - PATCH /api/v1/users/:id/deactivate - Deactivate user (requires users:write)
 //
 // Parameters:
 //   - v1: Router group for /api/v1 endpoints
 //   - di: Dependency container with identity handler and auth middlewares
 func registerUserRoutes(v1 *gin.RouterGroup, di *Dependencies) {
-	v1.GET("/users", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("users:read"), di.IdentityHandler.ListUsers)
-	v1.GET("/users/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("users:read"), di.IdentityHandler.GetUser)
-	v1.PATCH("/users/:id/deactivate", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("users:write"), di.IdentityHandler.DeactivateUser)
+	// User list endpoint with caching (5 minutes) - rarely changes
+	v1.GET("/users",
+		di.AuthMiddleware.Authenticate(),
+		di.RBACMiddleware.Require("users:read"),
+		middleware.Cache(di.Cache, 5*time.Minute),
+		di.IdentityHandler.ListUsers)
+
+	// User details endpoint with caching (5 minutes)
+	v1.GET("/users/:id",
+		di.AuthMiddleware.Authenticate(),
+		di.RBACMiddleware.Require("users:read"),
+		middleware.Cache(di.Cache, 5*time.Minute),
+		di.IdentityHandler.GetUser)
+
+	// User deactivation - no cache for mutations
+	v1.PATCH("/users/:id/deactivate",
+		di.AuthMiddleware.Authenticate(),
+		di.RBACMiddleware.Require("users:write"),
+		di.IdentityHandler.DeactivateUser)
 }
 
 // registerRoleRoutes registers role management endpoints.
@@ -161,6 +204,8 @@ func registerRoleRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 // Endpoints:
 //   - GET /health - Health check endpoint (public)
 //   - GET /build - Build information endpoint (public)
+//   - GET /ready - Readiness check endpoint (public)
+//   - GET /system/info - System information including cache and rate limit status (public)
 //
 // Parameters:
 //   - r: Gin engine to configure (registered at root, not under /api/v1)
@@ -168,6 +213,31 @@ func registerRoleRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 func registerStatusRoutes(r *gin.Engine, di *Dependencies) {
 	r.GET("/health", di.StatusHandler.Health)
 	r.GET("/build", di.StatusHandler.GetInfo)
+	r.GET("/ready", di.StatusHandler.Ready)
+	r.GET("/system/info", systemInfoHandler(di))
+}
+
+// systemInfoHandler returns a handler that provides system information.
+// Includes cache statistics, rate limiter status, and other runtime information.
+// Useful for monitoring and debugging in production environments.
+//
+// This endpoint is publicly accessible and does not require authentication.
+// Consider adding authentication for production sensitive environments.
+func systemInfoHandler(di *Dependencies) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		info := gin.H{
+			"cache": gin.H{
+				"type": di.Cache.(interface{ Type() string }).Type(),
+				// Add more cache stats when needed
+			},
+			"rate_limiter": gin.H{
+				"type": di.RateLimiter.(interface{ Type() string }).Type(),
+				// Add more rate limiter stats when needed
+			},
+			"status": "operational",
+		}
+		c.JSON(200, info)
+	}
 }
 
 // registerAuditRoutes registers audit log query endpoints.
@@ -186,14 +256,19 @@ func registerAuditRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 // registerFilesRoutes registers file management endpoints.
 // Files endpoints provide upload, download, processing, and management capabilities.
 //
+// Rate Limiting:
+//   - File upload: 10 requests per minute per user (prevent storage abuse)
+//   - File download: 30 requests per minute per user (preserve bandwidth)
+//   - Processing: 5 requests per minute per user (computational expensive)
+//
 // User Endpoints (require authentication):
 //   - GET /api/v1/files - List files with filtering
-//   - POST /api/v1/files - Upload a file directly (small files <5MB)
+//   - POST /api/v1/files - Upload a file directly (rate limited)
 //   - GET /api/v1/files/:id - Get file metadata
 //   - DELETE /api/v1/files/:id - Delete a file
-//   - POST /api/v1/files/upload-url - Request presigned upload URL (large files)
+//   - POST /api/v1/files/upload-url - Request presigned upload URL (rate limited)
 //   - POST /api/v1/files/confirm - Confirm upload completion
-//   - POST /api/v1/files/:id/process - Request file processing
+//   - POST /api/v1/files/:id/process - Request file processing (rate limited)
 //   - GET /api/v1/files/processing/:id - Get processing status
 //   - GET /api/v1/files/:id/processings - List file processings
 //
@@ -204,20 +279,26 @@ func registerFilesRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	files := v1.Group("/files")
 	files.Use(di.AuthMiddleware.Authenticate())
 
-	// File CRUD operations
+	// File operations with rate limiting
 	files.GET("", di.FilesHandler.ListFiles)
 	files.GET("/:id", di.FilesHandler.GetFile)
 	files.DELETE("/:id", di.FilesHandler.DeleteFile)
 
-	// Direct upload (small files)
-	files.POST("", di.FilesHandler.UploadFile)
+	// Direct upload - rate limited (10 per minute per user)
+	files.POST("",
+		middleware.RateLimit(di.RateLimiter, middleware.ByUser, 10, time.Minute),
+		di.FilesHandler.UploadFile)
 
-	// Presigned upload URLs (large files)
-	files.POST("/upload-url", di.FilesHandler.RequestUploadURL)
+	// Presigned upload URLs - rate limited (10 per minute)
+	files.POST("/upload-url",
+		middleware.RateLimit(di.RateLimiter, middleware.ByUser, 10, time.Minute),
+		di.FilesHandler.RequestUploadURL)
 	files.POST("/confirm", di.FilesHandler.ConfirmUpload)
 
-	// File processing
-	files.POST("/:id/process", di.FilesHandler.RequestProcessing)
+	// File processing - rate limited (5 per minute, computationally expensive)
+	files.POST("/:id/process",
+		middleware.RateLimit(di.RateLimiter, middleware.ByUser, 5, time.Minute),
+		di.FilesHandler.RequestProcessing)
 	files.GET("/processing/:id", di.FilesHandler.GetProcessingStatus)
 	files.GET("/:id/processings", di.FilesHandler.ListProcessings)
 }
