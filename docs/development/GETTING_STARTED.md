@@ -78,11 +78,21 @@ See [ADR-008: Semantic Versioning Strategy](../adr/ADR-008-versioning.md).
 ### Status
 
 ```bash
-# Health check
+# Health check (for load balancers)
 curl http://localhost:8080/health
+# {"status": "ok"}
 
-# Build info
-curl http://localhost:8080/build
+# Readiness probe (checks if service can handle requests)
+curl http://localhost:8080/system/ready
+# {"status": "ready"}
+
+# Build information (version, commit, build time)
+curl http://localhost:8080/system/build
+# {"version":"0.1.0-dev","commit":"abc123","build_time":"2026-04-08T10:00:00Z","go_version":"go1.24.0","env":"dev"}
+
+# Detailed system information (cache, rate limiter, runtime)
+curl http://localhost:8080/system/info
+# {"cache":{"type":"memory"},"rate_limiter":{"type":"token_bucket"},"status":"operational"}
 ```
 
 ### Auth (public)

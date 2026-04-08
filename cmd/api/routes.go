@@ -9,7 +9,7 @@
 //   - Audit routes (/api/v1/audit): Query audit records
 //   - Notification routes (/api/v1/notifications): Manage notifications and preferences
 //   - Files routes (/api/v1/files): Upload, download, process files
-//   - Status routes (/health, /build): Health checks and build information
+//   - System routes (/system): Health checks, build info, system status
 //
 // Middleware chain (applied in order):
 //  1. Recovery middleware - Panic recovery and error response
@@ -78,17 +78,20 @@ func registerGlobalMiddleware(r *gin.Engine) {
 }
 
 // registerRoutes registers all API routes organized by domain context.
-// Routes are grouped under /api/v1 for versioned endpoints, with status
-// endpoints at the root level for health checks.
+// Routes are grouped under /api/v1 for versioned endpoints, with system
+// monitoring endpoints at /health and /system/*.
 //
 // Route Structure:
 //
+//	/health -> Health check (load balancer endpoint)
+//	/system/ready -> Readiness probe
+//	/system/build -> Build information
+//	/system/info -> Detailed system info
 //	/api/v1/auth -> Authentication endpoints
 //	/api/v1/users -> User management endpoints
 //	/api/v1/audit -> Audit log endpoints
 //	/api/v1/notifications -> Notification endpoints
-//	/health -> Health check endpoint
-//	/build -> Build information endpoint
+//	/api/v1/files -> File management endpoints
 //
 // Parameters:
 //   - r: Gin engine to configure
@@ -197,29 +200,51 @@ func registerRoleRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	v1.DELETE("/users/:id/roles/:rid", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("roles:manage"), di.IdentityHandler.RevokeRole)
 }
 
-// registerStatusRoutes registers system status endpoints.
+// registerStatusRoutes registers system status and monitoring endpoints.
 // These endpoints are publicly accessible without authentication for
-// health monitoring and build information display.
+// health monitoring, load balancer checks, and system observability.
 //
-// Endpoints:
-//   - GET /health - Health check endpoint (public)
-//   - GET /build - Build information endpoint (public)
-//   - GET /ready - Readiness check endpoint (public)
-//   - GET /system/info - System information including cache and rate limit status (public)
+// Endpoint Structure:
+//   - /health - Simple health check (for load balancers, always returns 200)
+//   - /system/ready - Readiness probe (checks if service can handle requests)
+//   - /system/build - Build information (version, commit, build time)
+//   - /system/info - Detailed system info (cache, rate limiter, config)
+//
+// Rationale:
+//   - /health at root level follows industry standard (Kubernetes, AWS, etc.)
+//   - /system/* groups all system-related endpoints together
+//   - Separate endpoints for different monitoring needs
 //
 // Parameters:
 //   - r: Gin engine to configure (registered at root, not under /api/v1)
-//   - di: Dependency container with status handler
+//   - di: Dependency container with status handler and system info
 func registerStatusRoutes(r *gin.Engine, di *Dependencies) {
+	// Standard health check endpoint (load balancer friendly)
 	r.GET("/health", di.StatusHandler.Health)
-	r.GET("/build", di.StatusHandler.GetInfo)
-	r.GET("/ready", di.StatusHandler.Ready)
-	r.GET("/system/info", systemInfoHandler(di))
+
+	// System endpoints group
+	system := r.Group("/system")
+	{
+		// Readiness probe - checks if service is ready to accept traffic
+		system.GET("/ready", di.StatusHandler.Ready)
+
+		// Build information - version, commit, build time
+		system.GET("/build", di.StatusHandler.GetInfo)
+
+		// Detailed system information - cache, rate limiter, runtime stats
+		system.GET("/info", systemInfoHandler(di))
+	}
 }
 
-// systemInfoHandler returns a handler that provides system information.
-// Includes cache statistics, rate limiter status, and other runtime information.
-// Useful for monitoring and debugging in production environments.
+// systemInfoHandler returns a handler that provides detailed system information.
+// Includes cache statistics, rate limiter status, configuration, and runtime information.
+// Useful for monitoring, debugging, and observability in production environments.
+//
+// Response includes:
+//   - Cache: type, configuration, statistics
+//   - Rate limiter: type, configuration, limits
+//   - Runtime: Go version, memory stats, goroutines
+//   - Status: overall system health
 //
 // This endpoint is publicly accessible and does not require authentication.
 // Consider adding authentication for production sensitive environments.
@@ -228,11 +253,9 @@ func systemInfoHandler(di *Dependencies) gin.HandlerFunc {
 		info := gin.H{
 			"cache": gin.H{
 				"type": di.Cache.(interface{ Type() string }).Type(),
-				// Add more cache stats when needed
 			},
 			"rate_limiter": gin.H{
 				"type": di.RateLimiter.(interface{ Type() string }).Type(),
-				// Add more rate limiter stats when needed
 			},
 			"status": "operational",
 		}
