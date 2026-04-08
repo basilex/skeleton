@@ -1,4 +1,4 @@
-# Production environment
+# Production environment with PostgreSQL 16 + Redis + optimizations
 version: '3.8'
 
 services:
@@ -7,52 +7,166 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VERSION_MAJOR: 0
-        VERSION_MINOR: 1
-        VERSION_PATCH: 0
-        VERSION_STAGE: prod
-        COMMIT: ${COMMIT:-unknown}
-        BUILD_TIME: ${BUILD_TIME:-unknown}
-    image: skeleton-api:${VERSION:-0.1.0-prod}
+        - VERSION_MAJOR=${VERSION_MAJOR:-0}
+        - VERSION_MINOR=${VERSION_MINOR:-1}
+        - VERSION_PATCH=${VERSION_PATCH:-0}
+        - VERSION_STAGE=${VERSION_STAGE:-prod}
+        - COMMIT=${COMMIT:-unknown}
+        - BUILD_TIME=${BUILD_TIME:-unknown}
+    image: skeleton-api:${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}-${VERSION_STAGE}
     container_name: skeleton-api-prod
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "8080:8080"
     environment:
       - APP_ENV=prod
       - APP_PORT=8080
-      - DATABASE_PATH=/app/data/skeleton.db
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
       - AUTH_PRIVATE_KEY_PATH=/app/keys/private.pem
       - AUTH_PUBLIC_KEY_PATH=/app/keys/public.pem
-      - AUTH_ACCESS_TTL_MINUTES=${AUTH_ACCESS_TTL_MINUTES:-15}
-      - AUTH_REFRESH_TTL_DAYS=${AUTH_REFRESH_TTL_DAYS:-7}
-      - SESSION_TTL_MINUTES=${SESSION_TTL_MINUTES:-60}
+      - AUTH_ACCESS_TTL_MINUTES=15
+      - AUTH_REFRESH_TTL_DAYS=7
+      - SESSION_TTL_MINUTES=60
       - SESSION_COOKIE_NAME=session
+      - RATE_LIMIT_GLOBAL_LIMIT=${RATE_LIMIT_GLOBAL_LIMIT:-1000}
+      - RATE_LIMIT_GLOBAL_WINDOW=${RATE_LIMIT_GLOBAL_WINDOW:-60}
+      - CACHE_CLEANUP_INTERVAL=${CACHE_CLEANUP_INTERVAL:-300}
+      - CACHE_REDIS_PREFIX=${CACHE_REDIS_PREFIX:-skeleton:prod}
+    secrets:
+      - db_password
+      - redis_password
     volumes:
-      - app-data:/app/data
-      - app-keys:/app/keys:ro
+      - ./keys:/app/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 10s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      start_period: 15s
     deploy:
       resources:
         limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
           cpus: '0.5'
           memory: 256M
+    networks:
+      - skeleton_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: skeleton-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    secrets:
+      - db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    networks:
+      - skeleton_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: skeleton-redis-prod
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_prod_data:/data
+    secrets:
+      - redis_password
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
         reservations:
           cpus: '0.25'
-          memory: 128M
+          memory: 512M
+    networks:
+      - skeleton_network
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # Optional: Redis Commander for Redis management UI
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: skeleton-redis-commander-prod
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - skeleton_network
+    profiles:
+      - management
 
 volumes:
-  app-data:
+  postgres_prod_data:
     driver: local
-  app-keys:
+  redis_prod_data:
     driver: local
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+
+networks:
+  skeleton_network:
+    driver: bridge

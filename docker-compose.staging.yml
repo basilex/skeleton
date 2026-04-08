@@ -1,18 +1,28 @@
-# Development environment with PostgreSQL 16 + Redis
-# Hot reload enabled for local development
+# Staging environment (for testing before production)
+# Similar to production but with relaxed resource limits
+version: '3.8'
 
 services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.dev
-    container_name: skeleton-api-dev
+      dockerfile: Dockerfile
+      args:
+        - VERSION_MAJOR=${VERSION_MAJOR:-0}
+        - VERSION_MINOR=${VERSION_MINOR:-1}
+        - VERSION_PATCH=${VERSION_PATCH:-0}
+        - VERSION_STAGE=${VERSION_STAGE:-staging}
+        - COMMIT=${COMMIT:-unknown}
+        - BUILD_TIME=${BUILD_TIME:-unknown}
+    image: skeleton-api:${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}-${VERSION_STAGE}
+    container_name: skeleton-api-staging
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
-      - APP_ENV=dev
+      - APP_ENV=staging
       - APP_PORT=8080
-      - DATABASE_URL=postgres://skeleton:skeleton_password@postgres:5432/skeleton?sslmode=disable
+      - DATABASE_URL=postgres://skeleton:${DB_PASSWORD}@postgres:5432/skeleton_staging?sslmode=disable
       - REDIS_URL=redis://redis:6379
       - AUTH_PRIVATE_KEY_PATH=/app/keys/private.pem
       - AUTH_PUBLIC_KEY_PATH=/app/keys/public.pem
@@ -20,14 +30,8 @@ services:
       - AUTH_REFRESH_TTL_DAYS=7
       - SESSION_TTL_MINUTES=60
       - SESSION_COOKIE_NAME=session
-      - RATE_LIMIT_GLOBAL_LIMIT=100
-      - RATE_LIMIT_GLOBAL_WINDOW=60
-      - CACHE_CLEANUP_INTERVAL=60
-      - CACHE_REDIS_PREFIX=skeleton:dev
     volumes:
       - ./keys:/app/keys:ro
-      - ./configs:/app/configs:ro
-      - ./migrations:/app/migrations:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -44,18 +48,20 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: skeleton-postgres-dev
+    container_name: skeleton-postgres-staging
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: skeleton
+      POSTGRES_DB: skeleton_staging
       POSTGRES_USER: skeleton
-      POSTGRES_PASSWORD: skeleton_password
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-skeleton_staging_password}
     ports:
       - "5432:5432"
     volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
+      - postgres_staging_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U skeleton"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
     networks:
@@ -63,35 +69,25 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: skeleton-redis-dev
+    container_name: skeleton-redis-staging
+    restart: unless-stopped
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
-      - redis_dev_data:/data
+      - redis_staging_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 3s
       retries: 5
     networks:
       - skeleton_network
 
-  # Optional: Adminer for database management UI
-  adminer:
-    image: adminer:latest
-    container_name: skeleton-adminer-dev
-    ports:
-      - "8081:8080"
-    depends_on:
-      - postgres
-    networks:
-      - skeleton_network
-
 volumes:
-  postgres_dev_data:
+  postgres_staging_data:
     driver: local
-  redis_dev_data:
+  redis_staging_data:
     driver: local
 
 networks:

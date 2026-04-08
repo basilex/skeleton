@@ -1,0 +1,69 @@
+# Test environment for CI/CD testing
+# Minimal resources, PostgreSQL testcontainers compatible
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: skeleton-api-test
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=test
+      - APP_PORT=8080
+      - DATABASE_URL=postgres://test:test_password@postgres:5432/skeleton_test?sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - AUTH_PRIVATE_KEY_PATH=/app/keys/private.pem
+      - AUTH_PUBLIC_KEY_PATH=/app/keys/public.pem
+      - AUTH_ACCESS_TTL_MINUTES=5
+      - AUTH_REFRESH_TTL_DAYS=1
+      - SESSION_TTL_MINUTES=30
+    volumes:
+      - ./keys:/app/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - skeleton_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: skeleton-postgres-test
+    environment:
+      POSTGRES_DB: skeleton_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    networks:
+      - skeleton_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: skeleton-redis-test
+    ports:
+      - "6379:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+    networks:
+      - skeleton_network
+
+networks:
+  skeleton_network:
+    driver: bridge
