@@ -9,7 +9,7 @@
 | `audit` | Audit log, all system events | — | `identity.user_registered`, `identity.role_assigned`, `identity.role_revoked`, `identity.login`, `identity.logout` | ✅ |
 | `notifications` | Email, SMS, push, in-app notifications | `notification.created`, `notification.sent`, `notification.delivered`, `notification.failed` | `identity.user_registered`, `identity.password_reset_requested`, `tasks.task_failed` | ✅ |
 | `tasks` | Background jobs, scheduled tasks | `tasks.task_created`, `tasks.task_completed`, `tasks.task_failed` | — | ✅ |
-| `files` | File uploads, storage, processing | `files.file_uploaded`, `files.file_deleted`, `files.processing_completed` | `files.file_uploaded` (for processing) | ❌ Not implemented |
+| `files` | File uploads, storage, processing | `files.file_uploaded`, `files.file_deleted`, `files.processing_completed` | `files.file_uploaded` (for processing) | ✅ |
 
 ## Rules
 
@@ -62,9 +62,9 @@
 - **Events**: Publishes `files.file_uploaded`, `files.file_deleted`, `files.processing_completed`
 - **Subscribes to**: `files.file_uploaded` (trigger processing)
 - **Endpoints**: `/api/v1/files/*`
-- **Status**: ❌ Not implemented (ADR-012 ready)
+- **Status**: ✅ Implemented
 - **Details**: [ADR-012: Files/Storage](../adr/ADR-012-files-storage.md)
-- **Planned**: Will use Tasks context for async processing
+- **Uses**: Tasks context for async processing
 
 ## Checklist: Adding a New Context
 

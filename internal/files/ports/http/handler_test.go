@@ -2,12 +2,20 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	filesCmd "github.com/basilex/skeleton/internal/files/application/command"
+	filesQuery "github.com/basilex/skeleton/internal/files/application/query"
 	filesDomain "github.com/basilex/skeleton/internal/files/domain"
 	"github.com/basilex/skeleton/internal/files/infrastructure/storage"
+	"github.com/basilex/skeleton/pkg/eventbus"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -16,16 +24,366 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-// Mock handlers - simplified for testing
-type mockUploadFileHandler func(ctx *gin.Context)
-type mockGetFileHandler func(ctx *gin.Context)
+type mockFileRepo struct {
+	savedFile *filesDomain.File
+	err       error
+}
 
-func TestHandler_UploadFile(t *testing.T) {
-	t.Run("upload file endpoint exists", func(t *testing.T) {
-		// This is a basic test to verify the handler structure
-		// In production, you'd test with actual file uploads
-		require.True(t, true, "UploadFile endpoint structure verified")
-	})
+func (m *mockFileRepo) Create(ctx context.Context, file *filesDomain.File) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.savedFile = file
+	return nil
+}
+
+func (m *mockFileRepo) Update(ctx context.Context, file *filesDomain.File) error {
+	return nil
+}
+
+func (m *mockFileRepo) GetByID(ctx context.Context, id filesDomain.FileID) (*filesDomain.File, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.savedFile, nil
+}
+
+func (m *mockFileRepo) GetByOwner(ctx context.Context, ownerID string, limit, offset int) ([]*filesDomain.File, error) {
+	return nil, nil
+}
+
+func (m *mockFileRepo) GetByPath(ctx context.Context, path string) (*filesDomain.File, error) {
+	return nil, nil
+}
+
+func (m *mockFileRepo) GetExpired(ctx context.Context, before time.Time, limit int) ([]*filesDomain.File, error) {
+	return nil, nil
+}
+
+func (m *mockFileRepo) Delete(ctx context.Context, id filesDomain.FileID) error {
+	return nil
+}
+
+func (m *mockFileRepo) DeleteBatch(ctx context.Context, ids []filesDomain.FileID) error {
+	return nil
+}
+
+func (m *mockFileRepo) Count(ctx context.Context, filter *filesDomain.FileFilter) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockFileRepo) List(ctx context.Context, filter *filesDomain.FileFilter, limit, offset int) ([]*filesDomain.File, error) {
+	return nil, nil
+}
+
+type mockUploadRepo struct {
+	savedUpload *filesDomain.FileUpload
+	err         error
+}
+
+func (m *mockUploadRepo) Create(ctx context.Context, upload *filesDomain.FileUpload) error {
+	if m.err != nil {
+		return m.err
+	}
+	m.savedUpload = upload
+	return nil
+}
+
+func (m *mockUploadRepo) GetByID(ctx context.Context, id filesDomain.UploadID) (*filesDomain.FileUpload, error) {
+	return nil, nil
+}
+
+func (m *mockUploadRepo) GetByFileID(ctx context.Context, fileID filesDomain.FileID) (*filesDomain.FileUpload, error) {
+	return nil, nil
+}
+
+func (m *mockUploadRepo) UpdateStatus(ctx context.Context, id filesDomain.UploadID, status filesDomain.UploadStatus) error {
+	return nil
+}
+
+func (m *mockUploadRepo) GetExpired(ctx context.Context, before time.Time, limit int) ([]*filesDomain.FileUpload, error) {
+	return nil, nil
+}
+
+func (m *mockUploadRepo) Delete(ctx context.Context, id filesDomain.UploadID) error {
+	return nil
+}
+
+func (m *mockUploadRepo) DeleteByFileID(ctx context.Context, fileID filesDomain.FileID) error {
+	return nil
+}
+
+type mockProcessingRepo struct{}
+
+func (m *mockProcessingRepo) Create(ctx context.Context, processing *filesDomain.FileProcessing) error {
+	return nil
+}
+
+func (m *mockProcessingRepo) Update(ctx context.Context, processing *filesDomain.FileProcessing) error {
+	return nil
+}
+
+func (m *mockProcessingRepo) GetByID(ctx context.Context, id filesDomain.ProcessingID) (*filesDomain.FileProcessing, error) {
+	return nil, nil
+}
+
+func (m *mockProcessingRepo) GetByFileID(ctx context.Context, fileID filesDomain.FileID) ([]*filesDomain.FileProcessing, error) {
+	return nil, nil
+}
+
+func (m *mockProcessingRepo) GetPending(ctx context.Context, limit int) ([]*filesDomain.FileProcessing, error) {
+	return nil, nil
+}
+
+func (m *mockProcessingRepo) GetByStatus(ctx context.Context, status filesDomain.ProcessingStatus, limit, offset int) ([]*filesDomain.FileProcessing, error) {
+	return nil, nil
+}
+
+func (m *mockProcessingRepo) Delete(ctx context.Context, id filesDomain.ProcessingID) error {
+	return nil
+}
+
+func (m *mockProcessingRepo) DeleteByFileID(ctx context.Context, fileID filesDomain.FileID) error {
+	return nil
+}
+
+func (m *mockProcessingRepo) Count(ctx context.Context, filter *filesDomain.ProcessingFilter) (int64, error) {
+	return 0, nil
+}
+
+func (m *mockProcessingRepo) List(ctx context.Context, filter *filesDomain.ProcessingFilter, limit, offset int) ([]*filesDomain.FileProcessing, error) {
+	return nil, nil
+}
+
+type mockEventBus struct{}
+
+func (m *mockEventBus) Publish(ctx context.Context, event eventbus.Event) error {
+	return nil
+}
+
+func (m *mockEventBus) Subscribe(eventName string, handler eventbus.Handler) {}
+
+func createMultipartRequest(t *testing.T, filename, content string, ownerID, accessLevel string) *http.Request {
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	part, err := writer.CreateFormFile("file", filename)
+	require.NoError(t, err)
+
+	_, err = io.WriteString(part, content)
+	require.NoError(t, err)
+
+	if ownerID != "" {
+		_ = writer.WriteField("owner_id", ownerID)
+	}
+
+	if accessLevel != "" {
+		_ = writer.WriteField("access_level", accessLevel)
+	}
+
+	err = writer.Close()
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/api/v1/files", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	return req
+}
+
+func TestHandler_UploadFile_Success(t *testing.T) {
+	fileRepo := &mockFileRepo{}
+	storage, err := storage.NewLocalStorage("/tmp/test-uploads", "http://localhost:8080")
+	require.NoError(t, err)
+	bus := &mockEventBus{}
+
+	uploadFileH := filesCmd.NewUploadFileHandler(fileRepo, storage, bus)
+	deleteFileH := func(ctx context.Context, cmd filesCmd.DeleteFileCommand) error { return nil }
+	requestUploadURLH := func(ctx context.Context, cmd filesCmd.RequestUploadURLCommand) (*filesCmd.RequestUploadURLResult, error) {
+		return nil, nil
+	}
+	confirmUploadH := func(ctx context.Context, cmd filesCmd.ConfirmUploadCommand) (*filesCmd.ConfirmUploadResult, error) {
+		return nil, nil
+	}
+	requestProcessingH := func(ctx context.Context, cmd filesCmd.RequestProcessingCommand) (*filesCmd.RequestProcessingResult, error) {
+		return nil, nil
+	}
+	getFileH := func(ctx context.Context, query filesQuery.GetFileQuery) (*filesQuery.FileDTO, error) {
+		return nil, nil
+	}
+	listFilesH := func(ctx context.Context, query filesQuery.ListFilesQuery) (*filesQuery.ListFilesResult, error) {
+		return nil, nil
+	}
+	getProcessingStatusH := func(ctx context.Context, query filesQuery.GetProcessingStatusQuery) (*filesQuery.ProcessingDTO, error) {
+		return nil, nil
+	}
+	listProcessingsH := func(ctx context.Context, query filesQuery.ListProcessingsQuery) (*filesQuery.ListProcessingsResult, error) {
+		return nil, nil
+	}
+
+	handler := NewHandler(uploadFileH, deleteFileH, requestUploadURLH, confirmUploadH, requestProcessingH, getFileH, listFilesH, getProcessingStatusH, listProcessingsH)
+
+	r := gin.New()
+	r.POST("/api/v1/files", handler.UploadFile)
+
+	req := createMultipartRequest(t, "test.txt", "Hello, World!", "", "public")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+
+	var resp UploadFileResponse
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	require.NotEmpty(t, resp.FileID)
+	require.NotEmpty(t, resp.StoredName)
+	require.NotEmpty(t, resp.StoragePath)
+}
+
+func TestHandler_UploadFile_WithOwner(t *testing.T) {
+	fileRepo := &mockFileRepo{}
+	storage, err := storage.NewLocalStorage("/tmp/test-uploads", "http://localhost:8080")
+	require.NoError(t, err)
+	bus := &mockEventBus{}
+
+	uploadFileH := filesCmd.NewUploadFileHandler(fileRepo, storage, bus)
+	deleteFileH := func(ctx context.Context, cmd filesCmd.DeleteFileCommand) error { return nil }
+	requestUploadURLH := func(ctx context.Context, cmd filesCmd.RequestUploadURLCommand) (*filesCmd.RequestUploadURLResult, error) {
+		return nil, nil
+	}
+	confirmUploadH := func(ctx context.Context, cmd filesCmd.ConfirmUploadCommand) (*filesCmd.ConfirmUploadResult, error) {
+		return nil, nil
+	}
+	requestProcessingH := func(ctx context.Context, cmd filesCmd.RequestProcessingCommand) (*filesCmd.RequestProcessingResult, error) {
+		return nil, nil
+	}
+	getFileH := func(ctx context.Context, query filesQuery.GetFileQuery) (*filesQuery.FileDTO, error) {
+		return nil, nil
+	}
+	listFilesH := func(ctx context.Context, query filesQuery.ListFilesQuery) (*filesQuery.ListFilesResult, error) {
+		return nil, nil
+	}
+	getProcessingStatusH := func(ctx context.Context, query filesQuery.GetProcessingStatusQuery) (*filesQuery.ProcessingDTO, error) {
+		return nil, nil
+	}
+	listProcessingsH := func(ctx context.Context, query filesQuery.ListProcessingsQuery) (*filesQuery.ListProcessingsResult, error) {
+		return nil, nil
+	}
+
+	handler := NewHandler(uploadFileH, deleteFileH, requestUploadURLH, confirmUploadH, requestProcessingH, getFileH, listFilesH, getProcessingStatusH, listProcessingsH)
+
+	r := gin.New()
+	r.POST("/api/v1/files", handler.UploadFile)
+
+	// Use a valid UUID v7 for owner_id
+	req := createMultipartRequest(t, "test.txt", "Test content", "0192e5c8-7f0b-7d2e-8b1a-5c3e2d1f0a9b", "private")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Logf("Response body: %s", w.Body.String())
+	}
+
+	require.Equal(t, http.StatusCreated, w.Code)
+	require.NotNil(t, fileRepo.savedFile)
+	require.NotNil(t, fileRepo.savedFile.OwnerID())
+	require.Equal(t, "0192e5c8-7f0b-7d2e-8b1a-5c3e2d1f0a9b", string(*fileRepo.savedFile.OwnerID()))
+}
+
+func TestHandler_UploadFile_DefaultAccessLevel(t *testing.T) {
+	fileRepo := &mockFileRepo{}
+	storage, err := storage.NewLocalStorage("/tmp/test-uploads", "http://localhost:8080")
+	require.NoError(t, err)
+	bus := &mockEventBus{}
+
+	uploadFileH := filesCmd.NewUploadFileHandler(fileRepo, storage, bus)
+	deleteFileH := func(ctx context.Context, cmd filesCmd.DeleteFileCommand) error { return nil }
+	requestUploadURLH := func(ctx context.Context, cmd filesCmd.RequestUploadURLCommand) (*filesCmd.RequestUploadURLResult, error) {
+		return nil, nil
+	}
+	confirmUploadH := func(ctx context.Context, cmd filesCmd.ConfirmUploadCommand) (*filesCmd.ConfirmUploadResult, error) {
+		return nil, nil
+	}
+	requestProcessingH := func(ctx context.Context, cmd filesCmd.RequestProcessingCommand) (*filesCmd.RequestProcessingResult, error) {
+		return nil, nil
+	}
+	getFileH := func(ctx context.Context, query filesQuery.GetFileQuery) (*filesQuery.FileDTO, error) {
+		return nil, nil
+	}
+	listFilesH := func(ctx context.Context, query filesQuery.ListFilesQuery) (*filesQuery.ListFilesResult, error) {
+		return nil, nil
+	}
+	getProcessingStatusH := func(ctx context.Context, query filesQuery.GetProcessingStatusQuery) (*filesQuery.ProcessingDTO, error) {
+		return nil, nil
+	}
+	listProcessingsH := func(ctx context.Context, query filesQuery.ListProcessingsQuery) (*filesQuery.ListProcessingsResult, error) {
+		return nil, nil
+	}
+
+	handler := NewHandler(uploadFileH, deleteFileH, requestUploadURLH, confirmUploadH, requestProcessingH, getFileH, listFilesH, getProcessingStatusH, listProcessingsH)
+
+	r := gin.New()
+	r.POST("/api/v1/files", handler.UploadFile)
+
+	req := createMultipartRequest(t, "test.txt", "Test content", "", "")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusCreated, w.Code)
+	require.NotNil(t, fileRepo.savedFile)
+	require.Equal(t, filesDomain.AccessPrivate, fileRepo.savedFile.AccessLevel())
+}
+
+func TestHandler_UploadFile_MissingFile(t *testing.T) {
+	fileRepo := &mockFileRepo{}
+	storage, err := storage.NewLocalStorage("/tmp/test-uploads", "http://localhost:8080")
+	require.NoError(t, err)
+	bus := &mockEventBus{}
+
+	uploadFileH := filesCmd.NewUploadFileHandler(fileRepo, storage, bus)
+	deleteFileH := func(ctx context.Context, cmd filesCmd.DeleteFileCommand) error { return nil }
+	requestUploadURLH := func(ctx context.Context, cmd filesCmd.RequestUploadURLCommand) (*filesCmd.RequestUploadURLResult, error) {
+		return nil, nil
+	}
+	confirmUploadH := func(ctx context.Context, cmd filesCmd.ConfirmUploadCommand) (*filesCmd.ConfirmUploadResult, error) {
+		return nil, nil
+	}
+	requestProcessingH := func(ctx context.Context, cmd filesCmd.RequestProcessingCommand) (*filesCmd.RequestProcessingResult, error) {
+		return nil, nil
+	}
+	getFileH := func(ctx context.Context, query filesQuery.GetFileQuery) (*filesQuery.FileDTO, error) {
+		return nil, nil
+	}
+	listFilesH := func(ctx context.Context, query filesQuery.ListFilesQuery) (*filesQuery.ListFilesResult, error) {
+		return nil, nil
+	}
+	getProcessingStatusH := func(ctx context.Context, query filesQuery.GetProcessingStatusQuery) (*filesQuery.ProcessingDTO, error) {
+		return nil, nil
+	}
+	listProcessingsH := func(ctx context.Context, query filesQuery.ListProcessingsQuery) (*filesQuery.ListProcessingsResult, error) {
+		return nil, nil
+	}
+
+	handler := NewHandler(uploadFileH, deleteFileH, requestUploadURLH, confirmUploadH, requestProcessingH, getFileH, listFilesH, getProcessingStatusH, listProcessingsH)
+
+	r := gin.New()
+	r.POST("/api/v1/files", handler.UploadFile)
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	err = writer.Close()
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("POST", "/api/v1/files", &buf)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestHandler_GetFile(t *testing.T) {

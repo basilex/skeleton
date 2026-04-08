@@ -61,10 +61,65 @@ func NewHandler(
 // @Failure 500 {object} ErrorResponse
 // @Router /files [post]
 func (h *Handler) UploadFile(c *gin.Context) {
-	// TODO: Implement multipart file upload
-	c.JSON(http.StatusNotImplemented, ErrorResponse{
-		Error:   "not_implemented",
-		Message: "Direct file upload not yet implemented",
+	maxSize := int64(5 << 20) // 5 MB
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxSize)
+
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		if err.Error() == "http: request body too large" {
+			c.JSON(http.StatusRequestEntityTooLarge, ErrorResponse{
+				Error:   "file_too_large",
+				Message: "File size exceeds 5MB limit. Use presigned URL upload for larger files.",
+			})
+			return
+		}
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "invalid_request",
+			Message: "Failed to get file from request: " + err.Error(),
+		})
+		return
+	}
+	defer file.Close()
+
+	ownerID := c.PostForm("owner_id")
+	accessLevel := c.PostForm("access_level")
+	if accessLevel == "" {
+		accessLevel = "private"
+	}
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	cmd := command.UploadFileCommand{
+		Filename:        header.Filename,
+		Content:         file,
+		MimeType:        contentType,
+		Size:            header.Size,
+		StorageProvider: domain.StorageLocal,
+		AccessLevel:     domain.AccessLevel(accessLevel),
+	}
+
+	if ownerID != "" {
+		cmd.OwnerID = &ownerID
+	}
+
+	result, err := h.uploadFile(c.Request.Context(), cmd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Error:   "upload_failed",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, UploadFileResponse{
+		FileID:      result.FileID,
+		StoredName:  result.StoredName,
+		StoragePath: result.StoragePath,
+		Checksum:    result.Checksum,
+		UploadedAt:  result.UploadedAt,
 	})
 }
 

@@ -247,36 +247,16 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 	imageProcessor := filesProcessing.NewImagingProcessor()
 
 	// Files command handlers
-	uploadFileHandler := filesCommand.NewUploadFileHandler(
-		fileRepo,
-		localStorage,
-		bus,
-	)
-	deleteFileHandler := filesCommand.NewDeleteFileHandler(
-		fileRepo,
-		localStorage,
-		bus,
-	)
-	requestUploadURLHandler := filesCommand.NewRequestUploadURLHandler(
-		uploadRepo,
-		fileRepo,
-		localStorage,
-	)
-	confirmUploadHandler := filesCommand.NewConfirmUploadHandler(
-		uploadRepo,
-		fileRepo,
-		bus,
-	)
+	uploadFileHandler := filesCommand.NewUploadFileHandler(fileRepo, localStorage, bus)
+	deleteFileHandler := filesCommand.NewDeleteFileHandler(fileRepo, localStorage, bus)
+	requestUploadURLHandler := filesCommand.NewRequestUploadURLHandler(uploadRepo, fileRepo, localStorage)
+	confirmUploadHandler := filesCommand.NewConfirmUploadHandler(uploadRepo, fileRepo, bus)
 
 	// Note: ProcessFileHandler uses Tasks context which is not yet integrated
 	// For now, passing nil for taskRepo - this needs to be added when Tasks is integrated
 	var taskRepo tasksDomain.TaskRepository // Placeholder - Tasks integration needed
 	_ = taskRepo                            // Avoid unused variable error until Tasks is integrated
-	requestProcessingHandler := filesCommand.NewRequestProcessingHandler(
-		processingRepo,
-		fileRepo,
-		taskRepo,
-	)
+	requestProcessingHandler := filesCommand.NewRequestProcessingHandler(processingRepo, fileRepo, taskRepo)
 
 	// Files query handlers
 	getFileHandler := filesQuery.NewGetFileHandler(fileRepo)
