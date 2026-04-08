@@ -20,8 +20,11 @@ type AppConfig struct {
 
 // DatabaseConfig holds database connection configuration settings.
 type DatabaseConfig struct {
-	Path         string
+	Type         string // "sqlite" or "postgres"
+	Path         string // SQLite database file path (for sqlite type)
+	URL          string // Database URL (for postgres type)
 	MaxOpenConns int
+	MaxIdleConns int
 }
 
 // AuthConfig holds authentication and JWT configuration settings.
@@ -109,8 +112,11 @@ func Load() (*Config, error) {
 			Name: getEnv("APP_NAME", "skeleton"),
 		},
 		Database: DatabaseConfig{
-			Path:         getEnv("DB_PATH", "./data/skeleton.db"),
-			MaxOpenConns: getEnvInt("DB_MAX_OPEN_CONNS", 1),
+			Type:         getEnv("DATABASE_TYPE", "sqlite"),
+			Path:         getEnv("DATABASE_PATH", "./data/skeleton.db"),
+			URL:          getEnv("DATABASE_URL", ""),
+			MaxOpenConns: getEnvInt("DATABASE_MAX_OPEN_CONNS", 25),
+			MaxIdleConns: getEnvInt("DATABASE_MAX_IDLE_CONNS", 5),
 		},
 		Auth: AuthConfig{
 			PrivateKeyPath:   getEnv("JWT_PRIVATE_KEY_PATH", "./keys/private.pem"),
