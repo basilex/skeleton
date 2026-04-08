@@ -16,7 +16,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	auditCommand "github.com/basilex/skeleton/internal/audit/application/command"
 	auditQuery "github.com/basilex/skeleton/internal/audit/application/query"
@@ -48,11 +50,36 @@ import (
 	statusDomain "github.com/basilex/skeleton/internal/status/domain"
 	statusHTTP "github.com/basilex/skeleton/internal/status/ports/http"
 	tasksDomain "github.com/basilex/skeleton/internal/tasks/domain"
+	"github.com/basilex/skeleton/pkg/cache"
 	"github.com/basilex/skeleton/pkg/config"
 	"github.com/basilex/skeleton/pkg/eventbus"
 	membus "github.com/basilex/skeleton/pkg/eventbus/memory"
+	"github.com/basilex/skeleton/pkg/ratelimit"
 	"github.com/jmoiron/sqlx"
 )
+
+// Cache defines the interface for caching operations.
+type Cache interface {
+	Get(ctx context.Context, key string, dest interface{}) error
+	Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error
+	Delete(ctx context.Context, key string) error
+	GetMulti(ctx context.Context, keys []string) (map[string]interface{}, error)
+	SetMulti(ctx context.Context, items map[string]interface{}, ttl time.Duration) error
+	DeleteMulti(ctx context.Context, keys []string) error
+	DeleteByPattern(ctx context.Context, pattern string) error
+	Exists(ctx context.Context, key string) (bool, error)
+	TTL(ctx context.Context, key string) (time.Duration, error)
+	Clear(ctx context.Context) error
+}
+
+// RateLimiter defines the interface for rate limiting operations.
+type RateLimiter interface {
+	Allow(ctx context.Context, key string) (bool, error)
+	AllowN(ctx context.Context, key string, n int) (bool, error)
+	Remaining(ctx context.Context, key string) (int, error)
+	Reset(ctx context.Context, key string) error
+	Configure(config ratelimit.Config) error
+}
 
 // Dependencies holds all initialized application components required to run the API server.
 // This struct serves as a container for the complete dependency graph, making dependencies
@@ -67,6 +94,11 @@ import (
 type Dependencies struct {
 	// EventBus provides the domain event bus for publishing and subscribing to events.
 	EventBus eventbus.Bus
+
+	// Cache provides distributed caching functionality.
+	Cache Cache
+	// RateLimiter provides rate limiting for API protection.
+	RateLimiter RateLimiter
 
 	// SessionMiddleware handles cookie-based session authentication.
 	SessionMiddleware *session.Middleware
@@ -120,6 +152,16 @@ type Dependencies struct {
 func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTime, goVersion string) *Dependencies {
 	// Initialize the in-memory event bus for domain event propagation.
 	bus := membus.New()
+
+	// Initialize caching infrastructure.
+	// Uses in-memory cache for development by default.
+	// In production, this should be replaced with Redis-backed cache.
+	cacheClient := newCache(cfg)
+
+	// Initialize rate limiting infrastructure.
+	// Uses token bucket algorithm for development by default.
+	// In production, this should be replaced with sliding window (Redis-backed).
+	rateLimiter := newRateLimiter(cfg)
 
 	// Identity Bounded Context
 	// Initialize repositories for the identity context.
@@ -293,12 +335,14 @@ func wireDependencies(cfg *config.Config, db *sqlx.DB, version, commit, buildTim
 
 	// Return the complete dependency graph.
 	return &Dependencies{
+		EventBus:                 bus,
+		Cache:                    cacheClient,
+		RateLimiter:              rateLimiter,
 		IdentityHandler:          identityHandler,
 		AuthMiddleware:           authMiddleware,
 		RBACMiddleware:           rbacMiddleware,
 		SessionMiddleware:        sessionMiddleware,
 		StatusHandler:            statusHandler,
-		EventBus:                 bus,
 		AuditHandler:             auditHandler,
 		AuditEventHandler:        auditIdentityEventHandler,
 		NotificationHandler:      notificationHandler,
@@ -372,4 +416,43 @@ func newStatusHandler(version, commit, buildTime, goVersion, env string) *status
 	}
 	getBuildInfoHandler := query.NewGetBuildInfoHandler(buildInfo)
 	return statusHTTP.NewHandler(getBuildInfoHandler)
+}
+
+// newCache creates a cache instance based on configuration.
+// Uses in-memory cache for development and testing.
+// In production, this should be replaced with Redis-backed cache.
+//
+// Parameters:
+//   - cfg: Application configuration containing cache settings
+//
+// Returns a Cache implementation appropriate for the environment.
+func newCache(cfg *config.Config) Cache {
+	cleanupInterval := time.Duration(cfg.Cache.CleanupInterval) * time.Second
+	if cleanupInterval == 0 {
+		cleanupInterval = time.Minute
+	}
+
+	// For now, always use in-memory cache
+	// TODO: Add Redis support when Redis is integrated
+	return cache.NewMemoryCache(cleanupInterval)
+}
+
+// newRateLimiter creates a rate limiter instance based on configuration.
+// Uses token bucket for development and testing.
+// In production, this should be replaced with sliding window (Redis-backed).
+//
+// Parameters:
+//   - cfg: Application configuration containing rate limit settings
+//
+// Returns a RateLimiter implementation appropriate for the environment.
+func newRateLimiter(cfg *config.Config) RateLimiter {
+	config := ratelimit.Config{
+		Limit:     cfg.RateLimit.Global.Limit,
+		Window:    time.Duration(cfg.RateLimit.Global.Window) * time.Second,
+		KeyPrefix: cfg.RateLimit.KeyPrefix,
+	}
+
+	// For now, always use token bucket
+	// TODO: Add Redis support for sliding window
+	return ratelimit.NewTokenBucket(config)
 }

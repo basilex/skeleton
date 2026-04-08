@@ -51,15 +51,41 @@ type LogConfig struct {
 	Format string
 }
 
+// CacheConfig holds caching configuration settings.
+type CacheConfig struct {
+	Type            string // "memory" or "redis"
+	DefaultTTL      int    // Default TTL in seconds
+	RedisPrefix     string // Key prefix for Redis
+	CleanupInterval int    // Cleanup interval for memory cache in seconds
+}
+
+// RateLimitConfig holds rate limiting configuration settings.
+type RateLimitConfig struct {
+	Enabled   bool
+	Type      string // "token_bucket" or "sliding_window"
+	KeyPrefix string // Key prefix for Redis
+	Global    RateLimitRule
+	Auth      RateLimitRule
+	Files     RateLimitRule
+}
+
+// RateLimitRule defines a rate limit rule.
+type RateLimitRule struct {
+	Limit  int // Maximum requests
+	Window int // Time window in seconds
+}
+
 // Config is the root configuration structure that aggregates all
 // application configuration settings.
 type Config struct {
-	App      AppConfig
-	Database DatabaseConfig
-	Auth     AuthConfig
-	Redis    RedisConfig
-	Session  SessionConfig
-	Log      LogConfig
+	App       AppConfig
+	Database  DatabaseConfig
+	Auth      AuthConfig
+	Redis     RedisConfig
+	Session   SessionConfig
+	Log       LogConfig
+	Cache     CacheConfig
+	RateLimit RateLimitConfig
 }
 
 // Load reads configuration from environment files and environment variables.
@@ -104,6 +130,29 @@ func Load() (*Config, error) {
 		Log: LogConfig{
 			Level:  getEnv("LOG_LEVEL", "info"),
 			Format: getEnv("LOG_FORMAT", "json"),
+		},
+		Cache: CacheConfig{
+			Type:            getEnv("CACHE_TYPE", "memory"),
+			DefaultTTL:      getEnvInt("CACHE_DEFAULT_TTL", 300),
+			RedisPrefix:     getEnv("CACHE_REDIS_PREFIX", "skeleton"),
+			CleanupInterval: getEnvInt("CACHE_CLEANUP_INTERVAL", 60),
+		},
+		RateLimit: RateLimitConfig{
+			Enabled:   getEnvBool("RATE_LIMIT_ENABLED", true),
+			Type:      getEnv("RATE_LIMIT_TYPE", "token_bucket"),
+			KeyPrefix: getEnv("RATE_LIMIT_KEY_PREFIX", "ratelimit"),
+			Global: RateLimitRule{
+				Limit:  getEnvInt("RATE_LIMIT_GLOBAL_LIMIT", 1000),
+				Window: getEnvInt("RATE_LIMIT_GLOBAL_WINDOW", 60),
+			},
+			Auth: RateLimitRule{
+				Limit:  getEnvInt("RATE_LIMIT_AUTH_LIMIT", 5),
+				Window: getEnvInt("RATE_LIMIT_AUTH_WINDOW", 60),
+			},
+			Files: RateLimitRule{
+				Limit:  getEnvInt("RATE_LIMIT_FILES_LIMIT", 10),
+				Window: getEnvInt("RATE_LIMIT_FILES_WINDOW", 60),
+			},
 		},
 	}
 
