@@ -10,6 +10,15 @@
 //   - Audit logging for tracking user actions
 //   - Notification system with background worker processing
 //   - System status and health checks
+//   - Parties management (customers, suppliers, partners, employees)
+//   - Contracts management
+//   - Accounting (chart of accounts, transactions)
+//   - Ordering (orders, quotes)
+//   - Catalog management (items, categories)
+//   - Invoicing (invoices, payments)
+//   - Inventory management (warehouses, stock, movements, reservations)
+//   - Document management (PDF generation, signatures)
+//   - Files management (upload, download, processing)
 //
 // Architecture Overview:
 //
@@ -24,17 +33,18 @@
 //
 // Swagger Documentation:
 //
-// @title Skeleton API
-// @version 1.0
-// @description Go DDD Hexagonal architecture skeleton project API
+// @title Skeleton Business Engine API
+// @version 2.0
+// @description Enterprise-grade RESTful API for business management including parties, contracts, accounting, ordering, catalog, invoicing, inventory, and documents.
+// @description Cross-context integration via domain events enables seamless workflow automation.
 // @termsOfService http://swagger.io/terms/
 //
 // @contact.name API Support
-// @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
+// @contact.url https://github.com/basilex/skeleton/issues
+// @contact.email support@skeleton.local
 //
-// @license.name Apache 2.0
-// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
 //
 // @host localhost:8080
 // @BasePath /
@@ -42,11 +52,12 @@
 // @securityDefinitions.apikey SessionAuth
 // @in cookie
 // @name session
+// @description Session-based authentication for web clients
 //
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description JWT Bearer token (format: "Bearer {token}")
+// @description JWT Bearer token authentication (format: "Bearer {token}")
 //
 // @tag.name auth
 // @tag.description Authentication operations

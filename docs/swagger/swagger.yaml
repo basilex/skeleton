@@ -1,0 +1,89 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "Enterprise-grade RESTful API for business management including parties, contracts, accounting, ordering, catalog, invoicing, inventory, and documents. Cross-context integration via domain events enables seamless workflow automation.",
+    "title": "Skeleton Business Engine API",
+    "termsOfService": "http://swagger.io/terms/",
+    "contact": {
+      "name": "API Support",
+      "url": "https://github.com/basilex/skeleton/issues",
+      "email": "support@skeleton.local"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "2.0"
+  },
+  "host": "localhost:8080",
+  "basePath": "/",
+  "paths": {},
+  "securityDefinitions": {
+    "BearerAuth": {
+      "description": "JWT Bearer token authentication (format: \"Bearer {token}\")",
+      "in": "header",
+      "name": "Authorization",
+      "type": "apiKey"
+    },
+    "SessionAuth": {
+      "description": "Session-based authentication for web clients",
+      "in": "cookie",
+      "name": "session",
+      "type": "apiKey"
+    }
+  },
+  "tags": [
+    {
+      "name": "auth",
+      "description": "Authentication operations"
+    },
+    {
+      "name": "users",
+      "description": "User management operations"
+    },
+    {
+      "name": "roles",
+      "description": "Role management operations"
+    },
+    {
+      "name": "parties",
+      "description": "Parties management (customers, suppliers, partners, employees)"
+    },
+    {
+      "name": "contracts",
+      "description": "Contracts management"
+    },
+    {
+      "name": "accounting",
+      "description": "Accounting operations (chart of accounts, transactions)"
+    },
+    {
+      "name": "ordering",
+      "description": "Order and quote management"
+    },
+    {
+      "name": "catalog",
+      "description": "Catalog management (items, categories)"
+    },
+    {
+      "name": "invoicing",
+      "description": "Invoice and payment management"
+    },
+    {
+      "name": "inventory",
+      "description": "Inventory management (warehouses, stock, movements, reservations)"
+    },
+    {
+      "name": "documents",
+      "description": "Document management (PDF generation, signatures)"
+    },
+    {
+      "name": "files",
+      "description": "File management (upload, download, processing)"
+    },
+    {
+      "name": "status",
+      "description": "System status and health checks"
+    }
+  ]
+}
