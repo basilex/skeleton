@@ -32,13 +32,13 @@ CREATE TABLE invoices (
     issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
     due_date DATE NOT NULL,
     status invoice_status NOT NULL DEFAULT 'draft',
-    subtotal DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    tax_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    discount DECIMAL(15, 2) NOT NULL DEFAULT 0,
-    total DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    subtotal BIGINT NOT NULL DEFAULT 0,
+    tax_amount BIGINT NOT NULL DEFAULT 0,
+    discount BIGINT NOT NULL DEFAULT 0,
+    total BIGINT NOT NULL DEFAULT 0,
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
     notes TEXT,
-    paid_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    paid_amount BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
@@ -49,10 +49,10 @@ CREATE TABLE invoice_lines (
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
     description TEXT NOT NULL,
     quantity DECIMAL(15, 3) NOT NULL CHECK (quantity > 0),
-    unit_price DECIMAL(15, 2) NOT NULL CHECK (unit_price >= 0),
+    unit_price BIGINT NOT NULL CHECK (unit_price >= 0),
     unit VARCHAR(50) NOT NULL,
-    discount DECIMAL(15, 2) NOT NULL DEFAULT 0 CHECK (discount >= 0),
-    total DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    discount BIGINT NOT NULL DEFAULT 0 CHECK (discount >= 0),
+    total BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
@@ -60,7 +60,7 @@ CREATE TABLE invoice_lines (
 CREATE TABLE payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
-    amount DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
+    amount BIGINT NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'USD',
     method payment_method NOT NULL,
     reference VARCHAR(255),

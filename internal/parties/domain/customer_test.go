@@ -2,6 +2,8 @@ package domain
 
 import (
 	"testing"
+
+	moneypkg "github.com/basilex/skeleton/pkg/money"
 )
 
 func TestNewCustomer(t *testing.T) {
@@ -106,21 +108,26 @@ func TestCustomer_AddPurchase(t *testing.T) {
 	}
 
 	initialPurchases := customer.GetTotalPurchases()
-	customer.AddPurchase(1000.50)
+	purchase1, _ := moneypkg.NewFromFloat(1000.50, "USD")
+	customer.AddPurchase(purchase1)
 
-	if customer.GetTotalPurchases() != initialPurchases+1000.50 {
+	expectedTotal, _ := initialPurchases.Add(purchase1)
+	if !customer.GetTotalPurchases().Equals(expectedTotal) {
 		t.Errorf("GetTotalPurchases() = %v, want %v",
-			customer.GetTotalPurchases(), initialPurchases+1000.50)
+			customer.GetTotalPurchases(), expectedTotal)
 	}
 
 	// Test loyalty level upgrade (thresholds: 20000=Silver, 50000=Gold, 100000=Platinum)
-	customer.AddPurchase(20000) // Total > 20000, should upgrade to Silver
+	// These thresholds are in cents
+	purchase2, _ := moneypkg.New(2000000, "USD") // $20,000.00 in cents
+	customer.AddPurchase(purchase2)              // Total > 20000, should upgrade to Silver
 	if customer.GetLoyaltyLevel() != LoyaltyLevelSilver {
 		t.Errorf("GetLoyaltyLevel() = %v, want %v (total: %v)",
 			customer.GetLoyaltyLevel(), LoyaltyLevelSilver, customer.GetTotalPurchases())
 	}
 
-	customer.AddPurchase(30000) // Total > 50000, should upgrade to Gold
+	purchase3, _ := moneypkg.New(3000000, "USD") // $30,000.00 in cents
+	customer.AddPurchase(purchase3)              // Total > 50000, should upgrade to Gold
 	if customer.GetLoyaltyLevel() != LoyaltyLevelGold {
 		t.Errorf("GetLoyaltyLevel() = %v, want %v (total: %v)",
 			customer.GetLoyaltyLevel(), LoyaltyLevelGold, customer.GetTotalPurchases())

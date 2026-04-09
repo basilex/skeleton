@@ -1,342 +1,243 @@
-# Skeleton Business Engine - Documentation
+# Skeleton API Documentation
 
-A production-ready business engine with Domain-Driven Design, Hexagonal Architecture, and CQRS.
+> **Production-ready Go API with Domain-Driven Design and Hexagonal Architecture**
 
-## 📚 Architecture Documentation
+[![Go Version](https://img.shields.io/badge/Go-1.25%2B-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![Architecture](https://img.shields.io/badge/Architecture-Hexagonal-DDD-blue)]()
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-### Architecture Decision Records (ADR)
-- [ADR-017: Parties Bounded Context](adr/ADR-017-parties.md) - Customer, Supplier, Partner, Employee management
-- [ADR-018: Contracts Bounded Context](adr/ADR-018-contracts.md) - Contract lifecycle with DATERANGE
-- [ADR-019: Accounting Bounded Context](adr/ADR-019-accounting.md) - Chart of Accounts & Double-Entry
-- [ADR-020: Ordering Bounded Context](adr/ADR-020-ordering.md) - Order management with state machine
-- [ADR-021: Catalog Bounded Context](adr/ADR-021-catalog.md) - Product catalog with LTREE & JSONB
+---
 
-### Quick Start
+## 📚 Documentation Index
 
-```bash
-# Build
-go build ./cmd/api
+### Getting Started
 
-# Run tests
-go test ./internal/parties/domain/... ./internal/contracts/domain/... ./internal/accounting/domain/... ./internal/ordering/domain/... ./internal/catalog/domain/... -v
+- **[Quick Start](QUICKSTART.md)** - Get up and running in 5 minutes
+- **[Setup Guide](SETUP.md)** - Environment setup and configuration
+- **[Development Guide](DEVELOPMENT.md)** - Development workflow and conventions
 
-# Run migrations
-psql -d skeleton -f migrations/018_parties.up.sql
-psql -d skeleton -f migrations/019_contracts.up.sql
-psql -d skeleton -f migrations/020_accounting.up.sql
-psql -d skeleton -f migrations/021_ordering.up.sql
-psql -d skeleton -f migrations/022_catalog.up.sql
-```
+### Architecture & Design
+
+- **[Architecture Overview](ARCHITECTURE.md)** - System architecture and bounded contexts
+- **[Database Schema](DATABASE.md)** - Migrations, schema design, and data model
+- **[ADR Index](adr/)** - Architecture Decision Records
+
+### Testing & Quality
+
+- **[Testing Strategy](TESTING.md)** - Testing approach and guidelines
+- **[Testing Strategy Details](TESTING_STRATEGY.md)** - Comprehensive testing documentation
+
+### Operations
+
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Production deployment instructions
+- **[Makefile Reference](MAKEFILE_REFERENCE.md)** - Build and development commands
+- **[Changelog](CHANGELOG.md)** - Version history and changes
+
+---
 
 ## 🏗️ Architecture Overview
 
 ### Bounded Contexts
 
-#### 1. Parties (Universal)
-Multi-tenant party management for any business type.
-- **Entities**: Customer, Supplier, Partner, Employee
-- **Key Features**: Loyalty system, JSONB contact info, status management
-- **Database**: Single table with discriminator (party_type)
-- [Details](adr/ADR-017-parties.md)
+The system follows Domain-Driven Design with clear bounded contexts:
 
-#### 2. Contracts
-Contract lifecycle management with validity periods.
-- **Entities**: Contract, PaymentTerms, DeliveryTerms
-- **Key Features**: DATERANGE validity, state transitions, party references
-- **Database**: Native date range type with exclusion constraints
-- [Details](adr/ADR-018-contracts.md)
-
-#### 3. Accounting
-Chart of Accounts with double-entry bookkeeping.
-- **Entities**: Account, Transaction, Money
-- **Key Features**: Account hierarchy, debit/credit logic, transaction tracking
-- **Database**: Account types with parent-child relationships
-- [Details](adr/ADR-019-accounting.md)
-
-#### 4. Ordering
-Order management with lines and state machine.
-- **Entities**: Order, OrderLine, Quote
-- **Key Features**: State machine, line management, automatic totals
-- **Database**: Order lines with FK cascade
-- [Details](adr/ADR-020-ordering.md)
-
-#### 5. Catalog
-Product catalog with hierarchical categories.
-- **Entities**: Item, Category, Attributes
-- **Key Features**: LTREE hierarchy, JSONB attributes, flexible schema
-- **Database**: LTREE for categories, JSONB for item attributes
-- [Details](adr/ADR-021-catalog.md)
-
-### Design Patterns
-
-#### Domain-Driven Design (DDD)
-
-**Domain Layer Components:**
-- Aggregates: Customer, Contract, Account, Order, Item
-- Entities: OrderLine, Transaction
-- Value Objects: Money, ContactInfo, Address, PaymentTerms
-- Domain Events: CustomerCreated, OrderPlaced, TransactionRecorded
-- Repository Interfaces: CustomerRepository, OrderRepository
-
-#### Hexagonal Architecture (Ports & Adapters)
-
-**Ports (Interfaces):**
-- HTTP (REST API)
-- Application (Commands/Queries)
-- Domain (Business Logic)
-
-**Adapters (Implementations):**
-- Infrastructure (PostgreSQL, Redis)
-- Persistence (Repositories)
-- External (EventBus)
-
-#### CQRS (Command Query Separation)
-
-**Commands (Write):**
-- CreateCustomer
-- ConfirmOrder
-- RecordTransaction
-
-**Queries (Read):**
-- GetCustomer
-- ListOrders
-- ListAccounts
+| Context | Purpose | Key Entities |
+|---------|---------|--------------|
+| **Identity** | Authentication & Authorization | User, Role, Session, Permission |
+| **Accounting** | Financial Management | Account, Transaction, Journal Entry |
+| **Parties** | Party Management | Customer, Supplier, Partner, Employee |
+| **Contracts** | Contract Lifecycle | Contract, Terms, Renewal |
+| **Invoicing** | Invoice Processing | Invoice, Payment, Credit Note |
+| **Inventory** | Stock Management | Stock, Warehouse, Stock Take |
+| **Catalog** | Product Catalog | Product, Variant, Price |
+| **Documents** | Document Management | File, Version, Approval |
+| **Notifications** | Multi-channel Alerts | Notification, Template |
 
 ### Technology Stack
 
-#### Core Technologies
-- **Language**: Go 1.21+
-- **Database**: PostgreSQL 16
-- **Router**: Gin-Gonic
-- **SQL**: squirrel (query builder) + scany v2 (scanner)
-- **Validation**: Gin binding
-- **Events**: EventBus (memory/Redis)
+- **Language**: Go 1.25+
+- **Architecture**: Hexagonal (Ports & Adapters)
+- **Database**: PostgreSQL 16+ with JSONB & LTREE
+- **Event Bus**: In-memory (CQRS ready)
+- **Containerization**: Docker & Docker Compose
+- **Build**: Make + Go modules
 
-#### PostgreSQL Features Used
-- **UUID v7**: Time-sortable identifiers
-- **DATERANGE**: Contract validity periods
-- **LTREE**: Hierarchical category paths
-- **JSONB**: Flexible contact info & attributes
-- **ENUM Types**: Type-safe status fields
-- **GIN Indexes**: Fast JSONB & LTREE queries
+---
 
-## 🚀 Getting Started
+## 🚀 Quick Start Guide
 
 ### Prerequisites
-- Go 1.21+
+
+- Go 1.25+
 - PostgreSQL 16+
-- Redis (optional, for distributed events)
+- Docker & Docker Compose (optional)
 
-### Configuration
-
-```yaml
-# config.yaml
-app:
-  env: development
-  port: 8080
-
-database:
-  host: localhost
-  port: 5432
-  name: skeleton
-  user: postgres
-  password: password
-
-redis:
-  url: redis://localhost:6379
-```
-
-### Run Application
+### Minimal Setup
 
 ```bash
+# Clone repository
+git clone <repository-url>
+cd skeleton
+
 # Install dependencies
-go mod download
+make deps
+
+# Setup database
+make db-setup
 
 # Run migrations
-make migrate-up
+make migrate
 
 # Start server
 make run
 ```
 
-## 📖 API Documentation
+### Docker Setup
 
-### Swagger UI
-```
-http://localhost:8080/swagger/index.html
-```
-
-### Endpoints Overview
-
-#### Parties
-```
-POST   /api/v1/customers          # Create customer
-GET    /api/v1/customers/:id      # Get customer
-GET    /api/v1/customers          # List customers
-PUT    /api/v1/customers/:id      # Update customer
-```
-
-#### Contracts
-```
-POST   /api/v1/contracts              # Create contract
-GET    /api/v1/contracts/:id            # Get contract
-GET    /api/v1/contracts               # List contracts
-PUT    /api/v1/contracts/:id/activate  # Activate contract
-PUT    /api/v1/contracts/:id/terminate # Terminate contract
-```
-
-#### Accounting
-```
-POST   /api/v1/accounts          # Create account
-GET    /api/v1/accounts/:id       # Get account
-GET    /api/v1/accounts          # List accounts
-POST   /api/v1/transactions      # Record transaction
-```
-
-#### Ordering
-```
-POST   /api/v1/orders            # Create order
-GET    /api/v1/orders/:id        # Get order
-GET    /api/v1/orders            # List orders
-POST   /api/v1/orders/:id/lines # Add order line
-PUT    /api/v1/orders/:id/status # Update status
-```
-
-#### Catalog
-```
-POST   /api/v1/catalog/items     # Create item
-GET    /api/v1/catalog/items/:id  # Get item
-GET    /api/v1/catalog/items      # List items
-PUT    /api/v1/catalog/items/:id  # Update item
-```
-
-## 🧪 Testing
-
-### Unit Tests
 ```bash
-# Run domain tests
-go test ./internal/parties/domain/... -v
-go test ./internal/contracts/domain/... -v
-go test ./internal/accounting/domain/... -v
-go test ./internal/ordering/domain/... -v
-go test ./internal/catalog/domain/... -v
+# Start all services
+docker-compose up -d
 
-# Run all tests
-go test ./... -v
+# Run migrations
+docker-compose exec api make migrate
+
+# View logs
+docker-compose logs -f api
 ```
 
-### Integration Tests
+### Run Tests
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage
+make test-coverage
+
+# Run specific package
+go test ./internal/accounting/domain/... -v
+```
+
+---
+
+## 📖 Core Concepts
+
+### 1. Money Value Object
+
+All monetary values use `pkg/money.Money` (int64 cents):
+
 ```go
-// tests/integration/accounting_test.go
-func TestAccountingIntegration(t *testing.T) {
-    // Use testcontainers for PostgreSQL
-    // Test repository operations
+// Create money values
+amount, _ := money.NewFromFloat(100.50, "USD") // $100.50 USD
+amount, _ := money.New(10050, "USD")            // 100.50 USD in cents
+
+// Operations
+total, _ := amount.Add(another)
+diff, _ := amount.Subtract(another)
+
+// Convert for API
+floatAmount := amount.ToFloat64()  // 100.50
+
+// Database storage (BIGINT)
+// int64 in persistence layer
+```
+
+### 2. Domain Events
+
+All aggregates publish domain events:
+
+```go
+// Create aggregate
+customer, _ := domain.NewCustomer("ACME Corp", "12345678", contactInfo)
+
+// Pull events
+events := customer.PullEvents()
+
+// Publish to event bus
+for _, event := range events {
+    eventBus.Publish(ctx, event)
 }
 ```
 
-## 📊 Database Schema
+### 3. Transaction Management
 
-### Entity Relationship Diagram
+Repository operations support transaction context:
 
-```mermaid
-erDiagram
-    parties ||--o{ contracts : "has"
-    parties ||--o{ orders : "places"
-    contracts ||--o{ orders : "governs"
-    orders ||--|{ order_lines : "contains"
-    order_lines }o--|| catalog_items : "references"
-    accounting ||--o{ transactions : "records"
-
-    parties {
-        uuid id PK
-        string party_type
-        jsonb contact_info
-        string status
+```go
+// From command handler
+err := txManager.Execute(ctx, func(ctx context.Context) error {
+    // All operations within transaction
+    if err := accountRepo.Save(ctx, account); err != nil {
+        return err
     }
-
-    contracts {
-        uuid id PK
-        uuid party_id FK
-        daterange validity
-        jsonb payment_terms
-        string status
-    }
-
-    orders {
-        uuid id PK
-        uuid customer_id FK
-        uuid supplier_id FK
-        uuid contract_id FK
-        decimal total
-    }
-
-    order_lines {
-        uuid id PK
-        uuid item_id FK
-        int quantity
-        decimal unit_price
-    }
-
-    catalog_items {
-        uuid id PK
-        ltree category_id
-        jsonb attributes
-    }
-
-    accounting {
-        uuid id PK
-        jsonb accounts
-        jsonb transactions
-    }
+    return transactionRepo.Save(ctx, transaction)
+})
 ```
 
-## 🔧 Development
+---
 
-### Project Structure
+## 🔧 Project Structure
 
-- `skeleton/`
-  - `cmd/api/` - Application entrypoint
-  - `internal/`
-    - `parties/` - Parties bounded context
-    - `contracts/` - Contracts bounded context
-    - `accounting/` - Accounting bounded context
-    - `ordering/` - Ordering bounded context
-    - `catalog/` - Catalog bounded context
-    - `identity/` - Auth & Users
-    - `audit/` - Audit logging
-    - `files/` - File management
-    - `notifications/` - Notifications
-    - `tasks/` - Background tasks
-  - `migrations/` - Database migrations
-  - `pkg/` - Shared packages
-  - `docs/` - Documentation
-  - `tests/` - Integration tests
-
-### Make Commands
-```bash
-make run          # Start server
-make test         # Run tests
-make migrate-up   # Run migrations
-make migrate-down # Rollback migrations
-make swagger     # Generate Swagger docs
-make lint         # Run linter
-make build        # Build binary
+```
+skeleton/
+├── cmd/
+│   └── api/              # Application entry point
+├── internal/
+│   ├── accounting/      # Accounting bounded context
+│   ├── parties/          # Parties bounded context
+│   ├── invoicing/        # Invoicing bounded context
+│   ├── inventory/        # Inventory bounded context
+│   ├── ordering/         # Ordering bounded context
+│   ├── contracts/        # Contracts bounded context
+│   ├── catalog/          # Catalog bounded context
+│   └── identity/         # Authentication & authorization
+├── pkg/
+│   ├── money/            # Money value object
+│   ├── eventbus/         # Event bus interface
+│   ├── transaction/      # Transaction manager
+│   └── uuid/              # UUID utilities
+├── migrations/           # Database migrations
+├── docs/                 # Documentation
+│   └── adr/              # Architecture Decision Records
+└── tests/                # Integration tests
 ```
 
-## 📝 License
+---
 
-MIT License - See LICENSE file for details.
+## 📊 Key Metrics
+
+- **Lines of Code**: ~50,000+
+- **Test Coverage**: 70%+ domain layer
+- **Bounded Contexts**: 9
+- **Domain Entities**: 50+
+- **Database Tables**: 80+
+- **API Endpoints**: 100+
+
+---
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Make changes following [Development Guide](DEVELOPMENT.md)
+4. Run tests (`make test`)
+5. Commit with conventional commits
+6. Push and create pull request
 
-## 📞 Support
+---
 
-- **Issues**: GitHub Issues
-- **Documentation**: `/docs` directory
-- **Architecture**: ADR documents in `/docs/adr`
+## 📝 License
+
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
+
+---
+
+## 🔗 Additional Resources
+
+- **Main README**: [../README.md](../README.md) - Project overview
+- **API Documentation**: `/swagger/index.html` (when running)
+- **Architecture Records**: [adr/](adr/) - Decision documents
+
+---
+
+**Need help?** Check the [Development Guide](DEVELOPMENT.md) or open an issue.

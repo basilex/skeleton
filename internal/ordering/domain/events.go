@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
+)
 
 type DomainEvent interface {
 	EventName() string
@@ -11,7 +15,7 @@ type OrderCreated struct {
 	OrderID    OrderID
 	CustomerID string
 	SupplierID string
-	Total      float64
+	Total      money.Money
 	Currency   string
 	occurredAt time.Time
 }
@@ -29,14 +33,13 @@ type OrderStatusChanged struct {
 func (e OrderStatusChanged) EventName() string     { return "ordering.order_status_changed" }
 func (e OrderStatusChanged) OccurredAt() time.Time { return e.occurredAt }
 
-// OrderConfirmed is published when order is confirmed (ready for fulfillment)
 type OrderConfirmed struct {
 	OrderID     OrderID
 	CustomerID  string
 	SupplierID  string
-	WarehouseID string // Default warehouse for fulfillment
+	WarehouseID string
 	Lines       []OrderConfirmedLine
-	Total       float64
+	Total       money.Money
 	Currency    string
 	occurredAt  time.Time
 }
@@ -46,15 +49,14 @@ type OrderConfirmedLine struct {
 	ItemName  string
 	Quantity  float64
 	Unit      string
-	UnitPrice float64
-	Discount  float64
-	Total     float64
+	UnitPrice money.Money
+	Discount  money.Money
+	Total     money.Money
 }
 
 func (e OrderConfirmed) EventName() string     { return "ordering.order_confirmed" }
 func (e OrderConfirmed) OccurredAt() time.Time { return e.occurredAt }
 
-// OrderCancelled is published when order is cancelled
 type OrderCancelled struct {
 	OrderID    OrderID
 	CustomerID string
@@ -65,11 +67,10 @@ type OrderCancelled struct {
 func (e OrderCancelled) EventName() string     { return "ordering.order_cancelled" }
 func (e OrderCancelled) OccurredAt() time.Time { return e.occurredAt }
 
-// OrderCompleted is published when order is fulfilled
 type OrderCompleted struct {
 	OrderID    OrderID
 	CustomerID string
-	Total      float64
+	Total      money.Money
 	occurredAt time.Time
 }
 
@@ -80,7 +81,7 @@ type QuoteCreated struct {
 	QuoteID    string
 	CustomerID string
 	SupplierID string
-	Total      float64
+	Total      money.Money
 	Currency   string
 	occurredAt time.Time
 }

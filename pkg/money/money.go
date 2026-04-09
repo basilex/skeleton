@@ -43,6 +43,14 @@ func New(amount int64, currency string) (Money, error) {
 	}, nil
 }
 
+// Zero creates a Money instance with zero amount for the given currency.
+func Zero(currency string) Money {
+	return Money{
+		Amount:   0,
+		Currency: strings.ToUpper(currency),
+	}
+}
+
 // NewFromFloat creates Money from a float64 amount (e.g., 12.34 -> 1234 cents).
 // This is convenient for converting user input or API responses.
 func NewFromFloat(amount float64, currency string) (Money, error) {
@@ -125,6 +133,11 @@ func (m Money) IsZero() bool {
 // IsPositive checks if amount is positive.
 func (m Money) IsPositive() bool {
 	return m.Amount > 0
+}
+
+// IsNegative checks if amount is negative.
+func (m Money) IsNegative() bool {
+	return m.Amount < 0
 }
 
 // CompareTo compares two Money values.

@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
+)
 
 type DomainEvent interface {
 	EventName() string
@@ -124,8 +128,8 @@ func (e ContractAssigned) GetPartyID() string {
 
 type CustomerCreditLimitChanged struct {
 	PartyID    PartyID
-	OldLimit   float64
-	NewLimit   float64
+	OldLimit   money.Money
+	NewLimit   money.Money
 	occurredAt time.Time
 }
 

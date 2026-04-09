@@ -2,6 +2,8 @@ package domain
 
 import (
 	"testing"
+
+	moneypkg "github.com/basilex/skeleton/pkg/money"
 )
 
 func TestOrder_Create(t *testing.T) {
@@ -66,14 +68,17 @@ func TestOrder_AddLine(t *testing.T) {
 	order, _ := NewOrder("ORD-001", "customer-123", "supplier-456", "", "UAH", "user-123")
 
 	// Create order line
+	unitPrice, _ := moneypkg.NewFromFloat(100.0, "UAH")
+	discount := moneypkg.Zero("UAH")
+
 	line, err := NewOrderLine(
 		order.GetID(),
 		"item-123",
 		"Test Item",
 		10.0, // quantity
 		"piece",
-		100.0, // unit price
-		0,     // discount
+		unitPrice,
+		discount,
 	)
 
 	if err != nil {
@@ -90,11 +95,13 @@ func TestOrder_AddLine(t *testing.T) {
 		t.Errorf("expected 1 line, got %d", len(order.GetLines()))
 	}
 
-	if order.GetSubtotal() != 1000.0 { // 10 * 100
+	expectedSubtotal, _ := moneypkg.NewFromFloat(1000.0, "UAH") // 10 * 100
+	if !order.GetSubtotal().Equals(expectedSubtotal) {
 		t.Errorf("GetSubtotal() = %v, want 1000", order.GetSubtotal())
 	}
 
-	if order.GetTotal() != 1000.0 {
+	expectedTotal, _ := moneypkg.NewFromFloat(1000.0, "UAH")
+	if !order.GetTotal().Equals(expectedTotal) {
 		t.Errorf("GetTotal() = %v, want 1000", order.GetTotal())
 	}
 }
@@ -102,8 +109,13 @@ func TestOrder_AddLine(t *testing.T) {
 func TestOrder_RemoveLine(t *testing.T) {
 	order, _ := NewOrder("ORD-001", "customer-123", "supplier-456", "", "UAH", "user-123")
 
-	line1, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 5, "piece", 100, 0)
-	line2, _ := NewOrderLine(order.GetID(), "item-2", "Item 2", 10, "piece", 50, 0)
+	unitPrice1, _ := moneypkg.NewFromFloat(100.0, "UAH")
+	discount1 := moneypkg.Zero("UAH")
+	line1, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 5, "piece", unitPrice1, discount1)
+
+	unitPrice2, _ := moneypkg.NewFromFloat(50.0, "UAH")
+	discount2 := moneypkg.Zero("UAH")
+	line2, _ := NewOrderLine(order.GetID(), "item-2", "Item 2", 10, "piece", unitPrice2, discount2)
 
 	order.AddLine(line1)
 	order.AddLine(line2)
@@ -142,7 +154,9 @@ func TestOrder_Confirm(t *testing.T) {
 	}
 
 	// Add a line
-	line, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 1, "piece", 100, 0)
+	unitPrice, _ := moneypkg.NewFromFloat(100.0, "UAH")
+	discount := moneypkg.Zero("UAH")
+	line, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 1, "piece", unitPrice, discount)
 	order.AddLine(line)
 
 	// Now can confirm
@@ -177,7 +191,9 @@ func TestOrder_Confirm(t *testing.T) {
 
 func TestOrder_Complete(t *testing.T) {
 	order, _ := NewOrder("ORD-001", "customer-123", "supplier-456", "", "UAH", "user-123")
-	line, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 1, "piece", 100, 0)
+	unitPrice, _ := moneypkg.NewFromFloat(100.0, "UAH")
+	discount := moneypkg.Zero("UAH")
+	line, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 1, "piece", unitPrice, discount)
 	order.AddLine(line)
 
 	// Cannot complete draft order
@@ -228,7 +244,9 @@ func TestOrder_Cancel(t *testing.T) {
 	// Cannot cancel completed order
 	order = nil
 	order, _ = NewOrder("ORD-002", "customer-123", "supplier-456", "", "UAH", "user-123")
-	line, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 1, "piece", 100, 0)
+	unitPrice, _ := moneypkg.NewFromFloat(100.0, "UAH")
+	discount := moneypkg.Zero("UAH")
+	line, _ := NewOrderLine(order.GetID(), "item-1", "Item 1", 1, "piece", unitPrice, discount)
 	order.AddLine(line)
 	order.Confirm()
 	order.Complete()
@@ -294,7 +312,19 @@ func TestOrderLine_Quantity(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			line, err := NewOrderLine(orderID, "item-123", "Test Item", tt.quantity, "piece", tt.unitPrice, tt.discount)
+			unitPrice, err := moneypkg.NewFromFloat(tt.unitPrice, "USD")
+			if err != nil {
+				// If NewFromFloat returns error (e.g., negative price), that's expected for negative prices
+				if tt.wantErr {
+					return // Test passed - expected error
+				}
+				t.Errorf("NewFromFloat() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			discount, _ := moneypkg.NewFromFloat(tt.discount, "USD")
+
+			line, err := NewOrderLine(orderID, "item-123", "Test Item", tt.quantity, "piece", unitPrice, discount)
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewOrderLine() error = %v, wantErr %v", err, tt.wantErr)
@@ -305,7 +335,8 @@ func TestOrderLine_Quantity(t *testing.T) {
 				return
 			}
 
-			if line.GetTotal() != tt.wantTotal {
+			expectedTotal, _ := moneypkg.NewFromFloat(tt.wantTotal, "USD")
+			if !line.GetTotal().Equals(expectedTotal) {
 				t.Errorf("GetTotal() = %v, want %v", line.GetTotal(), tt.wantTotal)
 			}
 		})

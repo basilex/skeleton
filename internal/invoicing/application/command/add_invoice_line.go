@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/basilex/skeleton/internal/invoicing/domain"
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type AddInvoiceLineHandler struct {
@@ -37,7 +38,17 @@ func (h *AddInvoiceLineHandler) Handle(ctx context.Context, cmd AddInvoiceLineCo
 		return fmt.Errorf("find invoice: %w", err)
 	}
 
-	if err := invoice.AddLine(cmd.Description, cmd.Quantity, cmd.UnitPrice, cmd.Unit, cmd.Discount); err != nil {
+	unitPrice, err := money.NewFromFloat(cmd.UnitPrice, invoice.GetCurrency())
+	if err != nil {
+		return fmt.Errorf("create unit price: %w", err)
+	}
+
+	discount, err := money.NewFromFloat(cmd.Discount, invoice.GetCurrency())
+	if err != nil {
+		return fmt.Errorf("create discount: %w", err)
+	}
+
+	if err := invoice.AddLine(cmd.Description, cmd.Quantity, unitPrice, cmd.Unit, discount); err != nil {
 		return fmt.Errorf("add invoice line: %w", err)
 	}
 

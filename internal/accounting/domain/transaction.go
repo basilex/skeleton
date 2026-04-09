@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type TransactionID string
@@ -20,7 +22,7 @@ type Transaction struct {
 	id          TransactionID
 	fromAccount AccountID
 	toAccount   AccountID
-	amount      Money
+	amount      money.Money
 	currency    Currency
 	reference   string
 	description string
@@ -32,7 +34,7 @@ type Transaction struct {
 
 func NewTransaction(
 	fromAccount, toAccount AccountID,
-	amount Money,
+	amount money.Money,
 	currency Currency,
 	reference, description, postedBy string,
 ) (*Transaction, error) {
@@ -69,7 +71,7 @@ func NewTransaction(
 func (t *Transaction) GetID() TransactionID      { return t.id }
 func (t *Transaction) GetFromAccount() AccountID { return t.fromAccount }
 func (t *Transaction) GetToAccount() AccountID   { return t.toAccount }
-func (t *Transaction) GetAmount() Money          { return t.amount }
+func (t *Transaction) GetAmount() money.Money    { return t.amount }
 func (t *Transaction) GetCurrency() Currency     { return t.currency }
 func (t *Transaction) GetReference() string      { return t.reference }
 func (t *Transaction) GetDescription() string    { return t.description }
@@ -86,7 +88,7 @@ func (t *Transaction) PullEvents() []DomainEvent {
 func ReconstituteTransaction(
 	id TransactionID,
 	fromAccount, toAccount AccountID,
-	amount Money,
+	amount money.Money,
 	currency Currency,
 	reference, description string,
 	occurredAt, postedAt time.Time,

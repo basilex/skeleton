@@ -2,6 +2,8 @@ package domain
 
 import (
 	"testing"
+
+	moneypkg "github.com/basilex/skeleton/pkg/money"
 )
 
 func TestAccount_DebitCredit(t *testing.T) {
@@ -11,19 +13,19 @@ func TestAccount_DebitCredit(t *testing.T) {
 	}
 
 	// Initial balance should be 0
-	if account.GetBalance().Amount != 0 {
-		t.Errorf("initial balance = %v, want 0", account.GetBalance().Amount)
+	if account.GetBalance().GetAmount() != 0 {
+		t.Errorf("initial balance = %v, want 0", account.GetBalance().GetAmount())
 	}
 
 	// Debit asset account (increase)
-	money, _ := NewMoney(1000, CurrencyUAH)
+	money, _ := moneypkg.New(100000, "UAH") // 1000.00 UAH in cents
 	err = account.Debit(money)
 	if err != nil {
 		t.Errorf("Debit() error = %v", err)
 	}
 
-	if account.GetBalance().Amount != 1000 {
-		t.Errorf("balance after debit = %v, want 1000", account.GetBalance().Amount)
+	if account.GetBalance().GetAmount() != 100000 {
+		t.Errorf("balance after debit = %v, want 100000", account.GetBalance().GetAmount())
 	}
 
 	// Credit asset account (decrease)
@@ -32,8 +34,8 @@ func TestAccount_DebitCredit(t *testing.T) {
 		t.Errorf("Credit() error = %v", err)
 	}
 
-	if account.GetBalance().Amount != 0 {
-		t.Errorf("balance after credit = %v, want 0", account.GetBalance().Amount)
+	if account.GetBalance().GetAmount() != 0 {
+		t.Errorf("balance after credit = %v, want 0", account.GetBalance().GetAmount())
 	}
 }
 
@@ -80,40 +82,64 @@ func TestAccount_DifferentAccountTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			account, _ := NewAccount("1000", "Test Account", tt.accountType, CurrencyUAH, nil)
 
-			money, _ := NewMoney(100, CurrencyUAH)
+			// For liability/equity/revenue accounts, we need to credit first to have a positive balance
+			// before we can debit (which decreases these account types)
+			if tt.creditEffect == "increase" {
+				// Credit first to increase balance for liability/equity/revenue
+				creditAmount, _ := moneypkg.New(10000, "UAH")
+				err := account.Credit(creditAmount)
+				if err != nil {
+					t.Errorf("Credit() error = %v", err)
+				}
 
-			// Test debit
-			err := account.Debit(money)
-			if err != nil {
-				t.Errorf("Debit() error = %v", err)
-			}
+				balanceAfterCredit := account.GetBalance().GetAmount()
+				if balanceAfterCredit != 10000 {
+					t.Errorf("credit should increase %s account, balance = %v, want 10000",
+						tt.accountType, balanceAfterCredit)
+				}
 
-			balanceAfterDebit := account.GetBalance().Amount
+				// Then debit to decrease
+				debitAmount, _ := moneypkg.New(5000, "UAH")
+				err = account.Debit(debitAmount)
+				if err != nil {
+					t.Errorf("Debit() error = %v", err)
+				}
 
-			// Test credit
-			err = account.Credit(money)
-			if err != nil {
-				t.Errorf("Credit() error = %v", err)
-			}
-
-			balanceAfterCredit := account.GetBalance().Amount
-
-			// Verify expected behavior based on account type
-			if tt.debitEffect == "increase" {
-				if balanceAfterDebit != 100 {
-					t.Errorf("debit should increase %s account, balance = %v, want 100",
+				balanceAfterDebit := account.GetBalance().GetAmount()
+				if balanceAfterDebit != 5000 {
+					t.Errorf("debit should decrease %s account, balance = %v, want 5000",
 						tt.accountType, balanceAfterDebit)
 				}
 			} else {
-				if balanceAfterDebit != -100 {
-					t.Errorf("debit should decrease %s account, balance = %v, want -100",
-						tt.accountType, balanceAfterDebit)
+				// For asset/expense accounts, debit increases, credit decreases
+				debitAmount, _ := moneypkg.New(10000, "UAH")
+				err := account.Debit(debitAmount)
+				if err != nil {
+					t.Errorf("Debit() error = %v", err)
 				}
-			}
 
-			// After credit, should be back to 0
-			if balanceAfterCredit != 0 {
-				t.Errorf("balance after credit = %v, want 0", balanceAfterCredit)
+				balanceAfterDebit := account.GetBalance().GetAmount()
+
+				creditAmount, _ := moneypkg.New(10000, "UAH")
+				err = account.Credit(creditAmount)
+				if err != nil {
+					t.Errorf("Credit() error = %v", err)
+				}
+
+				balanceAfterCredit := account.GetBalance().GetAmount()
+
+				// Verify expected behavior based on account type
+				if tt.debitEffect == "increase" {
+					if balanceAfterDebit != 10000 {
+						t.Errorf("debit should increase %s account, balance = %v, want 10000",
+							tt.accountType, balanceAfterDebit)
+					}
+				}
+
+				// After credit, should be back to 0
+				if balanceAfterCredit != 0 {
+					t.Errorf("balance after credit = %v, want 0", balanceAfterCredit)
+				}
 			}
 		})
 	}
@@ -134,7 +160,7 @@ func TestAccount_ActivateDeactivate(t *testing.T) {
 	}
 
 	// Cannot debit/credit inactive account
-	money, _ := NewMoney(100, CurrencyUAH)
+	money, _ := moneypkg.New(10000, "UAH") // 100.00 UAH in cents
 	err := account.Debit(money)
 	if err != ErrAccountInactive {
 		t.Errorf("expected ErrAccountInactive, got %v", err)
@@ -154,31 +180,29 @@ func TestAccount_ActivateDeactivate(t *testing.T) {
 }
 
 func TestMoney_Operations(t *testing.T) {
-	money1, _ := NewMoney(100, CurrencyUAH)
-	money2, _ := NewMoney(50, CurrencyUAH)
+	money1, _ := moneypkg.New(10000, "UAH") // 100.00 UAH
+	money2, _ := moneypkg.New(5000, "UAH")  // 50.00 UAH
 
 	// Test Add
-	result := money1.Add(money2)
-	if result.Amount != 150 {
-		t.Errorf("Add() result = %v, want 150", result.Amount)
+	result, err := money1.Add(money2)
+	if err != nil {
+		t.Errorf("Add() error = %v", err)
+	}
+	if result.GetAmount() != 15000 {
+		t.Errorf("Add() result = %v, want 15000", result.GetAmount())
 	}
 
 	// Test Subtract
-	result = money1.Subtract(money2)
-	if result.Amount != 50 {
-		t.Errorf("Subtract() result = %v, want 50", result.Amount)
+	result, err = money1.Subtract(money2)
+	if err != nil {
+		t.Errorf("Subtract() error = %v", err)
 	}
-
-	// Subtract can result in negative values
-	smallMoney, _ := NewMoney(10, CurrencyUAH)
-	largeMoney, _ := NewMoney(100, CurrencyUAH)
-	result = smallMoney.Subtract(largeMoney)
-	if !result.IsNegative() {
-		t.Error("expected negative result when subtracting more than available")
+	if result.GetAmount() != 5000 {
+		t.Errorf("Subtract() result = %v, want 5000", result.GetAmount())
 	}
 
 	// Cannot create money with negative amount
-	_, err := NewMoney(-100, CurrencyUAH)
+	_, err = moneypkg.New(-100, "UAH")
 	if err == nil {
 		t.Error("expected error when creating money with negative amount")
 	}

@@ -3,6 +3,8 @@ package domain
 import (
 	"testing"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 func TestNewInvoice(t *testing.T) {
@@ -82,7 +84,10 @@ func TestInvoice_AddLine(t *testing.T) {
 		t.Fatalf("NewInvoice() error: %v", err)
 	}
 
-	err = invoice.AddLine("Service A", 10, 100.0, "hours", 0)
+	unitPrice, _ := money.NewFromFloat(100.0, "USD")
+	discount, _ := money.NewFromFloat(0, "USD")
+
+	err = invoice.AddLine("Service A", 10, unitPrice, "hours", discount)
 	if err != nil {
 		t.Errorf("AddLine() error: %v", err)
 	}
@@ -91,8 +96,9 @@ func TestInvoice_AddLine(t *testing.T) {
 		t.Errorf("Lines count = %d, want 1", len(invoice.GetLines()))
 	}
 
-	if invoice.GetSubtotal() != 1000.0 {
-		t.Errorf("Subtotal = %v, want 1000.0", invoice.GetSubtotal())
+	expectedSubtotal, _ := money.NewFromFloat(1000.0, "USD")
+	if !invoice.GetSubtotal().Equals(expectedSubtotal) {
+		t.Errorf("Subtotal = %v, want %v", invoice.GetSubtotal(), expectedSubtotal)
 	}
 }
 
@@ -107,7 +113,9 @@ func TestInvoice_Send(t *testing.T) {
 		t.Errorf("Send() should fail without lines")
 	}
 
-	invoice.AddLine("Service", 1, 100.0, "hours", 0)
+	unitPrice, _ := money.NewFromFloat(100.0, "USD")
+	discount, _ := money.NewFromFloat(0, "USD")
+	invoice.AddLine("Service", 1, unitPrice, "hours", discount)
 	err = invoice.Send()
 	if err != nil {
 		t.Errorf("Send() error: %v", err)
@@ -125,10 +133,13 @@ func TestInvoice_Send(t *testing.T) {
 
 func TestInvoice_RecordPayment(t *testing.T) {
 	invoice, _ := NewInvoice("INV-001", "customer-123", "USD", time.Now().Add(30*24*time.Hour))
-	invoice.AddLine("Service", 1, 100.0, "hours", 0)
+	unitPrice, _ := money.NewFromFloat(100.0, "USD")
+	discount, _ := money.NewFromFloat(0, "USD")
+	invoice.AddLine("Service", 1, unitPrice, "hours", discount)
 	invoice.Send()
 
-	_, err := invoice.RecordPayment(100.0, PaymentMethodBankTransfer, "REF-001")
+	amount, _ := money.NewFromFloat(100.0, "USD")
+	_, err := invoice.RecordPayment(amount, PaymentMethodBankTransfer, "REF-001")
 	if err != nil {
 		t.Errorf("RecordPayment() error: %v", err)
 	}
@@ -137,8 +148,9 @@ func TestInvoice_RecordPayment(t *testing.T) {
 		t.Errorf("Status = %v, want %v", invoice.GetStatus(), InvoiceStatusPaid)
 	}
 
-	if invoice.GetPaidAmount() != 100.0 {
-		t.Errorf("PaidAmount = %v, want 100.0", invoice.GetPaidAmount())
+	expectedPaid, _ := money.NewFromFloat(100.0, "USD")
+	if !invoice.GetPaidAmount().Equals(expectedPaid) {
+		t.Errorf("PaidAmount = %v, want %v", invoice.GetPaidAmount(), expectedPaid)
 	}
 }
 

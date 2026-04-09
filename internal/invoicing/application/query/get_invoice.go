@@ -85,10 +85,10 @@ func toDTO(invoice *domain.Invoice) *InvoiceDTO {
 			ID:          line.GetID().String(),
 			Description: line.GetDescription(),
 			Quantity:    line.GetQuantity(),
-			UnitPrice:   line.GetUnitPrice(),
+			UnitPrice:   line.GetUnitPrice().ToFloat64(),
 			Unit:        line.GetUnit(),
-			Discount:    line.GetDiscount(),
-			Total:       line.GetTotal(),
+			Discount:    line.GetDiscount().ToFloat64(),
+			Total:       line.GetTotal().ToFloat64(),
 		})
 	}
 
@@ -96,7 +96,7 @@ func toDTO(invoice *domain.Invoice) *InvoiceDTO {
 	for _, payment := range invoice.GetPayments() {
 		payments = append(payments, PaymentDTO{
 			ID:        payment.GetID().String(),
-			Amount:    payment.GetAmount(),
+			Amount:    payment.GetAmount().ToFloat64(),
 			Currency:  payment.GetCurrency(),
 			Method:    payment.GetMethod().String(),
 			Reference: payment.GetReference(),
@@ -116,13 +116,13 @@ func toDTO(invoice *domain.Invoice) *InvoiceDTO {
 		DueDate:       invoice.GetDueDate().Format("2006-01-02"),
 		Status:        invoice.GetStatus().String(),
 		Lines:         lines,
-		Subtotal:      invoice.GetSubtotal(),
-		TaxAmount:     invoice.GetTaxAmount(),
-		Discount:      invoice.GetDiscount(),
-		Total:         invoice.GetTotal(),
+		Subtotal:      invoice.GetSubtotal().ToFloat64(),
+		TaxAmount:     invoice.GetTaxAmount().ToFloat64(),
+		Discount:      invoice.GetDiscount().ToFloat64(),
+		Total:         invoice.GetTotal().ToFloat64(),
 		Currency:      invoice.GetCurrency(),
 		Notes:         invoice.GetNotes(),
-		PaidAmount:    invoice.GetPaidAmount(),
+		PaidAmount:    invoice.GetPaidAmount().ToFloat64(),
 		Payments:      payments,
 		CreatedAt:     invoice.GetCreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     invoice.GetUpdatedAt().Format("2006-01-02T15:04:05Z07:00"),

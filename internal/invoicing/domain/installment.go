@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type InstallmentID string
@@ -35,8 +37,8 @@ type Installment struct {
 	id                InstallmentID
 	invoiceID         InvoiceID
 	installmentNumber int
-	totalAmount       float64
-	paidAmount        float64
+	totalAmount       money.Money
+	paidAmount        money.Money
 	dueDate           time.Time
 	paidAt            *time.Time
 	remindedAt        *time.Time
@@ -47,8 +49,8 @@ type Installment struct {
 	events            []DomainEvent
 }
 
-func NewInstallment(invoiceID InvoiceID, installmentNumber int, totalAmount float64, dueDate time.Time) (*Installment, error) {
-	if totalAmount <= 0 {
+func NewInstallment(invoiceID InvoiceID, installmentNumber int, totalAmount money.Money, dueDate time.Time) (*Installment, error) {
+	if totalAmount.IsNegative() || totalAmount.IsZero() {
 		return nil, errors.New("installment amount must be positive")
 	}
 	if dueDate.Before(time.Now()) {
@@ -56,12 +58,13 @@ func NewInstallment(invoiceID InvoiceID, installmentNumber int, totalAmount floa
 	}
 
 	now := time.Now().UTC()
+	zeroMoney, _ := money.New(0, totalAmount.GetCurrency())
 	return &Installment{
 		id:                NewInstallmentID(),
 		invoiceID:         invoiceID,
 		installmentNumber: installmentNumber,
 		totalAmount:       totalAmount,
-		paidAmount:        0,
+		paidAmount:        zeroMoney,
 		dueDate:           dueDate,
 		status:            InstallmentStatusPending,
 		createdAt:         now,
@@ -73,8 +76,8 @@ func NewInstallment(invoiceID InvoiceID, installmentNumber int, totalAmount floa
 func (i *Installment) GetID() InstallmentID         { return i.id }
 func (i *Installment) GetInvoiceID() InvoiceID      { return i.invoiceID }
 func (i *Installment) GetInstallmentNumber() int    { return i.installmentNumber }
-func (i *Installment) GetTotalAmount() float64      { return i.totalAmount }
-func (i *Installment) GetPaidAmount() float64       { return i.paidAmount }
+func (i *Installment) GetTotalAmount() money.Money  { return i.totalAmount }
+func (i *Installment) GetPaidAmount() money.Money   { return i.paidAmount }
 func (i *Installment) GetDueDate() time.Time        { return i.dueDate }
 func (i *Installment) GetPaidAt() *time.Time        { return i.paidAt }
 func (i *Installment) GetRemindedAt() *time.Time    { return i.remindedAt }
@@ -83,8 +86,9 @@ func (i *Installment) GetFailedReason() string      { return i.failedReason }
 func (i *Installment) GetCreatedAt() time.Time      { return i.createdAt }
 func (i *Installment) GetUpdatedAt() time.Time      { return i.updatedAt }
 
-func (i *Installment) GetRemainingAmount() float64 {
-	return i.totalAmount - i.paidAmount
+func (i *Installment) GetRemainingAmount() money.Money {
+	remaining, _ := i.totalAmount.Subtract(i.paidAmount)
+	return remaining
 }
 
 func (i *Installment) IsPaid() bool {
@@ -95,7 +99,7 @@ func (i *Installment) IsOverdue() bool {
 	return i.status == InstallmentStatusOverdue
 }
 
-func (i *Installment) MakePayment(amount float64) error {
+func (i *Installment) MakePayment(amount money.Money) error {
 	if i.status == InstallmentStatusPaid {
 		return errors.New("installment already paid")
 	}
@@ -106,15 +110,19 @@ func (i *Installment) MakePayment(amount float64) error {
 		return errors.New("installment has failed")
 	}
 
-	newPaidAmount := i.paidAmount + amount
-	if newPaidAmount > i.totalAmount {
-		return fmt.Errorf("payment amount %.2f exceeds remaining amount %.2f", amount, i.GetRemainingAmount())
+	newPaidAmount, err := i.paidAmount.Add(amount)
+	if err != nil {
+		return err
+	}
+
+	if newPaidAmount.GreaterThan(i.totalAmount) {
+		return fmt.Errorf("payment amount %s exceeds remaining amount %s", amount.String(), i.GetRemainingAmount().String())
 	}
 
 	i.paidAmount = newPaidAmount
 	i.updatedAt = time.Now().UTC()
 
-	if i.paidAmount >= i.totalAmount {
+	if i.paidAmount.GreaterThanOrEqual(i.totalAmount) {
 		now := time.Now().UTC()
 		i.status = InstallmentStatusPaid
 		i.paidAt = &now
@@ -241,16 +249,16 @@ func (i *Installment) PullEvents() []DomainEvent {
 }
 
 func (i *Installment) String() string {
-	return fmt.Sprintf("Installment{id=%s, invoice=%s, number=%d, amount=%.2f, status=%s}",
-		i.id, i.invoiceID, i.installmentNumber, i.totalAmount, i.status)
+	return fmt.Sprintf("Installment{id=%s, invoice=%s, number=%d, amount=%s, status=%s}",
+		i.id, i.invoiceID, i.installmentNumber, i.totalAmount.String(), i.status)
 }
 
 func ReconstituteInstallment(
 	id InstallmentID,
 	invoiceID InvoiceID,
 	installmentNumber int,
-	totalAmount float64,
-	paidAmount float64,
+	totalAmount money.Money,
+	paidAmount money.Money,
 	dueDate time.Time,
 	paidAt *time.Time,
 	remindedAt *time.Time,
@@ -279,12 +287,12 @@ func ReconstituteInstallment(
 type InstallmentPlan struct {
 	invoiceID    InvoiceID
 	installments []*Installment
-	totalAmount  float64
+	totalAmount  money.Money
 	currency     string
 	createdAt    time.Time
 }
 
-func NewInstallmentPlan(invoiceID InvoiceID, totalAmount float64, currency string) *InstallmentPlan {
+func NewInstallmentPlan(invoiceID InvoiceID, totalAmount money.Money, currency string) *InstallmentPlan {
 	return &InstallmentPlan{
 		invoiceID:    invoiceID,
 		installments: make([]*Installment, 0),
@@ -294,18 +302,23 @@ func NewInstallmentPlan(invoiceID InvoiceID, totalAmount float64, currency strin
 	}
 }
 
-func (p *InstallmentPlan) AddInstallment(amount float64, dueDate time.Time) error {
-	if amount <= 0 {
+func (p *InstallmentPlan) AddInstallment(amount money.Money, dueDate time.Time) error {
+	if amount.IsNegative() || amount.IsZero() {
 		return errors.New("installment amount must be positive")
 	}
 
-	totalPlanned := float64(0)
+	totalPlanned, _ := money.New(0, p.currency)
 	for _, inst := range p.installments {
-		totalPlanned += inst.GetTotalAmount()
+		totalPlanned, _ = totalPlanned.Add(inst.GetTotalAmount())
 	}
 
-	if totalPlanned+amount > p.totalAmount {
-		return fmt.Errorf("installment total %.2f would exceed invoice total %.2f", totalPlanned+amount, p.totalAmount)
+	newTotal, err := totalPlanned.Add(amount)
+	if err != nil {
+		return err
+	}
+
+	if newTotal.GreaterThan(p.totalAmount) {
+		return fmt.Errorf("installment total %s would exceed invoice total %s", newTotal.String(), p.totalAmount.String())
 	}
 
 	inst, err := NewInstallment(p.invoiceID, len(p.installments)+1, amount, dueDate)
@@ -319,24 +332,25 @@ func (p *InstallmentPlan) AddInstallment(amount float64, dueDate time.Time) erro
 
 func (p *InstallmentPlan) GetInvoiceID() InvoiceID         { return p.invoiceID }
 func (p *InstallmentPlan) GetInstallments() []*Installment { return p.installments }
-func (p *InstallmentPlan) GetTotalAmount() float64         { return p.totalAmount }
+func (p *InstallmentPlan) GetTotalAmount() money.Money     { return p.totalAmount }
 func (p *InstallmentPlan) GetCurrency() string             { return p.currency }
 func (p *InstallmentPlan) GetCreatedAt() time.Time         { return p.createdAt }
 
-func (p *InstallmentPlan) GetTotalPaid() float64 {
-	total := float64(0)
+func (p *InstallmentPlan) GetTotalPaid() money.Money {
+	total, _ := money.New(0, p.currency)
 	for _, inst := range p.installments {
-		total += inst.GetPaidAmount()
+		total, _ = total.Add(inst.GetPaidAmount())
 	}
 	return total
 }
 
-func (p *InstallmentPlan) GetTotalRemaining() float64 {
-	return p.totalAmount - p.GetTotalPaid()
+func (p *InstallmentPlan) GetTotalRemaining() money.Money {
+	remaining, _ := p.totalAmount.Subtract(p.GetTotalPaid())
+	return remaining
 }
 
 func (p *InstallmentPlan) IsFullyPaid() bool {
-	return p.GetTotalPaid() >= p.totalAmount
+	return p.GetTotalPaid().GreaterThanOrEqual(p.totalAmount)
 }
 
 func (p *InstallmentPlan) GetNextPendingInstallment() *Installment {

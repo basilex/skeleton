@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
+)
 
 type DomainEvent interface {
 	EventName() string
@@ -27,7 +31,7 @@ type TransactionRecorded struct {
 	TransactionID string
 	FromAccount   AccountID
 	ToAccount     AccountID
-	Amount        Money
+	Amount        money.Money
 	OcurredAt     time.Time
 }
 
@@ -42,7 +46,7 @@ func (e TransactionRecorded) OccurredAt() time.Time {
 type InvoiceIssued struct {
 	InvoiceID string
 	PartyID   string
-	Amount    Money
+	Amount    money.Money
 	Direction string
 	OcurredAt time.Time
 }
@@ -58,7 +62,7 @@ func (e InvoiceIssued) OccurredAt() time.Time {
 type PaymentRecorded struct {
 	PaymentID string
 	PayableID string
-	Amount    Money
+	Amount    money.Money
 	OcurredAt time.Time
 }
 

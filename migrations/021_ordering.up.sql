@@ -19,10 +19,10 @@ CREATE TABLE orders (
     contract_id UUID,  -- References contracts.id from contracts context
     
     -- Amounts
-    subtotal DECIMAL(15,2) NOT NULL,
-    tax_amount DECIMAL(15,2) DEFAULT 0,
-    discount DECIMAL(15,2) DEFAULT 0,
-    total DECIMAL(15,2) NOT NULL,
+    subtotal BIGINT NOT NULL,
+    tax_amount BIGINT DEFAULT 0,
+    discount BIGINT DEFAULT 0,
+    total BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Status
@@ -79,9 +79,9 @@ CREATE TABLE order_lines (
     unit VARCHAR(20),  -- 'piece', 'kg', 'hour', etc.
     
     -- Pricing
-    unit_price DECIMAL(15,2) NOT NULL,
-    discount DECIMAL(15,2) DEFAULT 0,
-    total DECIMAL(15,2) NOT NULL,
+    unit_price BIGINT NOT NULL,
+    discount BIGINT DEFAULT 0,
+    total BIGINT NOT NULL,
     
     -- Metadata
     metadata JSONB DEFAULT '{}',
@@ -117,9 +117,9 @@ CREATE TABLE quotes (
     supplier_id UUID NOT NULL,  -- References parties.id
     
     -- Amounts
-    subtotal DECIMAL(15,2) NOT NULL,
-    tax_amount DECIMAL(15,2) DEFAULT 0,
-    total DECIMAL(15,2) NOT NULL,
+    subtotal BIGINT NOT NULL,
+    tax_amount BIGINT DEFAULT 0,
+    total BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Validity

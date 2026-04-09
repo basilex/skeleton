@@ -6,6 +6,7 @@ import (
 
 	"github.com/basilex/skeleton/internal/invoicing/domain"
 	"github.com/basilex/skeleton/pkg/eventbus"
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type RecordPaymentHandler struct {
@@ -43,8 +44,13 @@ func (h *RecordPaymentHandler) Handle(ctx context.Context, cmd RecordPaymentComm
 		return nil, fmt.Errorf("find invoice: %w", err)
 	}
 
+	amount, err := money.NewFromFloat(cmd.Amount, invoice.GetCurrency())
+	if err != nil {
+		return nil, fmt.Errorf("create payment amount: %w", err)
+	}
+
 	payment, err := invoice.RecordPayment(
-		cmd.Amount,
+		amount,
 		domain.PaymentMethod(cmd.Method),
 		cmd.Reference,
 	)
@@ -60,11 +66,9 @@ func (h *RecordPaymentHandler) Handle(ctx context.Context, cmd RecordPaymentComm
 		return nil, fmt.Errorf("save invoice: %w", err)
 	}
 
-	// Publish domain events
 	events := invoice.PullEvents()
 	for _, event := range events {
 		if err := h.bus.Publish(ctx, event); err != nil {
-			// Log error but don't fail the operation
 		}
 	}
 

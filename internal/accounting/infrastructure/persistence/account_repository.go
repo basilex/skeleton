@@ -66,7 +66,7 @@ func (r *AccountRepository) Save(ctx context.Context, account *domain.Account) e
 			account.GetName(),
 			account.GetType().String(),
 			account.GetCurrency().String(),
-			account.GetBalance().Amount,
+			account.GetBalance().GetAmount(),
 			parentID,
 			account.IsActive(),
 			account.GetCreatedAt(),

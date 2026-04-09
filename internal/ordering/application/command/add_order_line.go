@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/basilex/skeleton/internal/ordering/domain"
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type AddOrderLineHandler struct {
@@ -36,7 +37,17 @@ func (h *AddOrderLineHandler) Handle(ctx context.Context, cmd AddOrderLineComman
 		return fmt.Errorf("find order: %w", err)
 	}
 
-	line, err := domain.NewOrderLine(orderID, cmd.ItemID, cmd.ItemName, cmd.Quantity, cmd.Unit, cmd.UnitPrice, cmd.Discount)
+	unitPrice, err := money.NewFromFloat(cmd.UnitPrice, order.GetCurrency())
+	if err != nil {
+		return fmt.Errorf("create unit price: %w", err)
+	}
+
+	discount, err := money.NewFromFloat(cmd.Discount, order.GetCurrency())
+	if err != nil {
+		return fmt.Errorf("create discount: %w", err)
+	}
+
+	line, err := domain.NewOrderLine(orderID, cmd.ItemID, cmd.ItemName, cmd.Quantity, cmd.Unit, unitPrice, discount)
 	if err != nil {
 		return fmt.Errorf("create order line: %w", err)
 	}

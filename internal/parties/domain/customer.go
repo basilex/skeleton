@@ -3,6 +3,8 @@ package domain
 import (
 	"fmt"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type Customer struct {
@@ -14,9 +16,9 @@ type Customer struct {
 	bankAccount    BankAccount
 	status         PartyStatus
 	loyaltyLevel   LoyaltyLevel
-	totalPurchases float64
-	creditLimit    float64
-	currentCredit  float64
+	totalPurchases money.Money
+	creditLimit    money.Money
+	currentCredit  money.Money
 	createdAt      time.Time
 	updatedAt      time.Time
 	events         []DomainEvent
@@ -27,6 +29,7 @@ func NewCustomer(name, taxID string, contactInfo ContactInfo) (*Customer, error)
 		return nil, fmt.Errorf("name is required")
 	}
 
+	zeroMoney := money.Zero("USD")
 	now := time.Now().UTC()
 	c := &Customer{
 		id:             NewPartyID(),
@@ -37,9 +40,9 @@ func NewCustomer(name, taxID string, contactInfo ContactInfo) (*Customer, error)
 		bankAccount:    BankAccount{},
 		status:         PartyStatusActive,
 		loyaltyLevel:   LoyaltyLevelBronze,
-		totalPurchases: 0,
-		creditLimit:    0,
-		currentCredit:  0,
+		totalPurchases: zeroMoney,
+		creditLimit:    zeroMoney,
+		currentCredit:  zeroMoney,
 		createdAt:      now,
 		updatedAt:      now,
 		events:         make([]DomainEvent, 0),
@@ -55,20 +58,23 @@ func NewCustomer(name, taxID string, contactInfo ContactInfo) (*Customer, error)
 	return c, nil
 }
 
-func (c *Customer) GetID() PartyID                { return c.id }
-func (c *Customer) GetType() PartyType            { return c.partyType }
-func (c *Customer) GetName() string               { return c.name }
-func (c *Customer) GetContactInfo() ContactInfo   { return c.contactInfo }
-func (c *Customer) GetTaxID() string              { return c.taxID }
-func (c *Customer) GetStatus() PartyStatus        { return c.status }
-func (c *Customer) GetBankAccount() BankAccount   { return c.bankAccount }
-func (c *Customer) GetLoyaltyLevel() LoyaltyLevel { return c.loyaltyLevel }
-func (c *Customer) GetTotalPurchases() float64    { return c.totalPurchases }
-func (c *Customer) GetCreditLimit() float64       { return c.creditLimit }
-func (c *Customer) GetCurrentCredit() float64     { return c.currentCredit }
-func (c *Customer) GetAvailableCredit() float64   { return c.creditLimit - c.currentCredit }
-func (c *Customer) GetCreatedAt() time.Time       { return c.createdAt }
-func (c *Customer) GetUpdatedAt() time.Time       { return c.updatedAt }
+func (c *Customer) GetID() PartyID                 { return c.id }
+func (c *Customer) GetType() PartyType             { return c.partyType }
+func (c *Customer) GetName() string                { return c.name }
+func (c *Customer) GetContactInfo() ContactInfo    { return c.contactInfo }
+func (c *Customer) GetTaxID() string               { return c.taxID }
+func (c *Customer) GetStatus() PartyStatus         { return c.status }
+func (c *Customer) GetBankAccount() BankAccount    { return c.bankAccount }
+func (c *Customer) GetLoyaltyLevel() LoyaltyLevel  { return c.loyaltyLevel }
+func (c *Customer) GetTotalPurchases() money.Money { return c.totalPurchases }
+func (c *Customer) GetCreditLimit() money.Money    { return c.creditLimit }
+func (c *Customer) GetCurrentCredit() money.Money  { return c.currentCredit }
+func (c *Customer) GetAvailableCredit() money.Money {
+	available, _ := c.creditLimit.Subtract(c.currentCredit)
+	return available
+}
+func (c *Customer) GetCreatedAt() time.Time { return c.createdAt }
+func (c *Customer) GetUpdatedAt() time.Time { return c.updatedAt }
 
 func (c *Customer) UpdateContactInfo(contactInfo ContactInfo) error {
 	if c.status == PartyStatusBlacklisted {
@@ -88,27 +94,28 @@ func (c *Customer) UpdateBankAccount(bankAccount BankAccount) error {
 	return nil
 }
 
-func (c *Customer) AddPurchase(amount float64) {
-	c.totalPurchases += amount
+func (c *Customer) AddPurchase(amount money.Money) {
+	c.totalPurchases, _ = c.totalPurchases.Add(amount)
 	c.updatedAt = time.Now().UTC()
 	c.updateLoyaltyLevel()
 }
 
 func (c *Customer) updateLoyaltyLevel() {
+	totalAmount := c.totalPurchases.GetAmount()
 	switch {
-	case c.totalPurchases >= 100000:
+	case totalAmount >= 10000000:
 		c.loyaltyLevel = LoyaltyLevelPlatinum
-	case c.totalPurchases >= 50000:
+	case totalAmount >= 5000000:
 		c.loyaltyLevel = LoyaltyLevelGold
-	case c.totalPurchases >= 20000:
+	case totalAmount >= 2000000:
 		c.loyaltyLevel = LoyaltyLevelSilver
 	default:
 		c.loyaltyLevel = LoyaltyLevelBronze
 	}
 }
 
-func (c *Customer) SetCreditLimit(limit float64) error {
-	if limit < 0 {
+func (c *Customer) SetCreditLimit(limit money.Money) error {
+	if limit.IsNegative() {
 		return fmt.Errorf("credit limit cannot be negative")
 	}
 	if c.status == PartyStatusBlacklisted {
@@ -129,18 +136,22 @@ func (c *Customer) SetCreditLimit(limit float64) error {
 	return nil
 }
 
-func (c *Customer) UseCredit(amount float64) error {
-	if amount <= 0 {
+func (c *Customer) UseCredit(amount money.Money) error {
+	if amount.IsNegative() || amount.IsZero() {
 		return fmt.Errorf("amount must be positive")
 	}
 	if c.status == PartyStatusBlacklisted {
 		return ErrPartyBlacklisted
 	}
 
-	newCredit := c.currentCredit + amount
-	if newCredit > c.creditLimit {
-		return fmt.Errorf("credit limit exceeded: current %.2f + %.2f > limit %.2f",
-			c.currentCredit, amount, c.creditLimit)
+	newCredit, err := c.currentCredit.Add(amount)
+	if err != nil {
+		return err
+	}
+
+	if newCredit.GreaterThan(c.creditLimit) {
+		return fmt.Errorf("credit limit exceeded: current %s + %s > limit %s",
+			c.currentCredit.String(), amount.String(), c.creditLimit.String())
 	}
 
 	c.currentCredit = newCredit
@@ -148,23 +159,23 @@ func (c *Customer) UseCredit(amount float64) error {
 	return nil
 }
 
-func (c *Customer) RepayCredit(amount float64) error {
-	if amount <= 0 {
+func (c *Customer) RepayCredit(amount money.Money) error {
+	if amount.IsNegative() || amount.IsZero() {
 		return fmt.Errorf("amount must be positive")
 	}
 
-	if amount > c.currentCredit {
-		return fmt.Errorf("repayment amount %.2f exceeds current credit %.2f",
-			amount, c.currentCredit)
+	if amount.GreaterThan(c.currentCredit) {
+		return fmt.Errorf("repayment amount %s exceeds current credit %s",
+			amount.String(), c.currentCredit.String())
 	}
 
-	c.currentCredit -= amount
+	c.currentCredit, _ = c.currentCredit.Subtract(amount)
 	c.updatedAt = time.Now().UTC()
 	return nil
 }
 
 func (c *Customer) HasAvailableCredit() bool {
-	return c.currentCredit < c.creditLimit
+	return c.currentCredit.LessThan(c.creditLimit)
 }
 
 func (c *Customer) Activate() error {
@@ -223,9 +234,9 @@ func ReconstituteCustomer(
 	bankAccount BankAccount,
 	status PartyStatus,
 	loyaltyLevel LoyaltyLevel,
-	totalPurchases float64,
-	creditLimit float64,
-	currentCredit float64,
+	totalPurchases money.Money,
+	creditLimit money.Money,
+	currentCredit money.Money,
 	createdAt, updatedAt time.Time,
 ) (*Customer, error) {
 	return &Customer{

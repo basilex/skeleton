@@ -2,6 +2,8 @@ package domain
 
 import (
 	"errors"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type InvoiceLine struct {
@@ -9,19 +11,19 @@ type InvoiceLine struct {
 	invoiceID   InvoiceID
 	description string
 	quantity    float64
-	unitPrice   float64
+	unitPrice   money.Money
 	unit        string
-	discount    float64
-	total       float64
+	discount    money.Money
+	total       money.Money
 }
 
 func NewInvoiceLine(
 	invoiceID InvoiceID,
 	description string,
 	quantity float64,
-	unitPrice float64,
+	unitPrice money.Money,
 	unit string,
-	discount float64,
+	discount money.Money,
 ) (*InvoiceLine, error) {
 	if description == "" {
 		return nil, errors.New("description cannot be empty")
@@ -29,19 +31,20 @@ func NewInvoiceLine(
 	if quantity <= 0 {
 		return nil, ErrInvalidLineQuantity
 	}
-	if unitPrice < 0 {
+	if unitPrice.IsNegative() {
 		return nil, ErrInvalidLinePrice
 	}
-	if discount < 0 {
+	if discount.IsNegative() {
 		return nil, errors.New("discount cannot be negative")
 	}
 
-	total := quantity * unitPrice
-	if discount > 0 {
-		total = total - discount
-		if total < 0 {
-			total = 0
-		}
+	total, err := unitPrice.Multiply(quantity)
+	if err != nil {
+		return nil, err
+	}
+	total, err = total.Subtract(discount)
+	if err != nil {
+		return nil, err
 	}
 
 	return &InvoiceLine{
@@ -72,7 +75,7 @@ func (l *InvoiceLine) GetQuantity() float64 {
 	return l.quantity
 }
 
-func (l *InvoiceLine) GetUnitPrice() float64 {
+func (l *InvoiceLine) GetUnitPrice() money.Money {
 	return l.unitPrice
 }
 
@@ -80,11 +83,11 @@ func (l *InvoiceLine) GetUnit() string {
 	return l.unit
 }
 
-func (l *InvoiceLine) GetDiscount() float64 {
+func (l *InvoiceLine) GetDiscount() money.Money {
 	return l.discount
 }
 
-func (l *InvoiceLine) GetTotal() float64 {
+func (l *InvoiceLine) GetTotal() money.Money {
 	return l.total
 }
 
@@ -101,8 +104,8 @@ func (l *InvoiceLine) UpdateQuantity(qty float64) error {
 	return nil
 }
 
-func (l *InvoiceLine) UpdateUnitPrice(price float64) error {
-	if price < 0 {
+func (l *InvoiceLine) UpdateUnitPrice(price money.Money) error {
+	if price.IsNegative() {
 		return ErrInvalidLinePrice
 	}
 	l.unitPrice = price
@@ -110,8 +113,8 @@ func (l *InvoiceLine) UpdateUnitPrice(price float64) error {
 	return nil
 }
 
-func (l *InvoiceLine) UpdateDiscount(discount float64) error {
-	if discount < 0 {
+func (l *InvoiceLine) UpdateDiscount(discount money.Money) error {
+	if discount.IsNegative() {
 		return errors.New("discount cannot be negative")
 	}
 	l.discount = discount
@@ -120,13 +123,19 @@ func (l *InvoiceLine) UpdateDiscount(discount float64) error {
 }
 
 func (l *InvoiceLine) recalculateTotal() {
-	l.total = l.quantity * l.unitPrice
-	if l.discount > 0 {
-		l.total = l.total - l.discount
-		if l.total < 0 {
-			l.total = 0
+	total, err := l.unitPrice.Multiply(l.quantity)
+	if err != nil {
+		l.total = money.Money{}
+		return
+	}
+	if !l.discount.IsZero() {
+		total, err = total.Subtract(l.discount)
+		if err != nil {
+			l.total = money.Money{}
+			return
 		}
 	}
+	l.total = total
 }
 
 func RestoreInvoiceLine(
@@ -134,10 +143,10 @@ func RestoreInvoiceLine(
 	invoiceID InvoiceID,
 	description string,
 	quantity float64,
-	unitPrice float64,
+	unitPrice money.Money,
 	unit string,
-	discount float64,
-	total float64,
+	discount money.Money,
+	total money.Money,
 ) *InvoiceLine {
 	return &InvoiceLine{
 		id:          id,

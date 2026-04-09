@@ -26,7 +26,7 @@ func (r *PaymentRepository) Save(ctx context.Context, payment *domain.Payment) e
 	_, err := r.pool.Exec(ctx, query,
 		payment.GetID().String(),
 		payment.GetInvoiceID().String(),
-		payment.GetAmount(),
+		payment.GetAmount().GetAmount(),
 		payment.GetCurrency(),
 		payment.GetMethod().String(),
 		payment.GetReference(),

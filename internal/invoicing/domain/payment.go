@@ -3,12 +3,14 @@ package domain
 import (
 	"errors"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type Payment struct {
 	id        PaymentID
 	invoiceID InvoiceID
-	amount    float64
+	amount    money.Money
 	currency  string
 	method    PaymentMethod
 	reference string
@@ -18,7 +20,7 @@ type Payment struct {
 
 func NewPayment(
 	invoiceID InvoiceID,
-	amount float64,
+	amount money.Money,
 	currency string,
 	method PaymentMethod,
 	reference string,
@@ -26,7 +28,7 @@ func NewPayment(
 	if invoiceID.IsZero() {
 		return nil, errors.New("invoice ID cannot be empty")
 	}
-	if amount <= 0 {
+	if amount.IsNegative() || amount.IsZero() {
 		return nil, ErrInvalidAmount
 	}
 	if currency == "" {
@@ -47,7 +49,7 @@ func NewPayment(
 func RestorePayment(
 	id PaymentID,
 	invoiceID InvoiceID,
-	amount float64,
+	amount money.Money,
 	currency string,
 	method PaymentMethod,
 	reference string,
@@ -74,7 +76,7 @@ func (p *Payment) GetInvoiceID() InvoiceID {
 	return p.invoiceID
 }
 
-func (p *Payment) GetAmount() float64 {
+func (p *Payment) GetAmount() money.Money {
 	return p.amount
 }
 

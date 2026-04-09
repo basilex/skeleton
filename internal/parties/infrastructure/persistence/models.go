@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/internal/parties/domain"
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type partyDTO struct {
@@ -16,9 +17,9 @@ type partyDTO struct {
 	BankAccount      json.RawMessage `db:"bank_account"`
 	Status           string          `db:"status"`
 	LoyaltyLevel     string          `db:"loyalty_level"`
-	TotalPurchases   float64         `db:"total_purchases"`
-	CreditLimit      float64         `db:"credit_limit"`
-	CurrentCredit    float64         `db:"current_credit"`
+	TotalPurchases   int64           `db:"total_purchases"`
+	CreditLimit      int64           `db:"credit_limit"`
+	CurrentCredit    int64           `db:"current_credit"`
 	Rating           json.RawMessage `db:"rating"`
 	PerformanceLevel string          `db:"performance_level"`
 	Contracts        []string        `db:"contracts"`
@@ -53,6 +54,10 @@ func (dto *partyDTO) toCustomerDomain() (*domain.Customer, error) {
 		loyaltyLevel = domain.LoyaltyLevelBronze
 	}
 
+	totalPurchases, _ := money.New(dto.TotalPurchases, "USD")
+	creditLimit, _ := money.New(dto.CreditLimit, "USD")
+	currentCredit, _ := money.New(dto.CurrentCredit, "USD")
+
 	return domain.ReconstituteCustomer(
 		partyID,
 		dto.Name,
@@ -61,9 +66,9 @@ func (dto *partyDTO) toCustomerDomain() (*domain.Customer, error) {
 		bankAccount,
 		status,
 		loyaltyLevel,
-		dto.TotalPurchases,
-		dto.CreditLimit,
-		dto.CurrentCredit,
+		totalPurchases,
+		creditLimit,
+		currentCredit,
 		dto.CreatedAt,
 		dto.UpdatedAt,
 	)

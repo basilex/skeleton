@@ -62,7 +62,7 @@ func (h *ListAccountsHandler) Handle(ctx context.Context, q ListAccountsQuery) (
 			Name:        account.GetName(),
 			AccountType: account.GetType().String(),
 			Currency:    account.GetCurrency().String(),
-			Balance:     account.GetBalance().Amount,
+			Balance:     account.GetBalance().ToFloat64(),
 			ParentID:    parentID,
 			IsActive:    account.IsActive(),
 			CreatedAt:   account.GetCreatedAt().Format("2006-01-02T15:04:05Z07:00"),

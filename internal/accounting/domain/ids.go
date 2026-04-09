@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 
+	"github.com/basilex/skeleton/pkg/money"
 	"github.com/basilex/skeleton/pkg/uuid"
 )
 
@@ -70,36 +71,8 @@ func ParseCurrency(s string) (Currency, error) {
 	}
 }
 
-type Money struct {
-	Amount   float64
-	Currency Currency
-}
-
-func NewMoney(amount float64, currency Currency) (Money, error) {
-	if amount < 0 {
-		return Money{}, fmt.Errorf("amount cannot be negative")
-	}
-	return Money{Amount: amount, Currency: currency}, nil
-}
-
-func (m Money) Add(other Money) Money {
-	return Money{Amount: m.Amount + other.Amount, Currency: m.Currency}
-}
-
-func (m Money) Subtract(other Money) Money {
-	return Money{Amount: m.Amount - other.Amount, Currency: m.Currency}
-}
-
-func (m Money) IsZero() bool {
-	return m.Amount == 0
-}
-
-func (m Money) Equals(other Money) bool {
-	return m.Amount == other.Amount && m.Currency == other.Currency
-}
-
-func (m Money) IsNegative() bool {
-	return m.Amount < 0
+func (c Currency) ToMoney() money.Money {
+	return money.Zero(string(c))
 }
 
 type JournalEntryID string

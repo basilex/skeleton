@@ -108,7 +108,7 @@ func (r *InvoiceRepository) saveLine(ctx context.Context, line *domain.InvoiceLi
 func (r *InvoiceRepository) savePayment(ctx context.Context, payment *domain.Payment) error {
 	query, args, err := r.psql.Insert("payments").
 		Columns("id", "invoice_id", "amount", "currency", "method", "reference", "paid_at", "notes").
-		Values(payment.GetID().String(), payment.GetInvoiceID().String(), payment.GetAmount(),
+		Values(payment.GetID().String(), payment.GetInvoiceID().String(), payment.GetAmount().GetAmount(),
 			payment.GetCurrency(), payment.GetMethod().String(), payment.GetReference(),
 			payment.GetPaidAt(), payment.GetNotes()).
 		Suffix("ON CONFLICT(id) DO UPDATE SET amount = EXCLUDED.amount, method = EXCLUDED.method, " +

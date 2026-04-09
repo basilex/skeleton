@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/pkg/eventbus"
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type Invoice struct {
@@ -19,14 +20,14 @@ type Invoice struct {
 	dueDate       time.Time
 	status        InvoiceStatus
 	lines         []*InvoiceLine
-	subtotal      float64
+	subtotal      money.Money
 	taxRate       float64
-	taxAmount     float64
-	discount      float64
-	total         float64
+	taxAmount     money.Money
+	discount      money.Money
+	total         money.Money
 	currency      string
 	notes         *string
-	paidAmount    float64
+	paidAmount    money.Money
 	payments      []*Payment
 	createdAt     time.Time
 	updatedAt     time.Time
@@ -52,6 +53,8 @@ func NewInvoice(
 		return nil, ErrInvalidDueDate
 	}
 
+	zeroMoney, _ := money.New(0, currency)
+
 	now := time.Now()
 	return &Invoice{
 		id:            NewInvoiceID(),
@@ -63,6 +66,11 @@ func NewInvoice(
 		currency:      currency,
 		lines:         make([]*InvoiceLine, 0),
 		payments:      make([]*Payment, 0),
+		subtotal:      zeroMoney,
+		taxAmount:     zeroMoney,
+		discount:      zeroMoney,
+		total:         zeroMoney,
+		paidAmount:    zeroMoney,
 		createdAt:     now,
 		updatedAt:     now,
 		events:        make([]eventbus.Event, 0),
@@ -80,14 +88,14 @@ func RestoreInvoice(
 	dueDate time.Time,
 	status InvoiceStatus,
 	lines []*InvoiceLine,
-	subtotal float64,
+	subtotal money.Money,
 	taxRate float64,
-	taxAmount float64,
-	discount float64,
-	total float64,
+	taxAmount money.Money,
+	discount money.Money,
+	total money.Money,
 	currency string,
 	notes *string,
-	paidAmount float64,
+	paidAmount money.Money,
 	payments []*Payment,
 	createdAt time.Time,
 	updatedAt time.Time,
@@ -121,9 +129,9 @@ func RestoreInvoice(
 func (i *Invoice) AddLine(
 	description string,
 	quantity float64,
-	unitPrice float64,
+	unitPrice money.Money,
 	unit string,
-	discount float64,
+	discount money.Money,
 ) error {
 	if i.status != InvoiceStatusDraft {
 		return errors.New("cannot add lines to non-draft invoice")
@@ -189,7 +197,7 @@ func (i *Invoice) MarkAsViewed() error {
 }
 
 func (i *Invoice) RecordPayment(
-	amount float64,
+	amount money.Money,
 	method PaymentMethod,
 	reference string,
 ) (*Payment, error) {
@@ -203,7 +211,12 @@ func (i *Invoice) RecordPayment(
 		return nil, ErrInvoiceAlreadyPaid
 	}
 
-	if i.paidAmount+amount > i.total {
+	newPaidAmount, err := i.paidAmount.Add(amount)
+	if err != nil {
+		return nil, err
+	}
+
+	if newPaidAmount.GreaterThan(i.total) {
 		return nil, ErrPaymentExceedsAmount
 	}
 
@@ -213,10 +226,10 @@ func (i *Invoice) RecordPayment(
 	}
 
 	i.payments = append(i.payments, payment)
-	i.paidAmount += amount
+	i.paidAmount = newPaidAmount
 	i.updatedAt = time.Now()
 
-	if i.paidAmount >= i.total {
+	if i.paidAmount.GreaterThanOrEqual(i.total) {
 		i.status = InvoiceStatusPaid
 		i.events = append(i.events, InvoicePaid{
 			InvoiceID:     i.id,
@@ -310,18 +323,33 @@ func (i *Invoice) SetNotes(notes string) {
 }
 
 func (i *Invoice) recalculateTotals() {
-	i.subtotal = 0
+	zeroMoney, _ := money.New(0, i.currency)
+	subtotal := zeroMoney
+
 	for _, line := range i.lines {
-		i.subtotal += line.GetTotal()
+		subtotal, _ = subtotal.Add(line.GetTotal())
 	}
 
-	// Calculate tax based on rate and net amount
-	netAmount := i.subtotal - i.discount
+	i.subtotal = subtotal
+
+	netAmount, err := subtotal.Subtract(i.discount)
+	if err != nil {
+		netAmount = zeroMoney
+	}
+
 	if i.taxRate > 0 {
-		i.taxAmount = netAmount * (i.taxRate / 100)
+		taxAmount, err := netAmount.Multiply(i.taxRate / 100)
+		if err == nil {
+			i.taxAmount = taxAmount
+		}
 	}
 
-	i.total = i.subtotal + i.taxAmount - i.discount
+	total, err := subtotal.Add(i.taxAmount)
+	if err != nil {
+		i.total = zeroMoney
+		return
+	}
+	i.total, _ = total.Subtract(i.discount)
 }
 
 func (i *Invoice) SetTaxRate(taxRate float64) error {
@@ -341,14 +369,14 @@ func (i *Invoice) SetTaxRate(taxRate float64) error {
 	return nil
 }
 
-func (i *Invoice) SetDiscount(discount float64) error {
+func (i *Invoice) SetDiscount(discount money.Money) error {
 	if i.status != InvoiceStatusDraft {
 		return errors.New("cannot set discount on non-draft invoice")
 	}
-	if discount < 0 {
+	if discount.IsNegative() {
 		return errors.New("discount cannot be negative")
 	}
-	if discount > i.subtotal {
+	if discount.GreaterThan(i.subtotal) {
 		return errors.New("discount cannot exceed subtotal")
 	}
 
@@ -398,7 +426,7 @@ func (i *Invoice) GetLines() []*InvoiceLine {
 	return i.lines
 }
 
-func (i *Invoice) GetSubtotal() float64 {
+func (i *Invoice) GetSubtotal() money.Money {
 	return i.subtotal
 }
 
@@ -406,23 +434,26 @@ func (i *Invoice) GetTaxRate() float64 {
 	return i.taxRate
 }
 
-func (i *Invoice) GetTaxAmount() float64 {
+func (i *Invoice) GetTaxAmount() money.Money {
 	return i.taxAmount
 }
 
-func (i *Invoice) GetNetAmount() float64 {
-	return i.subtotal - i.discount
+func (i *Invoice) GetNetAmount() money.Money {
+	netAmount, _ := i.subtotal.Subtract(i.discount)
+	return netAmount
 }
 
-func (i *Invoice) GetGrossAmount() float64 {
-	return i.subtotal + i.taxAmount - i.discount
+func (i *Invoice) GetGrossAmount() money.Money {
+	grossAmount, _ := i.subtotal.Add(i.taxAmount)
+	grossAmount, _ = grossAmount.Subtract(i.discount)
+	return grossAmount
 }
 
-func (i *Invoice) GetDiscount() float64 {
+func (i *Invoice) GetDiscount() money.Money {
 	return i.discount
 }
 
-func (i *Invoice) GetTotal() float64 {
+func (i *Invoice) GetTotal() money.Money {
 	return i.total
 }
 
@@ -434,7 +465,7 @@ func (i *Invoice) GetNotes() *string {
 	return i.notes
 }
 
-func (i *Invoice) GetPaidAmount() float64 {
+func (i *Invoice) GetPaidAmount() money.Money {
 	return i.paidAmount
 }
 

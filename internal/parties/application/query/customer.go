@@ -95,7 +95,7 @@ func (h *GetCustomerHandler) Handle(ctx context.Context, q GetCustomerQuery) (Cu
 		},
 		Status:         customer.GetStatus().String(),
 		LoyaltyLevel:   customer.GetLoyaltyLevel().String(),
-		TotalPurchases: customer.GetTotalPurchases(),
+		TotalPurchases: customer.GetTotalPurchases().ToFloat64(),
 		CreatedAt:      customer.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:      customer.GetUpdatedAt().Format("2006-01-02T15:04:05Z"),
 	}, nil
@@ -172,7 +172,7 @@ func (h *ListCustomersHandler) Handle(ctx context.Context, q ListCustomersQuery)
 			},
 			Status:         c.GetStatus().String(),
 			LoyaltyLevel:   c.GetLoyaltyLevel().String(),
-			TotalPurchases: c.GetTotalPurchases(),
+			TotalPurchases: c.GetTotalPurchases().ToFloat64(),
 			CreatedAt:      c.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
 			UpdatedAt:      c.GetUpdatedAt().Format("2006-01-02T15:04:05Z"),
 		}

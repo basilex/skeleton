@@ -3,6 +3,8 @@ package domain
 import (
 	"fmt"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type OrderLine struct {
@@ -12,9 +14,9 @@ type OrderLine struct {
 	itemName  string
 	quantity  float64
 	unit      string
-	unitPrice float64
-	discount  float64
-	total     float64
+	unitPrice money.Money
+	discount  money.Money
+	total     money.Money
 	metadata  map[string]interface{}
 	createdAt time.Time
 }
@@ -24,21 +26,25 @@ func NewOrderLine(
 	itemID, itemName string,
 	quantity float64,
 	unit string,
-	unitPrice, discount float64,
+	unitPrice, discount money.Money,
 ) (*OrderLine, error) {
 	if quantity <= 0 {
 		return nil, ErrInvalidQuantity
 	}
-	if unitPrice < 0 {
+	if unitPrice.IsNegative() {
 		return nil, fmt.Errorf("unit price cannot be negative")
 	}
-	if discount < 0 {
+	if discount.IsNegative() {
 		return nil, fmt.Errorf("discount cannot be negative")
 	}
 
-	total := (quantity * unitPrice) - discount
-	if total < 0 {
-		total = 0
+	total, err := unitPrice.Multiply(quantity)
+	if err != nil {
+		return nil, err
+	}
+	total, err = total.Subtract(discount)
+	if err != nil {
+		total = money.Zero(unitPrice.GetCurrency())
 	}
 
 	return &OrderLine{
@@ -56,16 +62,16 @@ func NewOrderLine(
 	}, nil
 }
 
-func (ol *OrderLine) GetID() OrderLineID      { return ol.id }
-func (ol *OrderLine) GetOrderID() OrderID     { return ol.orderID }
-func (ol *OrderLine) GetItemID() string       { return ol.itemID }
-func (ol *OrderLine) GetItemName() string     { return ol.itemName }
-func (ol *OrderLine) GetQuantity() float64    { return ol.quantity }
-func (ol *OrderLine) GetUnit() string         { return ol.unit }
-func (ol *OrderLine) GetUnitPrice() float64   { return ol.unitPrice }
-func (ol *OrderLine) GetDiscount() float64    { return ol.discount }
-func (ol *OrderLine) GetTotal() float64       { return ol.total }
-func (ol *OrderLine) GetCreatedAt() time.Time { return ol.createdAt }
+func (ol *OrderLine) GetID() OrderLineID        { return ol.id }
+func (ol *OrderLine) GetOrderID() OrderID       { return ol.orderID }
+func (ol *OrderLine) GetItemID() string         { return ol.itemID }
+func (ol *OrderLine) GetItemName() string       { return ol.itemName }
+func (ol *OrderLine) GetQuantity() float64      { return ol.quantity }
+func (ol *OrderLine) GetUnit() string           { return ol.unit }
+func (ol *OrderLine) GetUnitPrice() money.Money { return ol.unitPrice }
+func (ol *OrderLine) GetDiscount() money.Money  { return ol.discount }
+func (ol *OrderLine) GetTotal() money.Money     { return ol.total }
+func (ol *OrderLine) GetCreatedAt() time.Time   { return ol.createdAt }
 
 func ReconstituteOrderLine(
 	id OrderLineID,
@@ -73,7 +79,7 @@ func ReconstituteOrderLine(
 	itemID, itemName string,
 	quantity float64,
 	unit string,
-	unitPrice, discount, total float64,
+	unitPrice, discount, total money.Money,
 	createdAt time.Time,
 ) (*OrderLine, error) {
 	return &OrderLine{
@@ -96,7 +102,49 @@ func (ol *OrderLine) UpdateQuantity(quantity float64) error {
 		return ErrInvalidQuantity
 	}
 	ol.quantity = quantity
-	ol.total = (quantity * ol.unitPrice) - ol.discount
+	total, err := ol.unitPrice.Multiply(quantity)
+	if err != nil {
+		return err
+	}
+	total, err = total.Subtract(ol.discount)
+	if err != nil {
+		total = money.Zero(ol.unitPrice.GetCurrency())
+	}
+	ol.total = total
+	return nil
+}
+
+func (ol *OrderLine) UpdateUnitPrice(unitPrice money.Money) error {
+	if unitPrice.IsNegative() {
+		return fmt.Errorf("unit price cannot be negative")
+	}
+	ol.unitPrice = unitPrice
+	total, err := unitPrice.Multiply(ol.quantity)
+	if err != nil {
+		return err
+	}
+	total, err = total.Subtract(ol.discount)
+	if err != nil {
+		total = money.Zero(unitPrice.GetCurrency())
+	}
+	ol.total = total
+	return nil
+}
+
+func (ol *OrderLine) UpdateDiscount(discount money.Money) error {
+	if discount.IsNegative() {
+		return fmt.Errorf("discount cannot be negative")
+	}
+	ol.discount = discount
+	total, err := ol.unitPrice.Multiply(ol.quantity)
+	if err != nil {
+		return err
+	}
+	total, err = total.Subtract(discount)
+	if err != nil {
+		total = money.Zero(ol.unitPrice.GetCurrency())
+	}
+	ol.total = total
 	return nil
 }
 
@@ -105,34 +153,27 @@ type Order struct {
 	orderNumber string
 	status      OrderStatus
 
-	// Parties
 	customerID string
 	supplierID string
 	contractID string
 
-	// Amounts
-	subtotal  float64
-	taxAmount float64
-	discount  float64
-	total     float64
+	subtotal  money.Money
+	taxAmount money.Money
+	discount  money.Money
+	total     money.Money
 	currency  string
 
-	//Lines
 	lines []*OrderLine
 
-	// Dates
 	orderDate   time.Time
 	dueDate     *time.Time
 	completedAt *time.Time
 	cancelledAt *time.Time
 
-	// Notes
 	notes string
 
-	// Metadata
 	metadata map[string]interface{}
 
-	// Audit
 	createdBy string
 	createdAt time.Time
 	updatedAt time.Time
@@ -155,6 +196,7 @@ func NewOrder(
 		return nil, fmt.Errorf("supplier ID is required")
 	}
 
+	zeroMoney, _ := money.New(0, currency)
 	now := time.Now().UTC()
 	o := &Order{
 		id:          NewOrderID(),
@@ -163,10 +205,10 @@ func NewOrder(
 		customerID:  customerID,
 		supplierID:  supplierID,
 		contractID:  contractID,
-		subtotal:    0,
-		taxAmount:   0,
-		discount:    0,
-		total:       0,
+		subtotal:    zeroMoney,
+		taxAmount:   zeroMoney,
+		discount:    zeroMoney,
+		total:       zeroMoney,
 		currency:    currency,
 		lines:       make([]*OrderLine, 0),
 		orderDate:   now,
@@ -195,10 +237,10 @@ func (o *Order) GetStatus() OrderStatus     { return o.status }
 func (o *Order) GetCustomerID() string      { return o.customerID }
 func (o *Order) GetSupplierID() string      { return o.supplierID }
 func (o *Order) GetContractID() string      { return o.contractID }
-func (o *Order) GetSubtotal() float64       { return o.subtotal }
-func (o *Order) GetTaxAmount() float64      { return o.taxAmount }
-func (o *Order) GetDiscount() float64       { return o.discount }
-func (o *Order) GetTotal() float64          { return o.total }
+func (o *Order) GetSubtotal() money.Money   { return o.subtotal }
+func (o *Order) GetTaxAmount() money.Money  { return o.taxAmount }
+func (o *Order) GetDiscount() money.Money   { return o.discount }
+func (o *Order) GetTotal() money.Money      { return o.total }
 func (o *Order) GetCurrency() string        { return o.currency }
 func (o *Order) GetLines() []*OrderLine     { return o.lines }
 func (o *Order) GetOrderDate() time.Time    { return o.orderDate }
@@ -238,11 +280,17 @@ func (o *Order) RemoveLine(lineID OrderLineID) error {
 }
 
 func (o *Order) recalculateTotals() {
-	o.subtotal = 0
+	zeroMoney, _ := money.New(0, o.currency)
+	subtotal := zeroMoney
+
 	for _, line := range o.lines {
-		o.subtotal += line.GetTotal()
+		subtotal, _ = subtotal.Add(line.GetTotal())
 	}
-	o.total = o.subtotal + o.taxAmount - o.discount
+
+	o.subtotal = subtotal
+	total, _ := subtotal.Add(o.taxAmount)
+	total, _ = total.Subtract(o.discount)
+	o.total = total
 }
 
 func (o *Order) Confirm() error {
@@ -268,7 +316,7 @@ func (o *Order) Confirm() error {
 		OrderID:     o.id,
 		CustomerID:  o.customerID,
 		SupplierID:  o.supplierID,
-		WarehouseID: "", // TODO: Get from order or configuration
+		WarehouseID: "",
 		Lines:       o.convertLinesToConfirmedLines(),
 		Total:       o.total,
 		Currency:    o.currency,
@@ -362,7 +410,7 @@ func ReconstituteOrder(
 	orderNumber string,
 	status OrderStatus,
 	customerID, supplierID, contractID string,
-	subtotal, taxAmount, discount, total float64,
+	subtotal, taxAmount, discount, total money.Money,
 	currency string,
 	lines []*OrderLine,
 	orderDate time.Time,

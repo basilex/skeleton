@@ -29,7 +29,7 @@ CREATE TABLE catalog_items (
     description TEXT,
     
     -- Pricing
-    base_price DECIMAL(15,2) NOT NULL,
+    base_price BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Status
@@ -62,7 +62,7 @@ CREATE TABLE catalog_prices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     item_id UUID NOT NULL REFERENCES catalog_items(id) ON DELETE CASCADE,
     price_type price_type NOT NULL DEFAULT 'base',
-    amount DECIMAL(15,2) NOT NULL,
+    amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
     valid_until DATE,

@@ -4,34 +4,32 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
-// Reconciliation represents a bank statement reconciliation.
-// It matches accounting records with external statements (bank, credit card, etc.)
 type Reconciliation struct {
 	id               ReconciliationID
 	accountID        AccountID
 	statementDate    time.Time
-	statementBalance Money
-	bookBalance      Money
-	difference       Money
+	statementBalance money.Money
+	bookBalance      money.Money
+	difference       money.Money
 	status           ReconciliationStatus
 	reconciledAt     *time.Time
 	reconciledBy     string
 	items            []ReconciliationItem
 }
 
-// ReconciliationItem represents a single reconciled transaction.
 type ReconciliationItem struct {
 	journalEntryID JournalEntryID
 	transactionID  TransactionID
-	amount         Money
+	amount         money.Money
 	cleared        bool
 	clearedAt      *time.Time
 	reference      string
 }
 
-// ReconciliationStatus represents the status of a reconciliation.
 type ReconciliationStatus string
 
 const (
@@ -40,13 +38,15 @@ const (
 	ReconciliationStatusDiscrepancy ReconciliationStatus = "discrepancy"
 )
 
-// NewReconciliation creates a new reconciliation.
-func NewReconciliation(accountID AccountID, statementDate time.Time, statementBalance, bookBalance Money) (*Reconciliation, error) {
-	if statementBalance.Currency != bookBalance.Currency {
+func NewReconciliation(accountID AccountID, statementDate time.Time, statementBalance, bookBalance money.Money) (*Reconciliation, error) {
+	if statementBalance.GetCurrency() != bookBalance.GetCurrency() {
 		return nil, errors.New("currencies must match")
 	}
 
-	difference := statementBalance.Subtract(bookBalance)
+	difference, err := statementBalance.Subtract(bookBalance)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Reconciliation{
 		id:               NewReconciliationID(),
@@ -60,49 +60,36 @@ func NewReconciliation(accountID AccountID, statementDate time.Time, statementBa
 	}, nil
 }
 
-// AddItem adds a reconciled item to the reconciliation.
-func (r *Reconciliation) AddItem(journalEntryID JournalEntryID, amount Money, reference string) error {
+func (r *Reconciliation) AddItem(journalEntryID JournalEntryID, transactionID TransactionID, amount money.Money, reference string) error {
 	if r.status != ReconciliationStatusInProgress {
-		return errors.New("cannot add items to completed reconciliation")
+		return errors.New("cannot add items to non-in-progress reconciliation")
 	}
 
-	item := ReconciliationItem{
+	r.items = append(r.items, ReconciliationItem{
 		journalEntryID: journalEntryID,
+		transactionID:  transactionID,
 		amount:         amount,
 		reference:      reference,
-		cleared:        false,
-	}
+	})
 
-	r.items = append(r.items, item)
 	return nil
 }
 
-// MarkCleared marks an item as cleared.
-func (r *Reconciliation) MarkCleared(journalEntryID JournalEntryID) error {
-	for i, item := range r.items {
-		if item.journalEntryID == journalEntryID {
+func (r *Reconciliation) MarkItemCleared(transactionID TransactionID) error {
+	for i := range r.items {
+		if r.items[i].transactionID == transactionID {
 			now := time.Now().UTC()
 			r.items[i].cleared = true
 			r.items[i].clearedAt = &now
 			return nil
 		}
 	}
-	return errors.New("item not found")
+	return fmt.Errorf("transaction %s not found in reconciliation", transactionID)
 }
 
-// Complete completes the reconciliation if all items are cleared and balanced.
 func (r *Reconciliation) Complete(reconciledBy string) error {
 	if r.status != ReconciliationStatusInProgress {
-		return errors.New("reconciliation is not in progress")
-	}
-
-	if !r.AllCleared() {
-		return errors.New("not all items are cleared")
-	}
-
-	if !r.IsBalanced() {
-		r.status = ReconciliationStatusDiscrepancy
-		return errors.New("reconciliation has discrepancy")
+		return errors.New("can only complete in-progress reconciliation")
 	}
 
 	now := time.Now().UTC()
@@ -110,16 +97,54 @@ func (r *Reconciliation) Complete(reconciledBy string) error {
 	r.reconciledAt = &now
 	r.reconciledBy = reconciledBy
 
+	if !r.difference.IsZero() {
+		r.status = ReconciliationStatusDiscrepancy
+	}
+
 	return nil
 }
 
-// IsBalanced checks if the reconciliation balances (statement == book).
-func (r *Reconciliation) IsBalanced() bool {
-	return r.difference.IsZero()
+func (r *Reconciliation) GetID() ReconciliationID {
+	return r.id
 }
 
-// AllCleared checks if all items are cleared.
-func (r *Reconciliation) AllCleared() bool {
+func (r *Reconciliation) GetAccountID() AccountID {
+	return r.accountID
+}
+
+func (r *Reconciliation) GetStatementDate() time.Time {
+	return r.statementDate
+}
+
+func (r *Reconciliation) GetStatementBalance() money.Money {
+	return r.statementBalance
+}
+
+func (r *Reconciliation) GetBookBalance() money.Money {
+	return r.bookBalance
+}
+
+func (r *Reconciliation) GetDifference() money.Money {
+	return r.difference
+}
+
+func (r *Reconciliation) GetStatus() ReconciliationStatus {
+	return r.status
+}
+
+func (r *Reconciliation) GetReconciledAt() *time.Time {
+	return r.reconciledAt
+}
+
+func (r *Reconciliation) GetReconciledBy() string {
+	return r.reconciledBy
+}
+
+func (r *Reconciliation) GetItems() []ReconciliationItem {
+	return r.items
+}
+
+func (r *Reconciliation) IsCleared() bool {
 	for _, item := range r.items {
 		if !item.cleared {
 			return false
@@ -128,28 +153,30 @@ func (r *Reconciliation) AllCleared() bool {
 	return true
 }
 
-// GetDifference returns the difference between statement and book balance.
-func (r *Reconciliation) GetDifference() Money {
-	return r.difference
+func (r *Reconciliation) HasDiscrepancy() bool {
+	return r.status == ReconciliationStatusDiscrepancy
 }
 
-// GetID returns the reconciliation ID.
-func (r *Reconciliation) GetID() ReconciliationID {
-	return r.id
+func (ri *ReconciliationItem) GetJournalEntryID() JournalEntryID {
+	return ri.journalEntryID
 }
 
-// GetStatus returns the current status.
-func (r *Reconciliation) GetStatus() ReconciliationStatus {
-	return r.status
+func (ri *ReconciliationItem) GetTransactionID() TransactionID {
+	return ri.transactionID
 }
 
-// GetItems returns all reconciliation items.
-func (r *Reconciliation) GetItems() []ReconciliationItem {
-	return r.items
+func (ri *ReconciliationItem) GetAmount() money.Money {
+	return ri.amount
 }
 
-// String returns a string representation.
-func (r *Reconciliation) String() string {
-	return fmt.Sprintf("Reconciliation{id=%s, status=%s, balanced=%v}",
-		r.id, r.status, r.IsBalanced())
+func (ri *ReconciliationItem) IsCleared() bool {
+	return ri.cleared
+}
+
+func (ri *ReconciliationItem) GetClearedAt() *time.Time {
+	return ri.clearedAt
+}
+
+func (ri *ReconciliationItem) GetReference() string {
+	return ri.reference
 }

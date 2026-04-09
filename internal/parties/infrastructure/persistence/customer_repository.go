@@ -35,7 +35,7 @@ func (r *CustomerRepository) Save(ctx context.Context, customer *domain.Customer
 	}
 
 	query, args, err := r.psql.Insert("parties").
-		Columns("id", "party_type", "name", "tax_id", "contact_info", "bank_account", "status", "loyalty_level", "total_purchases", "created_at", "updated_at").
+		Columns("id", "party_type", "name", "tax_id", "contact_info", "bank_account", "status", "loyalty_level", "total_purchases", "credit_limit", "current_credit", "created_at", "updated_at").
 		Values(
 			customer.GetID().String(),
 			domain.PartyTypeCustomer.String(),
@@ -45,11 +45,13 @@ func (r *CustomerRepository) Save(ctx context.Context, customer *domain.Customer
 			bankAccountJSON,
 			customer.GetStatus().String(),
 			customer.GetLoyaltyLevel().String(),
-			customer.GetTotalPurchases(),
+			customer.GetTotalPurchases().GetAmount(),
+			customer.GetCreditLimit().GetAmount(),
+			customer.GetCurrentCredit().GetAmount(),
 			customer.GetCreatedAt(),
 			customer.GetUpdatedAt(),
 		).
-		Suffix("ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, tax_id = EXCLUDED.tax_id, contact_info = EXCLUDED.contact_info, bank_account = EXCLUDED.bank_account, status = EXCLUDED.status, loyalty_level = EXCLUDED.loyalty_level, total_purchases = EXCLUDED.total_purchases, updated_at = EXCLUDED.updated_at").
+		Suffix("ON CONFLICT(id) DO UPDATE SET name = EXCLUDED.name, tax_id = EXCLUDED.tax_id, contact_info = EXCLUDED.contact_info, bank_account = EXCLUDED.bank_account, status = EXCLUDED.status, loyalty_level = EXCLUDED.loyalty_level, total_purchases = EXCLUDED.total_purchases, credit_limit = EXCLUDED.credit_limit, current_credit = EXCLUDED.current_credit, updated_at = EXCLUDED.updated_at").
 		ToSql()
 	if err != nil {
 		return fmt.Errorf("build insert query: %w", err)

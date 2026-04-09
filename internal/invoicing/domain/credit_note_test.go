@@ -3,6 +3,8 @@ package domain
 import (
 	"testing"
 	"time"
+
+	moneypkg "github.com/basilex/skeleton/pkg/money"
 )
 
 func TestNewCreditNote(t *testing.T) {
@@ -20,7 +22,7 @@ func TestNewCreditNote(t *testing.T) {
 			t.Errorf("status = %v, want %v", cn.GetStatus(), CreditNoteStatusDraft)
 		}
 
-		if cn.GetTotal() != 0 {
+		if !cn.GetTotal().IsZero() {
 			t.Errorf("total = %v, want 0", cn.GetTotal())
 		}
 	})
@@ -44,7 +46,8 @@ func TestCreditNote_Lines(t *testing.T) {
 	cn, _ := NewCreditNote("CN-001", "customer-123", CreditNoteReasonRefund, "desc", "USD")
 
 	t.Run("add line", func(t *testing.T) {
-		err := cn.AddLine("Product A", 2, 50.0)
+		unitPrice, _ := moneypkg.NewFromFloat(50.0, "USD")
+		err := cn.AddLine("Product A", 2, unitPrice)
 		if err != nil {
 			t.Errorf("AddLine() error = %v", err)
 		}
@@ -53,33 +56,39 @@ func TestCreditNote_Lines(t *testing.T) {
 			t.Errorf("lines count = %d, want 1", len(cn.GetLines()))
 		}
 
-		if cn.GetSubtotal() != 100 {
+		expected, _ := moneypkg.NewFromFloat(100.0, "USD")
+		if !cn.GetSubtotal().Equals(expected) {
 			t.Errorf("subtotal = %v, want 100", cn.GetSubtotal())
 		}
 	})
 
 	t.Run("add another line", func(t *testing.T) {
-		err := cn.AddLine("Product B", 1, 25.0)
+		unitPrice, _ := moneypkg.NewFromFloat(25.0, "USD")
+		err := cn.AddLine("Product B", 1, unitPrice)
 		if err != nil {
 			t.Errorf("AddLine() error = %v", err)
 		}
 
-		if cn.GetSubtotal() != 125 {
+		expected, _ := moneypkg.NewFromFloat(125.0, "USD")
+		if !cn.GetSubtotal().Equals(expected) {
 			t.Errorf("subtotal = %v, want 125", cn.GetSubtotal())
 		}
 	})
 
 	t.Run("set tax", func(t *testing.T) {
-		err := cn.SetTax(10.0)
+		taxAmount, _ := moneypkg.NewFromFloat(10.0, "USD")
+		err := cn.SetTax(taxAmount)
 		if err != nil {
 			t.Errorf("SetTax() error = %v", err)
 		}
 
-		if cn.GetTaxAmount() != 10 {
+		expectedTax, _ := moneypkg.NewFromFloat(10.0, "USD")
+		if !cn.GetTaxAmount().Equals(expectedTax) {
 			t.Errorf("tax amount = %v, want 10", cn.GetTaxAmount())
 		}
 
-		if cn.GetTotal() != 135 {
+		expectedTotal, _ := moneypkg.NewFromFloat(135.0, "USD")
+		if !cn.GetTotal().Equals(expectedTotal) {
 			t.Errorf("total = %v, want 135", cn.GetTotal())
 		}
 	})
@@ -114,7 +123,8 @@ func TestCreditNote_Issue(t *testing.T) {
 	})
 
 	t.Run("issues with lines", func(t *testing.T) {
-		cn.AddLine("Product A", 2, 50.0)
+		unitPrice, _ := moneypkg.NewFromFloat(50.0, "USD")
+		cn.AddLine("Product A", 2, unitPrice)
 		err := cn.Issue()
 		if err != nil {
 			t.Errorf("Issue() error = %v", err)
@@ -130,7 +140,8 @@ func TestCreditNote_Issue(t *testing.T) {
 	})
 
 	t.Run("cannot add lines after issue", func(t *testing.T) {
-		err := cn.AddLine("Product B", 1, 25.0)
+		unitPrice, _ := moneypkg.NewFromFloat(25.0, "USD")
+		err := cn.AddLine("Product B", 1, unitPrice)
 		if err == nil {
 			t.Error("expected error when adding line to issued credit note")
 		}
@@ -139,27 +150,33 @@ func TestCreditNote_Issue(t *testing.T) {
 
 func TestCreditNote_Apply(t *testing.T) {
 	cn, _ := NewCreditNote("CN-001", "customer-123", CreditNoteReasonRefund, "desc", "USD")
-	cn.AddLine("Product A", 2, 50.0)
-	cn.SetTax(10.0)
+	unitPrice, _ := moneypkg.NewFromFloat(50.0, "USD")
+	cn.AddLine("Product A", 2, unitPrice)
+	taxAmount, _ := moneypkg.NewFromFloat(10.0, "USD")
+	cn.SetTax(taxAmount)
 	cn.Issue()
 
 	t.Run("apply partial amount", func(t *testing.T) {
-		err := cn.Apply(50.0)
+		amount, _ := moneypkg.NewFromFloat(50.0, "USD")
+		err := cn.Apply(amount)
 		if err != nil {
 			t.Errorf("Apply() error = %v", err)
 		}
 
-		if cn.GetAppliedAmount() != 50 {
+		expectedApplied, _ := moneypkg.NewFromFloat(50.0, "USD")
+		if !cn.GetAppliedAmount().Equals(expectedApplied) {
 			t.Errorf("applied amount = %v, want 50", cn.GetAppliedAmount())
 		}
 
-		if cn.GetRemainingAmount() != 60 {
+		expectedRemaining, _ := moneypkg.NewFromFloat(60.0, "USD")
+		if !cn.GetRemainingAmount().Equals(expectedRemaining) {
 			t.Errorf("remaining amount = %v, want 60", cn.GetRemainingAmount())
 		}
 	})
 
 	t.Run("apply full remaining", func(t *testing.T) {
-		err := cn.Apply(60.0)
+		amount, _ := moneypkg.NewFromFloat(60.0, "USD")
+		err := cn.Apply(amount)
 		if err != nil {
 			t.Errorf("Apply() error = %v", err)
 		}
@@ -175,10 +192,12 @@ func TestCreditNote_Apply(t *testing.T) {
 
 	t.Run("cannot apply more than total", func(t *testing.T) {
 		cn2, _ := NewCreditNote("CN-002", "customer-123", CreditNoteReasonRefund, "desc", "USD")
-		cn2.AddLine("Product A", 1, 100.0)
+		unitPrice, _ := moneypkg.NewFromFloat(100.0, "USD")
+		cn2.AddLine("Product A", 1, unitPrice)
 		cn2.Issue()
 
-		err := cn2.Apply(150.0)
+		amount, _ := moneypkg.NewFromFloat(150.0, "USD")
+		err := cn2.Apply(amount)
 		if err == nil {
 			t.Error("expected error when applying more than total")
 		}
@@ -187,7 +206,8 @@ func TestCreditNote_Apply(t *testing.T) {
 
 func TestCreditNote_Cancel(t *testing.T) {
 	cn, _ := NewCreditNote("CN-001", "customer-123", CreditNoteReasonRefund, "desc", "USD")
-	cn.AddLine("Product A", 1, 100.0)
+	unitPrice, _ := moneypkg.NewFromFloat(100.0, "USD")
+	cn.AddLine("Product A", 1, unitPrice)
 	cn.Issue()
 
 	err := cn.Cancel("Customer requested cancellation")
@@ -209,12 +229,14 @@ func TestInstallment(t *testing.T) {
 	dueDate := time.Now().AddDate(0, 1, 0)
 
 	t.Run("creates installment with valid data", func(t *testing.T) {
-		inst, err := NewInstallment(invoiceID, 1, 100.0, dueDate)
+		amount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		inst, err := NewInstallment(invoiceID, 1, amount, dueDate)
 		if err != nil {
 			t.Fatalf("NewInstallment() error = %v", err)
 		}
 
-		if inst.GetTotalAmount() != 100.0 {
+		expectedAmount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		if !inst.GetTotalAmount().Equals(expectedAmount) {
 			t.Errorf("total = %v, want 100.0", inst.GetTotalAmount())
 		}
 
@@ -224,33 +246,39 @@ func TestInstallment(t *testing.T) {
 	})
 
 	t.Run("fails with non-positive amount", func(t *testing.T) {
-		_, err := NewInstallment(invoiceID, 1, 0, dueDate)
+		zeroAmount := moneypkg.Zero("USD")
+		_, err := NewInstallment(invoiceID, 1, zeroAmount, dueDate)
 		if err == nil {
 			t.Error("expected error for zero amount")
 		}
 	})
 
 	t.Run("make payment", func(t *testing.T) {
-		inst, _ := NewInstallment(invoiceID, 1, 100.0, dueDate)
+		amount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		inst, _ := NewInstallment(invoiceID, 1, amount, dueDate)
 
-		err := inst.MakePayment(50.0)
+		paymentAmount, _ := moneypkg.NewFromFloat(50.0, "USD")
+		err := inst.MakePayment(paymentAmount)
 		if err != nil {
 			t.Errorf("MakePayment() error = %v", err)
 		}
 
-		if inst.GetPaidAmount() != 50.0 {
+		expectedPaid, _ := moneypkg.NewFromFloat(50.0, "USD")
+		if !inst.GetPaidAmount().Equals(expectedPaid) {
 			t.Errorf("paid amount = %v, want 50.0", inst.GetPaidAmount())
 		}
 
-		if inst.GetRemainingAmount() != 50.0 {
+		expectedRemaining, _ := moneypkg.NewFromFloat(50.0, "USD")
+		if !inst.GetRemainingAmount().Equals(expectedRemaining) {
 			t.Errorf("remaining amount = %v, want 50.0", inst.GetRemainingAmount())
 		}
 	})
 
 	t.Run("full payment marks as paid", func(t *testing.T) {
-		inst, _ := NewInstallment(invoiceID, 1, 100.0, dueDate)
+		amount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		inst, _ := NewInstallment(invoiceID, 1, amount, dueDate)
 
-		err := inst.MakePayment(100.0)
+		err := inst.MakePayment(amount)
 		if err != nil {
 			t.Errorf("MakePayment() error = %v", err)
 		}
@@ -265,7 +293,8 @@ func TestInstallment(t *testing.T) {
 	})
 
 	t.Run("status transitions", func(t *testing.T) {
-		inst, _ := NewInstallment(invoiceID, 1, 100.0, dueDate)
+		amount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		inst, _ := NewInstallment(invoiceID, 1, amount, dueDate)
 
 		err := inst.MarkAsDue()
 		if err != nil {
@@ -287,7 +316,8 @@ func TestInstallment(t *testing.T) {
 	})
 
 	t.Run("send reminder", func(t *testing.T) {
-		inst, _ := NewInstallment(invoiceID, 1, 100.0, dueDate)
+		amount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		inst, _ := NewInstallment(invoiceID, 1, amount, dueDate)
 
 		err := inst.SendReminder()
 		if err != nil {
@@ -300,7 +330,8 @@ func TestInstallment(t *testing.T) {
 	})
 
 	t.Run("cancel", func(t *testing.T) {
-		inst, _ := NewInstallment(invoiceID, 1, 100.0, dueDate)
+		amount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		inst, _ := NewInstallment(invoiceID, 1, amount, dueDate)
 
 		err := inst.Cancel("Customer bankruptcy")
 		if err != nil {
@@ -317,21 +348,26 @@ func TestInstallmentPlan(t *testing.T) {
 	invoiceID := NewInvoiceID()
 
 	t.Run("create plan", func(t *testing.T) {
-		plan := NewInstallmentPlan(invoiceID, 1000.0, "USD")
-		if plan.GetTotalAmount() != 1000.0 {
+		totalAmount, _ := moneypkg.NewFromFloat(1000.0, "USD")
+		plan := NewInstallmentPlan(invoiceID, totalAmount, "USD")
+		expectedTotal, _ := moneypkg.NewFromFloat(1000.0, "USD")
+		if !plan.GetTotalAmount().Equals(expectedTotal) {
 			t.Errorf("total = %v, want 1000.0", plan.GetTotalAmount())
 		}
 	})
 
 	t.Run("add installments", func(t *testing.T) {
-		plan := NewInstallmentPlan(invoiceID, 1000.0, "USD")
+		totalAmount, _ := moneypkg.NewFromFloat(1000.0, "USD")
+		plan := NewInstallmentPlan(invoiceID, totalAmount, "USD")
 
-		err := plan.AddInstallment(500.0, time.Now().AddDate(0, 1, 0))
+		instAmount1, _ := moneypkg.NewFromFloat(500.0, "USD")
+		err := plan.AddInstallment(instAmount1, time.Now().AddDate(0, 1, 0))
 		if err != nil {
 			t.Errorf("AddInstallment() error = %v", err)
 		}
 
-		err = plan.AddInstallment(500.0, time.Now().AddDate(0, 2, 0))
+		instAmount2, _ := moneypkg.NewFromFloat(500.0, "USD")
+		err = plan.AddInstallment(instAmount2, time.Now().AddDate(0, 2, 0))
 		if err != nil {
 			t.Errorf("AddInstallment() error = %v", err)
 		}
@@ -342,18 +378,26 @@ func TestInstallmentPlan(t *testing.T) {
 	})
 
 	t.Run("fails when exceeds total", func(t *testing.T) {
-		plan := NewInstallmentPlan(invoiceID, 1000.0, "USD")
+		totalAmount, _ := moneypkg.NewFromFloat(1000.0, "USD")
+		plan := NewInstallmentPlan(invoiceID, totalAmount, "USD")
 
-		_ = plan.AddInstallment(500.0, time.Now().AddDate(0, 1, 0))
-		_ = plan.AddInstallment(600.0, time.Now().AddDate(0, 2, 0))
+		instAmount1, _ := moneypkg.NewFromFloat(500.0, "USD")
+		_ = plan.AddInstallment(instAmount1, time.Now().AddDate(0, 1, 0))
+
+		instAmount2, _ := moneypkg.NewFromFloat(600.0, "USD")
+		_ = plan.AddInstallment(instAmount2, time.Now().AddDate(0, 2, 0))
 		// Total so far: 1100, which exceeds 1000
 		// So the second add should fail
 
 		// Try to add another that would exceed
-		plan2 := NewInstallmentPlan(invoiceID, 500.0, "USD")
-		_ = plan2.AddInstallment(400.0, time.Now().AddDate(0, 1, 0))
+		totalAmount2, _ := moneypkg.NewFromFloat(500.0, "USD")
+		plan2 := NewInstallmentPlan(invoiceID, totalAmount2, "USD")
 
-		err := plan2.AddInstallment(200.0, time.Now().AddDate(0, 2, 0))
+		instAmount3, _ := moneypkg.NewFromFloat(400.0, "USD")
+		_ = plan2.AddInstallment(instAmount3, time.Now().AddDate(0, 1, 0))
+
+		instAmount4, _ := moneypkg.NewFromFloat(200.0, "USD")
+		err := plan2.AddInstallment(instAmount4, time.Now().AddDate(0, 2, 0))
 		if err == nil {
 			t.Error("expected error when exceeding total")
 		}

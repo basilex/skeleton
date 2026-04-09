@@ -41,7 +41,7 @@ func (h *InvoiceEventHandler) HandleInvoiceCreated(ctx context.Context, event in
 	transaction, err := domain.NewTransaction(
 		receivableAccount.GetID(),
 		revenueAccount.GetID(),
-		domain.Money{Amount: event.Total, Currency: domain.Currency(event.Currency)},
+		event.Total,
 		domain.Currency(event.Currency),
 		reference,
 		description,

@@ -85,7 +85,8 @@ func TestStock_Reserve(t *testing.T) {
 	movementID := NewStockMovementID()
 	stock.AdjustQuantity(100, movementID)
 
-	if err := stock.Reserve(30); err != nil {
+	reservationID := NewStockReservationID()
+	if err := stock.Reserve(30, reservationID); err != nil {
 		t.Errorf("Reserve() error = %v", err)
 	}
 
@@ -96,7 +97,8 @@ func TestStock_Reserve(t *testing.T) {
 		t.Errorf("Stock.AvailableQty = %v, want 70", stock.GetAvailableQty())
 	}
 
-	if err := stock.Reserve(80); err == nil {
+	reservationID2 := NewStockReservationID()
+	if err := stock.Reserve(80, reservationID2); err == nil {
 		t.Error("Reserve() should return error when insufficient stock")
 	}
 }
@@ -110,7 +112,8 @@ func TestStock_ReleaseReservation(t *testing.T) {
 
 	movementID := NewStockMovementID()
 	stock.AdjustQuantity(100, movementID)
-	stock.Reserve(30)
+	reservationID := NewStockReservationID()
+	stock.Reserve(30, reservationID)
 
 	stock.ReleaseReservation(10)
 
@@ -131,7 +134,8 @@ func TestStock_FulfillReservation(t *testing.T) {
 
 	movementID := NewStockMovementID()
 	stock.AdjustQuantity(100, movementID)
-	stock.Reserve(30)
+	reservationID := NewStockReservationID()
+	stock.Reserve(30, reservationID)
 
 	stock.FulfillReservation(10)
 

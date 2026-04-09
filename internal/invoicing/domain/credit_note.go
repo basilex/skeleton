@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type CreditNoteID string
@@ -46,23 +48,24 @@ func (r CreditNoteReason) String() string {
 type CreditNoteLine struct {
 	description string
 	quantity    float64
-	unitPrice   float64
-	total       float64
+	unitPrice   money.Money
+	total       money.Money
 }
 
-func NewCreditNoteLine(description string, quantity, unitPrice float64) CreditNoteLine {
+func NewCreditNoteLine(description string, quantity float64, unitPrice money.Money) CreditNoteLine {
+	total, _ := unitPrice.Multiply(quantity)
 	return CreditNoteLine{
 		description: description,
 		quantity:    quantity,
 		unitPrice:   unitPrice,
-		total:       quantity * unitPrice,
+		total:       total,
 	}
 }
 
-func (l CreditNoteLine) GetDescription() string { return l.description }
-func (l CreditNoteLine) GetQuantity() float64   { return l.quantity }
-func (l CreditNoteLine) GetUnitPrice() float64  { return l.unitPrice }
-func (l CreditNoteLine) GetTotal() float64      { return l.total }
+func (l CreditNoteLine) GetDescription() string    { return l.description }
+func (l CreditNoteLine) GetQuantity() float64      { return l.quantity }
+func (l CreditNoteLine) GetUnitPrice() money.Money { return l.unitPrice }
+func (l CreditNoteLine) GetTotal() money.Money     { return l.total }
 
 type CreditNote struct {
 	id               CreditNoteID
@@ -72,11 +75,11 @@ type CreditNote struct {
 	reason           CreditNoteReason
 	description      string
 	lines            []CreditNoteLine
-	subtotal         float64
-	taxAmount        float64
-	total            float64
+	subtotal         money.Money
+	taxAmount        money.Money
+	total            money.Money
 	currency         string
-	appliedAmount    float64
+	appliedAmount    money.Money
 	status           CreditNoteStatus
 	issuedAt         *time.Time
 	appliedAt        *time.Time
@@ -98,6 +101,7 @@ func NewCreditNote(creditNoteNumber string, customerID string, reason CreditNote
 	}
 
 	now := time.Now().UTC()
+	zeroMoney, _ := money.New(0, currency)
 	return &CreditNote{
 		id:               NewCreditNoteID(),
 		creditNoteNumber: creditNoteNumber,
@@ -106,6 +110,10 @@ func NewCreditNote(creditNoteNumber string, customerID string, reason CreditNote
 		description:      description,
 		currency:         currency,
 		lines:            make([]CreditNoteLine, 0),
+		subtotal:         zeroMoney,
+		taxAmount:        zeroMoney,
+		total:            zeroMoney,
+		appliedAmount:    zeroMoney,
 		status:           CreditNoteStatusDraft,
 		createdAt:        now,
 		updatedAt:        now,
@@ -113,24 +121,24 @@ func NewCreditNote(creditNoteNumber string, customerID string, reason CreditNote
 	}, nil
 }
 
-func (cn *CreditNote) GetID() CreditNoteID         { return cn.id }
-func (cn *CreditNote) GetCreditNoteNumber() string { return cn.creditNoteNumber }
-func (cn *CreditNote) GetInvoiceID() *InvoiceID    { return cn.invoiceID }
-func (cn *CreditNote) GetCustomerID() string       { return cn.customerID }
-func (cn *CreditNote) GetReason() CreditNoteReason { return cn.reason }
-func (cn *CreditNote) GetDescription() string      { return cn.description }
-func (cn *CreditNote) GetLines() []CreditNoteLine  { return cn.lines }
-func (cn *CreditNote) GetSubtotal() float64        { return cn.subtotal }
-func (cn *CreditNote) GetTaxAmount() float64       { return cn.taxAmount }
-func (cn *CreditNote) GetTotal() float64           { return cn.total }
-func (cn *CreditNote) GetCurrency() string         { return cn.currency }
-func (cn *CreditNote) GetAppliedAmount() float64   { return cn.appliedAmount }
-func (cn *CreditNote) GetStatus() CreditNoteStatus { return cn.status }
-func (cn *CreditNote) GetIssuedAt() *time.Time     { return cn.issuedAt }
-func (cn *CreditNote) GetAppliedAt() *time.Time    { return cn.appliedAt }
-func (cn *CreditNote) GetCancelledAt() *time.Time  { return cn.cancelledAt }
-func (cn *CreditNote) GetCreatedAt() time.Time     { return cn.createdAt }
-func (cn *CreditNote) GetUpdatedAt() time.Time     { return cn.updatedAt }
+func (cn *CreditNote) GetID() CreditNoteID           { return cn.id }
+func (cn *CreditNote) GetCreditNoteNumber() string   { return cn.creditNoteNumber }
+func (cn *CreditNote) GetInvoiceID() *InvoiceID      { return cn.invoiceID }
+func (cn *CreditNote) GetCustomerID() string         { return cn.customerID }
+func (cn *CreditNote) GetReason() CreditNoteReason   { return cn.reason }
+func (cn *CreditNote) GetDescription() string        { return cn.description }
+func (cn *CreditNote) GetLines() []CreditNoteLine    { return cn.lines }
+func (cn *CreditNote) GetSubtotal() money.Money      { return cn.subtotal }
+func (cn *CreditNote) GetTaxAmount() money.Money     { return cn.taxAmount }
+func (cn *CreditNote) GetTotal() money.Money         { return cn.total }
+func (cn *CreditNote) GetCurrency() string           { return cn.currency }
+func (cn *CreditNote) GetAppliedAmount() money.Money { return cn.appliedAmount }
+func (cn *CreditNote) GetStatus() CreditNoteStatus   { return cn.status }
+func (cn *CreditNote) GetIssuedAt() *time.Time       { return cn.issuedAt }
+func (cn *CreditNote) GetAppliedAt() *time.Time      { return cn.appliedAt }
+func (cn *CreditNote) GetCancelledAt() *time.Time    { return cn.cancelledAt }
+func (cn *CreditNote) GetCreatedAt() time.Time       { return cn.createdAt }
+func (cn *CreditNote) GetUpdatedAt() time.Time       { return cn.updatedAt }
 
 func (cn *CreditNote) LinkInvoice(invoiceID InvoiceID) error {
 	if cn.status != CreditNoteStatusDraft {
@@ -141,7 +149,7 @@ func (cn *CreditNote) LinkInvoice(invoiceID InvoiceID) error {
 	return nil
 }
 
-func (cn *CreditNote) AddLine(description string, quantity, unitPrice float64) error {
+func (cn *CreditNote) AddLine(description string, quantity float64, unitPrice money.Money) error {
 	if cn.status != CreditNoteStatusDraft {
 		return errors.New("can only add lines to draft credit note")
 	}
@@ -153,7 +161,7 @@ func (cn *CreditNote) AddLine(description string, quantity, unitPrice float64) e
 	return nil
 }
 
-func (cn *CreditNote) SetTax(taxAmount float64) error {
+func (cn *CreditNote) SetTax(taxAmount money.Money) error {
 	if cn.status != CreditNoteStatusDraft {
 		return errors.New("can only set tax on draft credit note")
 	}
@@ -164,11 +172,16 @@ func (cn *CreditNote) SetTax(taxAmount float64) error {
 }
 
 func (cn *CreditNote) recalculateTotals() {
-	cn.subtotal = 0
+	zeroMoney, _ := money.New(0, cn.currency)
+	subtotal := zeroMoney
+
 	for _, line := range cn.lines {
-		cn.subtotal += line.GetTotal()
+		subtotal, _ = subtotal.Add(line.GetTotal())
 	}
-	cn.total = cn.subtotal + cn.taxAmount
+
+	cn.subtotal = subtotal
+	total, _ := subtotal.Add(cn.taxAmount)
+	cn.total = total
 }
 
 func (cn *CreditNote) Issue() error {
@@ -197,23 +210,27 @@ func (cn *CreditNote) Issue() error {
 	return nil
 }
 
-func (cn *CreditNote) Apply(amount float64) error {
+func (cn *CreditNote) Apply(amount money.Money) error {
 	if cn.status != CreditNoteStatusIssued {
 		return fmt.Errorf("cannot apply credit note in %s status", cn.status)
 	}
-	if amount <= 0 {
+	if amount.IsNegative() || amount.IsZero() {
 		return errors.New("amount must be positive")
 	}
 
-	newApplied := cn.appliedAmount + amount
-	if newApplied > cn.total {
-		return fmt.Errorf("applied amount %.2f exceeds credit note total %.2f", newApplied, cn.total)
+	newApplied, err := cn.appliedAmount.Add(amount)
+	if err != nil {
+		return err
+	}
+
+	if newApplied.GreaterThan(cn.total) {
+		return fmt.Errorf("applied amount %s exceeds credit note total %s", newApplied.String(), cn.total.String())
 	}
 
 	cn.appliedAmount = newApplied
 	cn.updatedAt = time.Now().UTC()
 
-	if cn.appliedAmount >= cn.total {
+	if cn.appliedAmount.GreaterThanOrEqual(cn.total) {
 		now := time.Now().UTC()
 		cn.status = CreditNoteStatusApplied
 		cn.appliedAt = &now
@@ -253,12 +270,13 @@ func (cn *CreditNote) Cancel(reason string) error {
 	return nil
 }
 
-func (cn *CreditNote) GetRemainingAmount() float64 {
-	return cn.total - cn.appliedAmount
+func (cn *CreditNote) GetRemainingAmount() money.Money {
+	remaining, _ := cn.total.Subtract(cn.appliedAmount)
+	return remaining
 }
 
 func (cn *CreditNote) IsFullyApplied() bool {
-	return cn.appliedAmount >= cn.total
+	return cn.appliedAmount.GreaterThanOrEqual(cn.total)
 }
 
 func (cn *CreditNote) PullEvents() []DomainEvent {
@@ -268,8 +286,8 @@ func (cn *CreditNote) PullEvents() []DomainEvent {
 }
 
 func (cn *CreditNote) String() string {
-	return fmt.Sprintf("CreditNote{id=%s, number=%s, customer=%s, total=%.2f, status=%s}",
-		cn.id, cn.creditNoteNumber, cn.customerID, cn.total, cn.status)
+	return fmt.Sprintf("CreditNote{id=%s, number=%s, customer=%s, total=%s, status=%s}",
+		cn.id, cn.creditNoteNumber, cn.customerID, cn.total.String(), cn.status)
 }
 
 func ReconstituteCreditNote(
@@ -280,11 +298,11 @@ func ReconstituteCreditNote(
 	reason CreditNoteReason,
 	description string,
 	lines []CreditNoteLine,
-	subtotal float64,
-	taxAmount float64,
-	total float64,
+	subtotal money.Money,
+	taxAmount money.Money,
+	total money.Money,
 	currency string,
-	appliedAmount float64,
+	appliedAmount money.Money,
 	status CreditNoteStatus,
 	issuedAt *time.Time,
 	appliedAt *time.Time,

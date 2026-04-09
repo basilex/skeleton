@@ -36,7 +36,7 @@ CREATE TABLE contracts (
     documents UUID[] DEFAULT '{}',
     
     -- Credit limit
-    credit_limit DECIMAL(15,2),
+    credit_limit BIGINT,
     currency VARCHAR(3) DEFAULT 'UAH',
     
     -- Metadata

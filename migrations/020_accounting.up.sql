@@ -13,7 +13,7 @@ CREATE TABLE accounts (
     name VARCHAR(255) NOT NULL,
     account_type account_type NOT NULL,
     currency VARCHAR(3) DEFAULT 'UAH',
-    balance DECIMAL(15,2) DEFAULT 0,
+    balance BIGINT DEFAULT 0,
     parent_id UUID REFERENCES accounts(id),
     is_active BOOLEAN NOT NULL DEFAULT true,
     metadata JSONB DEFAULT '{}',
@@ -27,14 +27,14 @@ CREATE INDEX idx_accounts_code ON accounts(code);
 COMMENT ON TABLE accounts IS 'Chart of accounts (Plan рахунків)';
 COMMENT ON COLUMN accounts.code IS 'Account code (e.g., 1010 for Cash)';
 COMMENT ON COLUMN accounts.account_type IS 'Type: asset, liability, equity, revenue, expense';
-COMMENT ON COLUMN accounts.balance IS 'Current balance in the account';
+COMMENT ON COLUMN accounts.balance IS 'Current balance in the account (in cents)';
 
 -- Transactions (Double-entry bookkeeping)
 CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     from_account UUID NOT NULL REFERENCES accounts(id),  -- Credit
     to_account UUID NOT NULL REFERENCES accounts(id),    -- Debit
-    amount DECIMAL(15,2) NOT NULL,
+    amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Reference (what is this transaction for?)
@@ -72,9 +72,9 @@ CREATE TABLE invoices (
     contract_id UUID,         -- References contracts.id (from contracts context)
     
     -- Amounts
-    subtotal DECIMAL(15,2) NOT NULL,
-    tax_amount DECIMAL(15,2) DEFAULT 0,
-    total DECIMAL(15,2) NOT NULL,
+    subtotal BIGINT NOT NULL,
+    tax_amount BIGINT DEFAULT 0,
+    total BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Dates
@@ -109,10 +109,10 @@ CREATE TABLE payables (
     invoice_id UUID REFERENCES invoices(id),
     
     -- Amounts
-    amount DECIMAL(15,2) NOT NULL,
-    tax_amount DECIMAL(15,2) DEFAULT 0,
-    due_amount DECIMAL(15,2) NOT NULL,
-    paid_amount DECIMAL(15,2) DEFAULT 0,
+    amount BIGINT NOT NULL,
+    tax_amount BIGINT DEFAULT 0,
+    due_amount BIGINT NOT NULL,
+    paid_amount BIGINT DEFAULT 0,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Dates
@@ -143,10 +143,10 @@ CREATE TABLE receivables (
     invoice_id UUID REFERENCES invoices(id),
     
     -- Amounts
-    amount DECIMAL(15,2) NOT NULL,
-    tax_amount DECIMAL(15,2) DEFAULT 0,
-    due_amount DECIMAL(15,2) NOT NULL,
-    paid_amount DECIMAL(15,2) DEFAULT 0,
+    amount BIGINT NOT NULL,
+    tax_amount BIGINT DEFAULT 0,
+    due_amount BIGINT NOT NULL,
+    paid_amount BIGINT DEFAULT 0,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Dates
@@ -179,7 +179,7 @@ CREATE TABLE payments (
     invoice_id UUID REFERENCES invoices(id),
     
     -- Amount
-    amount DECIMAL(15,2) NOT NULL,
+    amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
     
     -- Method

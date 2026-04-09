@@ -6,6 +6,7 @@ import (
 
 	"github.com/basilex/skeleton/internal/accounting/domain"
 	"github.com/basilex/skeleton/pkg/eventbus"
+	"github.com/basilex/skeleton/pkg/money"
 	"github.com/basilex/skeleton/pkg/transaction"
 )
 
@@ -66,7 +67,7 @@ func (h *RecordTransactionHandler) Handle(ctx context.Context, cmd RecordTransac
 		}
 
 		// Create money value
-		money, err := domain.NewMoney(cmd.Amount, currency)
+		amount, err := money.NewFromFloat(cmd.Amount, string(currency))
 		if err != nil {
 			return fmt.Errorf("invalid amount: %w", err)
 		}
@@ -83,16 +84,16 @@ func (h *RecordTransactionHandler) Handle(ctx context.Context, cmd RecordTransac
 		}
 
 		// Perform double-entry bookkeeping
-		if err := fromAccount.Credit(money); err != nil {
+		if err := fromAccount.Credit(amount); err != nil {
 			return fmt.Errorf("credit from account: %w", err)
 		}
 
-		if err := toAccount.Debit(money); err != nil {
+		if err := toAccount.Debit(amount); err != nil {
 			return fmt.Errorf("debit to account: %w", err)
 		}
 
 		// Create transaction record
-		transaction, err := domain.NewTransaction(fromAccountID, toAccountID, money, currency, cmd.Reference, cmd.Description, cmd.PostedBy)
+		transaction, err := domain.NewTransaction(fromAccountID, toAccountID, amount, currency, cmd.Reference, cmd.Description, cmd.PostedBy)
 		if err != nil {
 			return fmt.Errorf("create transaction: %w", err)
 		}

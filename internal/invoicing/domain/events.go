@@ -2,6 +2,8 @@ package domain
 
 import (
 	"time"
+
+	"github.com/basilex/skeleton/pkg/money"
 )
 
 type DomainEvent interface {
@@ -13,7 +15,7 @@ type InvoiceCreated struct {
 	InvoiceID     InvoiceID
 	InvoiceNumber string
 	CustomerID    string
-	Total         float64
+	Total         money.Money
 	Currency      string
 	occurredAt    time.Time
 }
@@ -62,8 +64,8 @@ type InvoicePaid struct {
 	InvoiceID     InvoiceID
 	InvoiceNumber string
 	CustomerID    string
-	Total         float64
-	PaidAmount    float64
+	Total         money.Money
+	PaidAmount    money.Money
 	PaidAt        string
 	occurredAt    time.Time
 }
@@ -112,7 +114,7 @@ func (e InvoiceCancelled) OccurredAt() time.Time {
 type InvoicePaymentRecorded struct {
 	InvoiceID  InvoiceID
 	PaymentID  PaymentID
-	Amount     float64
+	Amount     money.Money
 	Method     PaymentMethod
 	occurredAt time.Time
 }
@@ -131,7 +133,7 @@ type CreditNoteIssued struct {
 	CreditNoteNumber string
 	CustomerID       string
 	InvoiceID        *InvoiceID
-	Total            float64
+	Total            money.Money
 	Currency         string
 	occurredAt       time.Time
 }
@@ -148,7 +150,7 @@ type CreditNoteFullyApplied struct {
 	CreditNoteID     CreditNoteID
 	CreditNoteNumber string
 	CustomerID       string
-	Total            float64
+	Total            money.Money
 	occurredAt       time.Time
 }
 
@@ -179,7 +181,7 @@ func (e CreditNoteCancelled) OccurredAt() time.Time {
 type InstallmentPaid struct {
 	InstallmentID InstallmentID
 	InvoiceID     InvoiceID
-	Amount        float64
+	Amount        money.Money
 	PaidAt        time.Time
 	occurredAt    time.Time
 }
@@ -195,7 +197,7 @@ func (e InstallmentPaid) OccurredAt() time.Time {
 type InstallmentPartiallyPaid struct {
 	InstallmentID InstallmentID
 	InvoiceID     InvoiceID
-	Amount        float64
+	Amount        money.Money
 	occurredAt    time.Time
 }
 

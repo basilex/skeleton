@@ -14,7 +14,9 @@ CREATE TABLE parties (
     status party_status NOT NULL DEFAULT 'active',
     
     loyalty_level loyalty_level,
-    total_purchases DECIMAL(15,2) DEFAULT 0,
+    total_purchases BIGINT DEFAULT 0,
+    credit_limit BIGINT DEFAULT 0,
+    current_credit BIGINT DEFAULT 0,
     
     rating JSONB,
     contracts UUID[] DEFAULT '{}',

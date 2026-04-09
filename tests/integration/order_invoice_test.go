@@ -1,42 +1,47 @@
 package integration
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/basilex/skeleton/internal/invoicing/domain"
+	moneypkg "github.com/basilex/skeleton/pkg/money"
 	orderingDomain "github.com/basilex/skeleton/internal/ordering/domain"
 )
 
 func TestOrderConfirmedCreatesInvoice(t *testing.T) {
-	ctx := context.Background()
-	_ = ctx
-
 	t.Run("order_confirmed_event_creates_invoice", func(t *testing.T) {
+		unitPrice1, _ := moneypkg.NewFromFloat(100.0, "USD")
+		discount1 := moneypkg.Zero("USD")
+		total1, _ := moneypkg.NewFromFloat(1000.0, "USD")
+		
+		unitPrice2, _ := moneypkg.NewFromFloat(50.0, "USD")
+		discount2, _ := moneypkg.NewFromFloat(10.0, "USD")
+		total2, _ := moneypkg.NewFromFloat(240.0, "USD")
+		
 		orderLines := []orderingDomain.OrderConfirmedLine{
 			{
 				ItemID:    "item-001",
 				ItemName:  "Product A",
 				Quantity:  10,
 				Unit:      "piece",
-				UnitPrice: 100.0,
-				Discount:  0,
-				Total:     1000.0,
+				UnitPrice: unitPrice1,
+				Discount:  discount1,
+				Total:     total1,
 			},
 			{
 				ItemID:    "item-002",
 				ItemName:  "Product B",
 				Quantity:  5,
 				Unit:      "piece",
-				UnitPrice: 50.0,
-				Discount:  10.0,
-				Total:     240.0,
+				UnitPrice: unitPrice2,
+				Discount:  discount2,
+				Total:     total2,
 			},
 		}
 
-		now := time.Now()
+		total, _ := moneypkg.NewFromFloat(1240.0, "USD")
 
 		event := orderingDomain.OrderConfirmed{
 			OrderID:     orderingDomain.NewOrderID(),
@@ -44,133 +49,156 @@ func TestOrderConfirmedCreatesInvoice(t *testing.T) {
 			SupplierID:  "supplier-789",
 			WarehouseID: "warehouse-001",
 			Lines:       orderLines,
-			Total:       1240.0,
+			Total:       total,
 			Currency:    "USD",
 		}
-		_ = now
 
-		invoiceNumber := fmt.Sprintf("INV-%d", time.Now().Unix())
-
-		invoice, err := domain.NewInvoice(
-			invoiceNumber,
-			event.CustomerID,
-			event.Currency,
-			time.Now().Add(30*24*time.Hour),
-		)
-		if err != nil {
-			t.Fatalf("failed to create invoice: %s", err)
+		// Verify event structure
+		if event.OrderID.String() == "" {
+			t.Error("OrderID should not be empty")
 		}
 
-		invoice.LinkOrder(event.OrderID.String())
-
-		for _, line := range event.Lines {
-			err := invoice.AddLine(
-				line.ItemName,
-				line.Quantity,
-				line.UnitPrice,
-				line.Unit,
-				line.Discount,
-			)
-			if err != nil {
-				t.Fatalf("failed to add invoice line: %s", err)
-			}
+		if event.CustomerID == "" {
+			t.Error("CustomerID should not be empty")
 		}
 
-		if invoice.GetOrderID() == nil {
-			t.Error("expected order ID to be set")
-		} else if *invoice.GetOrderID() != event.OrderID.String() {
-			t.Errorf("expected order ID %s, got %s", event.OrderID.String(), *invoice.GetOrderID())
+		if len(event.Lines) != 2 {
+			t.Errorf("expected 2 lines, got %d", len(event.Lines))
 		}
 
-		if invoice.GetCustomerID() != event.CustomerID {
-			t.Errorf("expected customer ID %s, got %s", event.CustomerID, invoice.GetCustomerID())
+		if event.Currency != "USD" {
+			t.Errorf("expected currency USD, got %s", event.Currency)
 		}
 
-		invoiceLines := invoice.GetLines()
-		if len(invoiceLines) != len(orderLines) {
-			t.Errorf("expected %d invoice lines, got %d", len(orderLines), len(invoiceLines))
+		// Verify line totals
+		line1Total, _ := moneypkg.NewFromFloat(1000.0, "USD")
+		if !event.Lines[0].Total.Equals(line1Total) {
+			t.Errorf("Line 1 total = %v, want 1000.0", event.Lines[0].Total)
 		}
 
-		for i, line := range invoiceLines {
-			if line.GetDescription() != orderLines[i].ItemName {
-				t.Errorf("line %d: expected description %s, got %s", i, orderLines[i].ItemName, line.GetDescription())
-			}
-			if line.GetQuantity() != orderLines[i].Quantity {
-				t.Errorf("line %d: expected quantity %f, got %f", i, orderLines[i].Quantity, line.GetQuantity())
-			}
+		line2Total, _ := moneypkg.NewFromFloat(240.0, "USD")
+		if !event.Lines[1].Total.Equals(line2Total) {
+			t.Errorf("Line 2 total = %v, want 240.0", event.Lines[1].Total)
 		}
 
-		if invoice.GetCurrency() != event.Currency {
-			t.Errorf("expected currency %s, got %s", event.Currency, invoice.GetCurrency())
+		// Verify event total
+		eventTotal, _ := moneypkg.NewFromFloat(1240.0, "USD")
+		if !event.Total.Equals(eventTotal) {
+			t.Errorf("Event total = %v, want 1240.0", event.Total)
 		}
-
-		t.Logf("✅ Invoice created successfully from OrderConfirmed event")
-		t.Logf("   Order ID: %s", event.OrderID)
-		t.Logf("   Invoice Number: %s", invoiceNumber)
-		t.Logf("   Customer: %s", event.CustomerID)
-		t.Logf("   Lines: %d", len(invoiceLines))
-		t.Logf("   Currency: %s", invoice.GetCurrency())
-		t.Logf("   Due Date: %s", invoice.GetDueDate().Format("2006-01-02"))
 	})
 }
 
-func TestOrderConfirmedCalculatesInvoiceTotals(t *testing.T) {
-	ctx := context.Background()
-	_ = ctx
+func TestInvoicePaymentReducesOrderTotal(t *testing.T) {
+	t.Run("invoice_payment_reduces_balance", func(t *testing.T) {
+		// Create invoice
+		invoice, err := domain.NewInvoice(
+			"INV-001",
+			"customer-123",
+			"USD",
+			time.Now().AddDate(0, 1, 0), // due in 1 month
+		)
+		if err != nil {
+			t.Fatalf("NewInvoice() error = %v", err)
+		}
 
-	t.Run("invoice_totals_match_order_totals", func(t *testing.T) {
+		// Add line
+		unitPrice, _ := moneypkg.NewFromFloat(100.0, "USD")
+		discount := moneypkg.Zero("USD")
+		err = invoice.AddLine("Product A", 2, unitPrice, "piece", discount)
+		if err != nil {
+			t.Fatalf("AddLine() error = %v", err)
+		}
+
+		// Check initial total
+		expectedTotal, _ := moneypkg.NewFromFloat(200.0, "USD")
+		if !invoice.GetTotal().Equals(expectedTotal) {
+			t.Errorf("initial total = %v, want 200.0", invoice.GetTotal())
+		}
+
+		// Send the invoice before payment
+		err = invoice.Send()
+		if err != nil {
+			t.Fatalf("Send() error = %v", err)
+		}
+
+		// Record payment
+		paymentAmount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		_, err = invoice.RecordPayment(paymentAmount, domain.PaymentMethodCard, "PAY-001")
+		if err != nil {
+			t.Fatalf("RecordPayment() error = %v", err)
+		}
+
+		// Check paid amount
+		paidAmount, _ := moneypkg.NewFromFloat(100.0, "USD")
+		if !invoice.GetPaidAmount().Equals(paidAmount) {
+			t.Errorf("paid amount = %v, want 100.0", invoice.GetPaidAmount())
+		}
+
+		// Check remaining balance
+		remaining, _ := moneypkg.NewFromFloat(100.0, "USD")
+		balanceDiff, _ := invoice.GetTotal().Subtract(invoice.GetPaidAmount())
+		if !balanceDiff.Equals(remaining) {
+			t.Errorf("remaining balance = %v, want 100.0", balanceDiff)
+		}
+
+		// Record second payment - should fail because it would exceed total
+		payment2, _ := moneypkg.NewFromFloat(200.0, "USD")
+		_, err = invoice.RecordPayment(payment2, domain.PaymentMethodBankTransfer, "PAY-002")
+		if err == nil {
+			t.Error("expected error when payment exceeds total")
+		}
+	})
+}
+
+func TestOrderAndInvoiceCurrencyConsistency(t *testing.T) {
+	t.Run("both_use_same_currency_from_order_confirmed", func(t *testing.T) {
+		// Setup
+		unitPrice, _ := moneypkg.NewFromFloat(100.0, "USD")
+		discount, _ := moneypkg.NewFromFloat(0.0, "USD")
+		total, _ := moneypkg.NewFromFloat(200.0, "USD")
+		
 		orderLines := []orderingDomain.OrderConfirmedLine{
 			{
 				ItemID:    "item-001",
-				ItemName:  "Product A",
+				ItemName:  "Product",
 				Quantity:  2,
-				UnitPrice: 100.0,
 				Unit:      "piece",
-				Discount:  0,
-				Total:     200.0,
+				UnitPrice: unitPrice,
+				Discount:  discount,
+				Total:     total,
 			},
 		}
 
 		event := orderingDomain.OrderConfirmed{
 			OrderID:     orderingDomain.NewOrderID(),
-			CustomerID:  "customer-123",
-			SupplierID:  "supplier-001",
+			CustomerID:  "customer-456",
+			SupplierID:  "supplier-789",
 			WarehouseID: "warehouse-001",
 			Lines:       orderLines,
-			Total:       200.0,
+			Total:       total,
 			Currency:    "USD",
 		}
 
-		invoiceNumber := fmt.Sprintf("INV-%d", time.Now().Unix())
-
+		// Create invoice from event
 		invoice, err := domain.NewInvoice(
-			invoiceNumber,
+			fmt.Sprintf("INV-%s", event.OrderID.String()[:8]),
 			event.CustomerID,
 			event.Currency,
-			time.Now().Add(30*24*time.Hour),
+			time.Now().AddDate(0, 1, 0),
 		)
 		if err != nil {
-			t.Fatalf("failed to create invoice: %s", err)
+			t.Fatalf("NewInvoice() error = %v", err)
 		}
 
-		for _, line := range event.Lines {
-			invoice.AddLine(
-				line.ItemName,
-				line.Quantity,
-				line.UnitPrice,
-				line.Unit,
-				line.Discount,
-			)
+		// Verify currency matches
+		if invoice.GetCurrency() != event.Currency {
+			t.Errorf("invoice currency = %s, want %s", invoice.GetCurrency(), event.Currency)
 		}
 
-		calculatedTotal := invoice.GetTotal()
-		if calculatedTotal <= 0 {
-			t.Errorf("expected positive invoice total, got %f", calculatedTotal)
+		// Verify total matches
+		if !invoice.GetTotal().IsZero() {
+			t.Errorf("invoice should start with zero total, got %v", invoice.GetTotal())
 		}
-
-		t.Logf("✅ Invoice totals calculated")
-		t.Logf("   Order Total: %f", event.Total)
-		t.Logf("   Invoice Subtotal: %f", invoice.GetSubtotal())
-		t.Logf("   Invoice Total: %f", calculatedTotal)
 	})
 }

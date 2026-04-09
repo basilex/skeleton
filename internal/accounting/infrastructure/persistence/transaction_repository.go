@@ -29,7 +29,7 @@ func (r *TransactionRepository) Save(ctx context.Context, transaction *domain.Tr
 			transaction.GetID().String(),
 			transaction.GetFromAccount().String(),
 			transaction.GetToAccount().String(),
-			transaction.GetAmount().Amount,
+			transaction.GetAmount().GetAmount(),
 			transaction.GetCurrency().String(),
 			transaction.GetReference(),
 			transaction.GetDescription(),
