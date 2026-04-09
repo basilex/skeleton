@@ -12,7 +12,7 @@ import type {
   Product,
   PaginatedResponse,
   PaginationParams,
-} from '../../shared/types/api';
+} from '@shared/types/api';
 
 // ============================================
 // Auth Endpoints

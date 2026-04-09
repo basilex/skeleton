@@ -204,12 +204,12 @@ export const MoneyUtils = {
       throw new Error('Cannot sum empty array');
     }
     
-    const currency = values[0].currency;
+    const currency = values[0].getCurrency();
     const total = values.reduce((sum, m) => {
-      if (m.currency !== currency) {
+      if (m.getCurrency() !== currency) {
         throw new Error('All Money values must have the same currency');
       }
-      return sum + m.amount;
+      return sum + m.getAmount();
     }, 0);
     
     return new Money(total, currency);
