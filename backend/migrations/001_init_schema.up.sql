@@ -19,6 +19,7 @@
 -- The application generates all PKs itself (UUIDv7 via Go), but the extension
 -- is useful for ad-hoc SQL, seed scripts, and cross-check queries.
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "ltree";
 
 -- ============================================================================
 -- 2. uuid_generate_v7()
