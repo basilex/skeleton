@@ -106,11 +106,11 @@ A **battle-testedfoundation for building enterprise-grade Go applications** foll
 
 ```
 ┌─────────────────────────────────────┐
-│           Ports (HTTP API)           │← External world
+│           Ports (HTTP API)          │← External world
 ├─────────────────────────────────────┤
-│      Application Layer (CQRS-lite)   │← Use cases
+│      Application Layer (CQRS-lite)  │← Use cases
 ├─────────────────────────────────────┤
-│        Domain Layer (Aggregates)     │← Business rules
+│        Domain Layer (Aggregates)    │← Business rules
 ├─────────────────────────────────────┤
 │   Infrastructure (DB, Cache, etc)   │← Technical details
 └─────────────────────────────────────┘
