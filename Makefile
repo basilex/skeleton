@@ -56,7 +56,7 @@ install-frontend: ## FE Install frontend dependencies
 # Development
 # ===========================================
 
-dev: ## DEV Start all services (postgres + backend + frontend)
+dev: ## DEV Start all services (postgres + redis + backend + frontend)
 	docker-compose up --build
 
 dev-detach: ## DEV Start all services in background
@@ -75,7 +75,7 @@ dev-reset: ## DEV Stop services and remove volumes
 # Backend Development
 # ===========================================
 
-backend: ## BE Start backend server (requires postgres)
+backend: ## BE Start backend server (requires postgres + redis)
 	cd backend && go run ./cmd/api
 
 backend-watch: ## BE Start backend with hot reload (requires air)
@@ -85,6 +85,7 @@ backend-build: ## BE Build backend binary
 	cd backend && go build -o bin/api ./cmd/api
 
 DB_URL ?= postgres://skeleton:skeleton@localhost:5432/skeleton?sslmode=disable
+REDIS_URL ?= redis://localhost:6379
 
 # ===========================================
 # Frontend Development
@@ -110,7 +111,7 @@ frontend-typecheck: ## FE Run TypeScript type checking
 # ===========================================
 
 db-up: ## DB Start PostgreSQL with Docker
-	docker-compose up -d postgres
+	docker-compose up -d postgres redis
 
 db-migrate: ## DB Run database migrations
 	cd backend && go run ./cmd/api migrate
@@ -119,7 +120,7 @@ db-reset: ## DB Reset database and run migrations
 	cd backend && go run ./cmd/api reset
 
 db-seed: ## DB Seed database with sample data
-	cd scripts/seed && go run main.go
+	cd backend && go run ./scripts/seed/main.go
 
 db-shell: ## DB Open PostgreSQL shell
 	docker-compose exec postgres psql -U skeleton -d skeleton
@@ -173,11 +174,11 @@ fmt: ## Format code
 # Scripts
 # ===========================================
 
-scripts-migrate: ## Run migration scripts
-	cd scripts/migrate && ./migrate.sh
+scripts-migrate: ## Run migration script manually
+	cd backend && go run ./scripts/migrate/main.go -action=up
 
 scripts-benchmark: ## Run benchmarks
 	cd scripts && ./run-benchmarks.sh
 
 scripts-deploy-staging: ## Deploy to staging
-	cd scripts && ./deploy-staging.sh
+	cd scripts/deploy && ./deploy-staging.sh
