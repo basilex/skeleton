@@ -77,3 +77,81 @@ type ItemCategoryChanged struct {
 
 func (e ItemCategoryChanged) EventName() string     { return "catalog.item_category_changed" }
 func (e ItemCategoryChanged) OccurredAt() time.Time { return e.occurredAt }
+
+// VariantCreated is published when a new product variant is created
+type VariantCreated struct {
+	VariantID   VariantID
+	ItemID      ItemID
+	SKU         string
+	Attributes  Attributes
+	PriceAdjust float64
+	occurredAt  time.Time
+}
+
+func (e VariantCreated) EventName() string     { return "catalog.variant_created" }
+func (e VariantCreated) OccurredAt() time.Time { return e.occurredAt }
+
+// VariantPriceAdjustChanged is published when variant price adjustment changes
+type VariantPriceAdjustChanged struct {
+	VariantID  VariantID
+	OldAdjust  float64
+	NewAdjust  float64
+	occurredAt time.Time
+}
+
+func (e VariantPriceAdjustChanged) EventName() string     { return "catalog.variant_price_adjust_changed" }
+func (e VariantPriceAdjustChanged) OccurredAt() time.Time { return e.occurredAt }
+
+// VariantStockUpdated is published when variant stock is updated
+type VariantStockUpdated struct {
+	VariantID  VariantID
+	OldStock   int
+	NewStock   int
+	occurredAt time.Time
+}
+
+func (e VariantStockUpdated) EventName() string     { return "catalog.variant_stock_updated" }
+func (e VariantStockUpdated) OccurredAt() time.Time { return e.occurredAt }
+
+// VariantStatusChanged is published when variant status changes
+type VariantStatusChanged struct {
+	VariantID  VariantID
+	OldStatus  VariantStatus
+	NewStatus  VariantStatus
+	occurredAt time.Time
+}
+
+func (e VariantStatusChanged) EventName() string     { return "catalog.variant_status_changed" }
+func (e VariantStatusChanged) OccurredAt() time.Time { return e.occurredAt }
+
+// PricingRuleCreated is published when a new pricing rule is created
+type PricingRuleCreated struct {
+	RuleID      PricingRuleID
+	Name        string
+	RuleType    PricingRuleType
+	MinQuantity int
+	occurredAt  time.Time
+}
+
+func (e PricingRuleCreated) EventName() string     { return "catalog.pricing_rule_created" }
+func (e PricingRuleCreated) OccurredAt() time.Time { return e.occurredAt }
+
+// ItemVariantAdded is published when a variant is added to an item
+type ItemVariantAdded struct {
+	ItemID     ItemID
+	VariantID  VariantID
+	occurredAt time.Time
+}
+
+func (e ItemVariantAdded) EventName() string     { return "catalog.item_variant_added" }
+func (e ItemVariantAdded) OccurredAt() time.Time { return e.occurredAt }
+
+// ItemVariantRemoved is published when a variant is removed from an item
+type ItemVariantRemoved struct {
+	ItemID     ItemID
+	VariantID  VariantID
+	occurredAt time.Time
+}
+
+func (e ItemVariantRemoved) EventName() string     { return "catalog.item_variant_removed" }
+func (e ItemVariantRemoved) OccurredAt() time.Time { return e.occurredAt }

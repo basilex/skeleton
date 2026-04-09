@@ -46,6 +46,8 @@ func (dto *documentDTO) toDomain(signatures []*signatureDTO) (*domain.Document, 
 		status,
 		dto.Metadata,
 		domainSignatures,
+		[]domain.DocumentVersion{},
+		domain.VersionNumber(1),
 		dto.CreatedAt,
 		dto.UpdatedAt,
 	), nil

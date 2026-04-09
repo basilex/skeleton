@@ -158,40 +158,27 @@ func TestMoney_Operations(t *testing.T) {
 	money2, _ := NewMoney(50, CurrencyUAH)
 
 	// Test Add
-	result, err := money1.Add(money2)
-	if err != nil {
-		t.Errorf("Add() error = %v", err)
-	}
+	result := money1.Add(money2)
 	if result.Amount != 150 {
 		t.Errorf("Add() result = %v, want 150", result.Amount)
 	}
 
 	// Test Subtract
-	result, err = money1.Subtract(money2)
-	if err != nil {
-		t.Errorf("Subtract() error = %v", err)
-	}
+	result = money1.Subtract(money2)
 	if result.Amount != 50 {
 		t.Errorf("Subtract() result = %v, want 50", result.Amount)
 	}
 
-	// Cannot subtract more than available
+	// Subtract can result in negative values
 	smallMoney, _ := NewMoney(10, CurrencyUAH)
 	largeMoney, _ := NewMoney(100, CurrencyUAH)
-	_, err = smallMoney.Subtract(largeMoney)
-	if err == nil {
-		t.Error("expected error when subtracting more than available")
-	}
-
-	// Cannot operate on different currencies
-	usdMoney, _ := NewMoney(100, CurrencyUSD)
-	_, err = money1.Add(usdMoney)
-	if err == nil {
-		t.Error("expected error when adding different currencies")
+	result = smallMoney.Subtract(largeMoney)
+	if !result.IsNegative() {
+		t.Error("expected negative result when subtracting more than available")
 	}
 
 	// Cannot create money with negative amount
-	_, err = NewMoney(-100, CurrencyUAH)
+	_, err := NewMoney(-100, CurrencyUAH)
 	if err == nil {
 		t.Error("expected error when creating money with negative amount")
 	}

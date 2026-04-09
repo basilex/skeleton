@@ -39,6 +39,8 @@ type Item struct {
 	currency    string
 	status      ItemStatus
 	attributes  Attributes
+	hasVariants bool
+	variants    []VariantID
 	metadata    map[string]interface{}
 	createdAt   time.Time
 	updatedAt   time.Time
@@ -69,6 +71,8 @@ func NewItem(
 		currency:    currency,
 		status:      ItemStatusActive,
 		attributes:  make(Attributes),
+		hasVariants: false,
+		variants:    make([]VariantID, 0),
 		metadata:    make(map[string]interface{}),
 		createdAt:   now,
 		updatedAt:   now,
@@ -99,6 +103,8 @@ func (i *Item) GetBasePrice() float64      { return i.basePrice }
 func (i *Item) GetCurrency() string        { return i.currency }
 func (i *Item) GetStatus() ItemStatus      { return i.status }
 func (i *Item) GetAttributes() Attributes  { return i.attributes }
+func (i *Item) HasVariants() bool          { return i.hasVariants }
+func (i *Item) GetVariants() []VariantID   { return i.variants }
 func (i *Item) GetCreatedAt() time.Time    { return i.createdAt }
 func (i *Item) GetUpdatedAt() time.Time    { return i.updatedAt }
 
@@ -149,6 +155,50 @@ func (i *Item) SetAttribute(key string, value interface{}) {
 func (i *Item) RemoveAttribute(key string) {
 	delete(i.attributes, key)
 	i.updatedAt = time.Now().UTC()
+}
+
+func (i *Item) AddVariant(variantID VariantID) error {
+	if i.status == ItemStatusDiscontinued {
+		return fmt.Errorf("cannot add variant to discontinued item")
+	}
+
+	for _, v := range i.variants {
+		if v == variantID {
+			return fmt.Errorf("variant already added")
+		}
+	}
+
+	i.variants = append(i.variants, variantID)
+	i.hasVariants = true
+	i.updatedAt = time.Now().UTC()
+
+	i.events = append(i.events, ItemVariantAdded{
+		ItemID:     i.id,
+		VariantID:  variantID,
+		occurredAt: i.updatedAt,
+	})
+
+	return nil
+}
+
+func (i *Item) RemoveVariant(variantID VariantID) error {
+	for idx, v := range i.variants {
+		if v == variantID {
+			i.variants = append(i.variants[:idx], i.variants[idx+1:]...)
+			i.hasVariants = len(i.variants) > 0
+			i.updatedAt = time.Now().UTC()
+
+			i.events = append(i.events, ItemVariantRemoved{
+				ItemID:     i.id,
+				VariantID:  variantID,
+				occurredAt: i.updatedAt,
+			})
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("variant not found")
 }
 
 func (i *Item) Activate() {
@@ -206,6 +256,8 @@ func ReconstituteItem(
 	currency string,
 	status ItemStatus,
 	attributes Attributes,
+	hasVariants bool,
+	variants []VariantID,
 	metadata map[string]interface{},
 	createdAt, updatedAt time.Time,
 ) (*Item, error) {
@@ -219,6 +271,8 @@ func ReconstituteItem(
 		currency:    currency,
 		status:      status,
 		attributes:  attributes,
+		hasVariants: hasVariants,
+		variants:    variants,
 		metadata:    metadata,
 		createdAt:   createdAt,
 		updatedAt:   updatedAt,

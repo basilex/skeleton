@@ -16,6 +16,8 @@ type Document struct {
 	status         DocumentStatus
 	metadata       map[string]string
 	signatures     []*Signature
+	versions       []DocumentVersion
+	currentVersion VersionNumber
 	createdAt      time.Time
 	updatedAt      time.Time
 	events         []eventbus.Event
@@ -42,6 +44,8 @@ func NewDocument(
 		status:         DocumentStatusDraft,
 		metadata:       make(map[string]string),
 		signatures:     make([]*Signature, 0),
+		versions:       make([]DocumentVersion, 0),
+		currentVersion: 0,
 		createdAt:      now,
 		updatedAt:      now,
 		events:         make([]eventbus.Event, 0),
@@ -57,6 +61,8 @@ func RestoreDocument(
 	status DocumentStatus,
 	metadata map[string]string,
 	signatures []*Signature,
+	versions []DocumentVersion,
+	currentVersion VersionNumber,
 	createdAt time.Time,
 	updatedAt time.Time,
 ) *Document {
@@ -69,6 +75,8 @@ func RestoreDocument(
 		status:         status,
 		metadata:       metadata,
 		signatures:     signatures,
+		versions:       versions,
+		currentVersion: currentVersion,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 		events:         make([]eventbus.Event, 0),
@@ -105,6 +113,55 @@ func (d *Document) GetMetadata() map[string]string {
 
 func (d *Document) GetSignatures() []*Signature {
 	return d.signatures
+}
+
+func (d *Document) GetVersions() []DocumentVersion {
+	return d.versions
+}
+
+func (d *Document) GetCurrentVersion() VersionNumber {
+	return d.currentVersion
+}
+
+func (d *Document) CreateVersion(changeType ChangeType, changedBy string, description string, checksum string, fileID string) error {
+	if changedBy == "" {
+		return fmt.Errorf("changed by is required")
+	}
+
+	var nextVersion VersionNumber
+	if len(d.versions) == 0 {
+		nextVersion = 1
+	} else {
+		nextVersion = d.currentVersion.Next()
+	}
+
+	version, err := NewDocumentVersion(nextVersion, changeType, changedBy, description, checksum, fileID)
+	if err != nil {
+		return err
+	}
+
+	d.versions = append(d.versions, *version)
+	d.currentVersion = nextVersion
+	d.updatedAt = time.Now()
+
+	d.events = append(d.events, DocumentVersionCreated{
+		DocumentID: d.id,
+		Version:    nextVersion,
+		ChangeType: changeType,
+		ChangedBy:  changedBy,
+		occurredAt: time.Now(),
+	})
+
+	return nil
+}
+
+func (d *Document) GetVersion(versionNum VersionNumber) (*DocumentVersion, error) {
+	for i := range d.versions {
+		if d.versions[i].GetVersion() == versionNum {
+			return &d.versions[i], nil
+		}
+	}
+	return nil, fmt.Errorf("version %d not found", versionNum)
 }
 
 func (d *Document) GetCreatedAt() time.Time {

@@ -24,6 +24,10 @@ func (id ItemID) String() string {
 	return uuid.UUID(id).String()
 }
 
+func (id ItemID) IsZero() bool {
+	return uuid.UUID(id) == uuid.UUID{}
+}
+
 type CategoryID uuid.UUID
 
 func NewCategoryID() CategoryID {

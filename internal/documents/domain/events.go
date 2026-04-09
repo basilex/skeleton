@@ -62,3 +62,51 @@ func (e SignatureSigned) EventName() string {
 func (e SignatureSigned) OccurredAt() time.Time {
 	return e.occurredAt
 }
+
+type ApprovalRequested struct {
+	WorkflowID   ApprovalWorkflowID
+	DocumentID   DocumentID
+	DocumentType DocumentType
+	RequestedBy  string
+	occurredAt   time.Time
+}
+
+func (e ApprovalRequested) EventName() string {
+	return "documents.approval_requested"
+}
+
+func (e ApprovalRequested) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+type ApprovalCompleted struct {
+	WorkflowID   ApprovalWorkflowID
+	DocumentID   DocumentID
+	DocumentType DocumentType
+	Status       ApprovalStatus
+	completedAt  time.Time
+}
+
+func (e ApprovalCompleted) EventName() string {
+	return "documents.approval_completed"
+}
+
+func (e ApprovalCompleted) OccurredAt() time.Time {
+	return e.completedAt
+}
+
+type DocumentVersionCreated struct {
+	DocumentID DocumentID
+	Version    VersionNumber
+	ChangeType ChangeType
+	ChangedBy  string
+	occurredAt time.Time
+}
+
+func (e DocumentVersionCreated) EventName() string {
+	return "documents.document_version_created"
+}
+
+func (e DocumentVersionCreated) OccurredAt() time.Time {
+	return e.occurredAt
+}

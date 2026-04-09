@@ -15,6 +15,8 @@ type Customer struct {
 	status         PartyStatus
 	loyaltyLevel   LoyaltyLevel
 	totalPurchases float64
+	creditLimit    float64
+	currentCredit  float64
 	createdAt      time.Time
 	updatedAt      time.Time
 	events         []DomainEvent
@@ -36,6 +38,8 @@ func NewCustomer(name, taxID string, contactInfo ContactInfo) (*Customer, error)
 		status:         PartyStatusActive,
 		loyaltyLevel:   LoyaltyLevelBronze,
 		totalPurchases: 0,
+		creditLimit:    0,
+		currentCredit:  0,
 		createdAt:      now,
 		updatedAt:      now,
 		events:         make([]DomainEvent, 0),
@@ -60,6 +64,9 @@ func (c *Customer) GetStatus() PartyStatus        { return c.status }
 func (c *Customer) GetBankAccount() BankAccount   { return c.bankAccount }
 func (c *Customer) GetLoyaltyLevel() LoyaltyLevel { return c.loyaltyLevel }
 func (c *Customer) GetTotalPurchases() float64    { return c.totalPurchases }
+func (c *Customer) GetCreditLimit() float64       { return c.creditLimit }
+func (c *Customer) GetCurrentCredit() float64     { return c.currentCredit }
+func (c *Customer) GetAvailableCredit() float64   { return c.creditLimit - c.currentCredit }
 func (c *Customer) GetCreatedAt() time.Time       { return c.createdAt }
 func (c *Customer) GetUpdatedAt() time.Time       { return c.updatedAt }
 
@@ -98,6 +105,66 @@ func (c *Customer) updateLoyaltyLevel() {
 	default:
 		c.loyaltyLevel = LoyaltyLevelBronze
 	}
+}
+
+func (c *Customer) SetCreditLimit(limit float64) error {
+	if limit < 0 {
+		return fmt.Errorf("credit limit cannot be negative")
+	}
+	if c.status == PartyStatusBlacklisted {
+		return ErrPartyBlacklisted
+	}
+
+	oldLimit := c.creditLimit
+	c.creditLimit = limit
+	c.updatedAt = time.Now().UTC()
+
+	c.events = append(c.events, CustomerCreditLimitChanged{
+		PartyID:    c.id,
+		OldLimit:   oldLimit,
+		NewLimit:   limit,
+		occurredAt: c.updatedAt,
+	})
+
+	return nil
+}
+
+func (c *Customer) UseCredit(amount float64) error {
+	if amount <= 0 {
+		return fmt.Errorf("amount must be positive")
+	}
+	if c.status == PartyStatusBlacklisted {
+		return ErrPartyBlacklisted
+	}
+
+	newCredit := c.currentCredit + amount
+	if newCredit > c.creditLimit {
+		return fmt.Errorf("credit limit exceeded: current %.2f + %.2f > limit %.2f",
+			c.currentCredit, amount, c.creditLimit)
+	}
+
+	c.currentCredit = newCredit
+	c.updatedAt = time.Now().UTC()
+	return nil
+}
+
+func (c *Customer) RepayCredit(amount float64) error {
+	if amount <= 0 {
+		return fmt.Errorf("amount must be positive")
+	}
+
+	if amount > c.currentCredit {
+		return fmt.Errorf("repayment amount %.2f exceeds current credit %.2f",
+			amount, c.currentCredit)
+	}
+
+	c.currentCredit -= amount
+	c.updatedAt = time.Now().UTC()
+	return nil
+}
+
+func (c *Customer) HasAvailableCredit() bool {
+	return c.currentCredit < c.creditLimit
 }
 
 func (c *Customer) Activate() error {
@@ -157,6 +224,8 @@ func ReconstituteCustomer(
 	status PartyStatus,
 	loyaltyLevel LoyaltyLevel,
 	totalPurchases float64,
+	creditLimit float64,
+	currentCredit float64,
 	createdAt, updatedAt time.Time,
 ) (*Customer, error) {
 	return &Customer{
@@ -169,6 +238,8 @@ func ReconstituteCustomer(
 		status:         status,
 		loyaltyLevel:   loyaltyLevel,
 		totalPurchases: totalPurchases,
+		creditLimit:    creditLimit,
+		currentCredit:  currentCredit,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 		events:         make([]DomainEvent, 0),

@@ -9,16 +9,16 @@ import (
 
 type itemDTO struct {
 	ID          string          `db:"id"`
-	CategoryID   *string         `db:"category_id"`
-	Name         string          `db:"name"`
-	Description  string          `db:"description"`
-	SKU          string          `db:"sku"`
-	BasePrice    float64         `db:"base_price"`
-	Currency     string          `db:"currency"`
-	Status       string          `db:"status"`
-	Attributes   json.RawMessage `db:"attributes"`
-	CreatedAt    time.Time       `db:"created_at"`
-	UpdatedAt    time.Time       `db:"updated_at"`
+	CategoryID  *string         `db:"category_id"`
+	Name        string          `db:"name"`
+	Description string          `db:"description"`
+	SKU         string          `db:"sku"`
+	BasePrice   float64         `db:"base_price"`
+	Currency    string          `db:"currency"`
+	Status      string          `db:"status"`
+	Attributes  json.RawMessage `db:"attributes"`
+	CreatedAt   time.Time       `db:"created_at"`
+	UpdatedAt   time.Time       `db:"updated_at"`
 }
 
 type categoryDTO struct {
@@ -71,6 +71,8 @@ func (dto *itemDTO) toDomain() (*catalog.Item, error) {
 		dto.Currency,
 		status,
 		attributes,
+		false,
+		make([]catalog.VariantID, 0),
 		make(map[string]interface{}),
 		dto.CreatedAt,
 		dto.UpdatedAt,

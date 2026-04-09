@@ -102,17 +102,6 @@ var (
 	buildTime = "unknown"
 )
 
-// func parseBuildTime() time.Time {
-// 	if buildTime == "unknown" || buildTime == "" {
-// 		return time.Now()
-// 	}
-// 	t, err := time.Parse(time.RFC3339, buildTime)
-// 	if err != nil {
-// 		return time.Now()
-// 	}
-// 	return t
-// }
-
 // main is the application entry point. It orchestrates the entire application
 // lifecycle including configuration loading, database initialization, dependency
 // wiring, and HTTP server management.

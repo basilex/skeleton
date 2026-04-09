@@ -23,27 +23,29 @@ type GetSupplierQuery struct {
 }
 
 type SupplierDTO struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	TaxID       string            `json:"tax_id"`
-	Email       string            `json:"email"`
-	Phone       string            `json:"phone"`
-	Address     AddressDTO        `json:"address"`
-	Website     string            `json:"website"`
-	SocialMedia map[string]string `json:"social_media"`
-	BankAccount BankAccountDTO    `json:"bank_account"`
-	Status      string            `json:"status"`
-	Rating      SupplierRatingDTO `json:"rating"`
-	Contracts   []string          `json:"contracts"`
-	CreatedAt   string            `json:"created_at"`
-	UpdatedAt   string            `json:"updated_at"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	TaxID            string            `json:"tax_id"`
+	Email            string            `json:"email"`
+	Phone            string            `json:"phone"`
+	Address          AddressDTO        `json:"address"`
+	Website          string            `json:"website"`
+	SocialMedia      map[string]string `json:"social_media"`
+	BankAccount      BankAccountDTO    `json:"bank_account"`
+	Status           string            `json:"status"`
+	Rating           SupplierRatingDTO `json:"rating"`
+	PerformanceLevel string            `json:"performance_level"`
+	Contracts        []string          `json:"contracts"`
+	CreatedAt        string            `json:"created_at"`
+	UpdatedAt        string            `json:"updated_at"`
 }
 
 type SupplierRatingDTO struct {
-	Quality      float64 `json:"quality"`
-	DeliveryTime float64 `json:"delivery_time"`
-	Price        float64 `json:"price"`
-	Overall      float64 `json:"overall"`
+	QualityScore       float64 `json:"quality_score"`
+	DeliveryScore      float64 `json:"delivery_score"`
+	CommunicationScore float64 `json:"communication_score"`
+	OverallScore       float64 `json:"overall_score"`
+	RatingCount        int     `json:"rating_count"`
 }
 
 func (h *GetSupplierHandler) Handle(ctx context.Context, q GetSupplierQuery) (SupplierDTO, error) {
@@ -86,14 +88,16 @@ func (h *GetSupplierHandler) Handle(ctx context.Context, q GetSupplierQuery) (Su
 		},
 		Status: supplier.GetStatus().String(),
 		Rating: SupplierRatingDTO{
-			Quality:      rating.Quality,
-			DeliveryTime: rating.DeliveryTime,
-			Price:        rating.Price,
-			Overall:      rating.Overall,
+			QualityScore:       rating.QualityScore,
+			DeliveryScore:      rating.DeliveryScore,
+			CommunicationScore: rating.CommunicationScore,
+			OverallScore:       rating.OverallScore,
+			RatingCount:        rating.RatingCount,
 		},
-		Contracts: supplier.GetContracts(),
-		CreatedAt: supplier.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
-		UpdatedAt: supplier.GetUpdatedAt().Format("2006-01-02T15:04:05Z"),
+		PerformanceLevel: supplier.GetPerformanceLevel().String(),
+		Contracts:        supplier.GetContracts(),
+		CreatedAt:        supplier.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:        supplier.GetUpdatedAt().Format("2006-01-02T15:04:05Z"),
 	}, nil
 }
 
@@ -169,14 +173,16 @@ func (h *ListSuppliersHandler) Handle(ctx context.Context, q ListSuppliersQuery)
 			},
 			Status: s.GetStatus().String(),
 			Rating: SupplierRatingDTO{
-				Quality:      rating.Quality,
-				DeliveryTime: rating.DeliveryTime,
-				Price:        rating.Price,
-				Overall:      rating.Overall,
+				QualityScore:       rating.QualityScore,
+				DeliveryScore:      rating.DeliveryScore,
+				CommunicationScore: rating.CommunicationScore,
+				OverallScore:       rating.OverallScore,
+				RatingCount:        rating.RatingCount,
 			},
-			Contracts: s.GetContracts(),
-			CreatedAt: s.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
-			UpdatedAt: s.GetUpdatedAt().Format("2006-01-02T15:04:05Z"),
+			PerformanceLevel: s.GetPerformanceLevel().String(),
+			Contracts:        s.GetContracts(),
+			CreatedAt:        s.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
+			UpdatedAt:        s.GetUpdatedAt().Format("2006-01-02T15:04:05Z"),
 		}
 	}
 

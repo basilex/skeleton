@@ -8,20 +8,23 @@ import (
 )
 
 type partyDTO struct {
-	ID             string          `db:"id"`
-	PartyType      string          `db:"party_type"`
-	Name           string          `db:"name"`
-	TaxID          string          `db:"tax_id"`
-	ContactInfo    json.RawMessage `db:"contact_info"`
-	BankAccount    json.RawMessage `db:"bank_account"`
-	Status         string          `db:"status"`
-	LoyaltyLevel   string          `db:"loyalty_level"`
-	TotalPurchases float64         `db:"total_purchases"`
-	Rating         json.RawMessage `db:"rating"`
-	Contracts      []string        `db:"contracts"`
-	Position       string          `db:"position"`
-	CreatedAt      time.Time       `db:"created_at"`
-	UpdatedAt      time.Time       `db:"updated_at"`
+	ID               string          `db:"id"`
+	PartyType        string          `db:"party_type"`
+	Name             string          `db:"name"`
+	TaxID            string          `db:"tax_id"`
+	ContactInfo      json.RawMessage `db:"contact_info"`
+	BankAccount      json.RawMessage `db:"bank_account"`
+	Status           string          `db:"status"`
+	LoyaltyLevel     string          `db:"loyalty_level"`
+	TotalPurchases   float64         `db:"total_purchases"`
+	CreditLimit      float64         `db:"credit_limit"`
+	CurrentCredit    float64         `db:"current_credit"`
+	Rating           json.RawMessage `db:"rating"`
+	PerformanceLevel string          `db:"performance_level"`
+	Contracts        []string        `db:"contracts"`
+	Position         string          `db:"position"`
+	CreatedAt        time.Time       `db:"created_at"`
+	UpdatedAt        time.Time       `db:"updated_at"`
 }
 
 func (dto *partyDTO) toCustomerDomain() (*domain.Customer, error) {
@@ -59,6 +62,8 @@ func (dto *partyDTO) toCustomerDomain() (*domain.Customer, error) {
 		status,
 		loyaltyLevel,
 		dto.TotalPurchases,
+		dto.CreditLimit,
+		dto.CurrentCredit,
 		dto.CreatedAt,
 		dto.UpdatedAt,
 	)
@@ -90,6 +95,11 @@ func (dto *partyDTO) toSupplierDomain() (*domain.Supplier, error) {
 		return nil, err
 	}
 
+	performanceLevel := domain.PerformanceLevel(dto.PerformanceLevel)
+	if performanceLevel == "" {
+		performanceLevel = domain.PerformanceLevelAverage
+	}
+
 	return domain.ReconstituteSupplier(
 		partyID,
 		dto.Name,
@@ -98,6 +108,7 @@ func (dto *partyDTO) toSupplierDomain() (*domain.Supplier, error) {
 		bankAccount,
 		status,
 		rating,
+		performanceLevel,
 		dto.Contracts,
 		dto.CreatedAt,
 		dto.UpdatedAt,

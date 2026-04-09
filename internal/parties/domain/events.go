@@ -121,3 +121,42 @@ func (e ContractAssigned) OccurredAt() time.Time {
 func (e ContractAssigned) GetPartyID() string {
 	return e.PartyID.String()
 }
+
+type CustomerCreditLimitChanged struct {
+	PartyID    PartyID
+	OldLimit   float64
+	NewLimit   float64
+	occurredAt time.Time
+}
+
+func (e CustomerCreditLimitChanged) EventName() string {
+	return "parties.customer_credit_limit_changed"
+}
+
+func (e CustomerCreditLimitChanged) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+func (e CustomerCreditLimitChanged) GetPartyID() string {
+	return e.PartyID.String()
+}
+
+type SupplierRatingUpdated struct {
+	PartyID    PartyID
+	OldScore   float64
+	NewScore   float64
+	Level      PerformanceLevel
+	occurredAt time.Time
+}
+
+func (e SupplierRatingUpdated) EventName() string {
+	return "parties.supplier_rating_updated"
+}
+
+func (e SupplierRatingUpdated) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+func (e SupplierRatingUpdated) GetPartyID() string {
+	return e.PartyID.String()
+}

@@ -27,8 +27,39 @@ func (ll LoyaltyLevel) String() string {
 }
 
 type SupplierRating struct {
-	Quality      float64 `json:"quality"`
-	DeliveryTime float64 `json:"delivery_time"`
-	Price        float64 `json:"price"`
-	Overall      float64 `json:"overall"`
+	QualityScore       float64 `json:"quality_score"`
+	DeliveryScore      float64 `json:"delivery_score"`
+	CommunicationScore float64 `json:"communication_score"`
+	OverallScore       float64 `json:"overall_score"`
+	RatingCount        int     `json:"rating_count"`
+}
+
+type PerformanceLevel string
+
+const (
+	PerformanceLevelExcellent PerformanceLevel = "excellent"
+	PerformanceLevelGood      PerformanceLevel = "good"
+	PerformanceLevelAverage   PerformanceLevel = "average"
+	PerformanceLevelPoor      PerformanceLevel = "poor"
+)
+
+func (r SupplierRating) GetPerformanceLevel() PerformanceLevel {
+	switch {
+	case r.OverallScore >= 90:
+		return PerformanceLevelExcellent
+	case r.OverallScore >= 75:
+		return PerformanceLevelGood
+	case r.OverallScore >= 50:
+		return PerformanceLevelAverage
+	default:
+		return PerformanceLevelPoor
+	}
+}
+
+func (r SupplierRating) IsReliable() bool {
+	return r.OverallScore >= 70 && r.RatingCount >= 5
+}
+
+func (p PerformanceLevel) String() string {
+	return string(p)
 }
