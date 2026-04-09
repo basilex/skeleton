@@ -1,13 +1,10 @@
-# Development Dockerfile with hot reload
-FROM golang:1.25-alpine
+# Development Dockerfile
+FROM golang:1.23-alpine AS development
 
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache git make gcc musl-dev
-
-# Install air for hot reload
-RUN go install github.com/air-verse/air@latest
+RUN apk add --no-cache git make gcc musl-dev postgresql-client
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -16,11 +13,46 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Create directories
-RUN mkdir -p /app/data /app/keys
+# Build the application
+RUN go build -o /app/bin/api ./cmd/api
 
 # Expose port
 EXPOSE 8080
 
-# Run with hot reload
-CMD ["air", "-c", ".air.toml"]
+# Run migrations and start server
+CMD ["sh", "-c", "make migrate-up && /app/bin/api"]
+
+# Production Dockerfile
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache git make gcc musl-dev
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -ldflags '-linkmode external -extldflags "-static"' -o /app/bin/api ./cmd/api
+
+FROM alpine:latest AS production
+
+RUN apk --no-cache add ca-certificates postgresql-client
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/bin/api /app/bin/api
+
+# Copy migrations
+COPY --from=builder /app/migrations /app/migrations
+
+# Copy config files
+COPY --from=builder /app/configs /app/configs
+
+# Copy keys
+COPY --from=builder /app/keys /app/keys
+
+EXPOSE 8080
+
+CMD ["/app/bin/api"]

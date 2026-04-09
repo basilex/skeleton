@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Skeleton Development",
+      "Group": "Development Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "skeleton",
+      "Username": "skeleton",
+      "Password": "skeleton_dev_password",
+      "SSLMode": "disable",
+      "Passfile": "/pgadmin/.pgpass"
+    }
+  }
+}

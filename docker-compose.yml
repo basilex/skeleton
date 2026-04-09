@@ -1,97 +1,121 @@
-# Development environment with PostgreSQL 16 + Redis
-# Hot reload enabled for local development
+version: '3.9'
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: skeleton-api-dev
-    ports:
-      - "8080:8080"
-    environment:
-      - APP_ENV=dev
-      - APP_PORT=8080
-      - DATABASE_URL=postgres://skeleton:skeleton_password@postgres:5432/skeleton?sslmode=disable
-      - REDIS_URL=redis://redis:6379
-      - AUTH_PRIVATE_KEY_PATH=/app/keys/private.pem
-      - AUTH_PUBLIC_KEY_PATH=/app/keys/public.pem
-      - AUTH_ACCESS_TTL_MINUTES=15
-      - AUTH_REFRESH_TTL_DAYS=7
-      - SESSION_TTL_MINUTES=60
-      - SESSION_COOKIE_NAME=session
-      - RATE_LIMIT_GLOBAL_LIMIT=100
-      - RATE_LIMIT_GLOBAL_WINDOW=60
-      - CACHE_CLEANUP_INTERVAL=60
-      - CACHE_REDIS_PREFIX=skeleton:dev
-    volumes:
-      - ./keys:/app/keys:ro
-      - ./configs:/app/configs:ro
-      - ./migrations:/app/migrations:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    networks:
-      - skeleton_network
-
+  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
-    container_name: skeleton-postgres-dev
+    container_name: skeleton_postgres
     environment:
-      POSTGRES_DB: skeleton
       POSTGRES_USER: skeleton
-      POSTGRES_PASSWORD: skeleton_password
+      POSTGRES_PASSWORD: skeleton_dev_password
+      POSTGRES_DB: skeleton
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
     ports:
       - "5432:5432"
     volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U skeleton"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U skeleton -d skeleton"]
+      interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - skeleton_network
 
+  # Redis Cache & Event Bus
   redis:
     image: redis:7-alpine
-    container_name: skeleton-redis-dev
+    container_name: skeleton_redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
-      - redis_dev_data:/data
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      interval: 10s
       timeout: 3s
       retries: 5
     networks:
       - skeleton_network
 
-  # Optional: Adminer for database management UI
-  adminer:
-    image: adminer:latest
-    container_name: skeleton-adminer-dev
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: skeleton_api
+    environment:
+      - APP_ENV=dev
+      - APP_PORT=8080
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=skeleton
+      - DB_PASSWORD=skeleton_dev_password
+      - DB_NAME=skeleton
+      - DB_SSL_MODE=disable
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=
+      - AUTH_PRIVATE_KEY_PATH=/app/keys/private.pem
+      - AUTH_PUBLIC_KEY_PATH=/app/keys/public.pem
+      - AUTH_ACCESS_TTL_MINUTES=15
+      - AUTH_REFRESH_TTL_DAYS=7
+      - SESSION_TTL_MINUTES=1440
+      - LOG_LEVEL=debug
+    ports:
+      - "8080:8080"
+    volumes:
+      - .:/app
+      - go_modules:/go/pkg/mod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - skeleton_network
+
+  # Swagger UI (API Documentation)
+  swagger:
+    image: swaggerapi/swagger-ui:v5.10.5
+    container_name: skeleton_swagger
+    environment:
+      - SWAGGER_JSON=/docs/swagger.json
     ports:
       - "8081:8080"
+    volumes:
+      - ./docs/swagger:/docs
+    networks:
+      - skeleton_network
+
+  # pgAdmin (Database Management UI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: skeleton_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@skeleton.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_SERVER_JSON_FILE: /pgadmin/servers.json
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin/servers.json
     depends_on:
       - postgres
     networks:
       - skeleton_network
 
 volumes:
-  postgres_dev_data:
+  postgres_data:
     driver: local
-  redis_dev_data:
+  redis_data:
+    driver: local
+  go_modules:
+    driver: local
+  pgadmin_data:
     driver: local
 
 networks:
