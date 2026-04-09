@@ -1,115 +1,95 @@
-# Database Scripts
+# Utility Scripts
 
-## Migrate
+This directory contains operational scripts for the Skeleton CRM monorepo.
 
-Database migration tool for PostgreSQL.
+## Overview
 
-### Usage
+All scripts in this directory are operational/maintenance tools, not part of the core application code.
+
+## Go Scripts
+
+Go scripts in this directory have their own `go.mod` with a replace directive pointing to `../backend`. This allows them to import packages from the backend module:
+
+```go
+// scripts/go.mod
+module github.com/basilex/scripts
+go 1.25.0
+require github.com/basilex/skeleton v0.0.0
+replace github.com/basilex/skeleton => ../backend
+```
+
+### Seed (`seed/`)
+
+Database seeding script for initial/test data.
 
 ```bash
-# Apply pending migrations
-make migrate-up
-# or
-go run ./scripts/migrate -action=up
+# Run from project root
+make db-seed
+
+# Or directly
+cd scripts/seed && go run main.go
+```
+
+**Environment Variables:**
+- `DATABASE_URL` - PostgreSQL connection string
+  - Default: `postgres://skeleton:skeleton@localhost:5432/skeleton?sslmode=disable`
+
+### Migrate (`migrate/`)
+
+Database migration runner (alternative to main backend migration tool).
+
+```bash
+# Run migrations
+cd scripts/migrate && go run main.go -action=up
 
 # Rollback last migration
-make migrate-down
-# or
-go run ./scripts/migrate -action=down
-
-# Check migration status
-go run ./scripts/migrate -action=status
+cd scripts/migrate && go run main.go -action=down
 ```
 
-### Environment Variables
+## Shell Scripts
 
-- `DATABASE_URL` - PostgreSQL connection string (default: `postgres://user:password@localhost:5432/skeleton?sslmode=disable`)
+### deploy-staging.sh
 
-### Migration Files
+Deployment script for staging environment. Configures environment and deploys backend/frontend.
 
-Create migration files in `migrations/` directory:
-- `{number}.up.sql` - Apply migration
-- `{number}.down.sql` - Rollback migration
+### run-benchmarks.sh
 
-Example:
-```
-migrations/
-  001_initial_schema.up.sql
-  001_initial_schema.down.sql
-  002_add_user_preferences.up.sql
-  002_add_user_preferences.down.sql
-```
+Performance benchmarking script for API endpoints.
 
-## Seed
+### optimize-indexes.sh
 
-Database seeding tool for initial data.
+Database index optimization script.
 
-### Usage
+### docker-clean-cache.sh
+
+Docker cleanup utility script.
+
+## Usage from Makefile
+
+All scripts have corresponding Makefile targets:
 
 ```bash
-# Seed database with initial data
-make seed
-# or
-go run ./scripts/seed
+make db-seed           # Seed database
+make scripts-migrate   # Run migration script
+make scripts-benchmark # Run benchmarks
 ```
 
-### Environment Variables
+See root `Makefile` for all available targets.
 
-- `DATABASE_URL` - PostgreSQL connection string
+## Directory Structure
 
-### What it seeds
-
-- **Roles**: super_admin, admin, viewer
-- **Permissions**: users:read, users:write, roles:manage, etc.
-- **Role Permissions**: Assign permissions to roles
-- **Admin User**: admin@skeleton.local / Admin1234!
-
-## Make Targets
-
-Add to Makefile:
-
-```makefile
-migrate-up: ## Apply database migrations
-	@echo "Running migrations..."
-	go run ./scripts/migrate -action=up
-
-migrate-down: ## Rollback last migration
-	@echo "Rolling back migration..."
-	go run ./scripts/migrate -action=down
-
-migrate-status: ## Check migration status
-	go run ./scripts/migrate -action=status
-
-seed: ## Seed database with initial data
-	@echo "Seeding database..."
-	go run ./scripts/seed
 ```
-
-## Docker Compose
-
-For local development with PostgreSQL:
-
-```yaml
-# docker-compose.yml
-services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: skeleton
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+scripts/
+├── go.mod              # Go module for scripts
+├── go.sum              # Dependencies
+├── README.md           # This file
+├── seed/               # Database seeding
+│   ├── main.go
+│   └── seed            # Binary (gitignored)
+├── migrate/            # Migration runner
+│   └── main.go
+├── deploy-staging.sh   # Staging deployment
+├── run-benchmarks.sh   # Performance tests
+├── optimize-indexes.sh # DB optimization
+└── docker-clean-cache.sh
 ```
-
-## Notes
-
-- Both scripts use pure pgxpool (no ORM)
-- PostgreSQL 16+ required
-- Transactions ensure atomic migrations
-- Idempotent seed operations (safe to run multiple times)

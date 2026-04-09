@@ -18,7 +18,7 @@ func main() {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://user:password@localhost:5432/skeleton?sslmode=disable"
+		dbURL = "postgres://skeleton:skeleton@localhost:5432/skeleton?sslmode=disable"
 	}
 
 	ctx := context.Background()

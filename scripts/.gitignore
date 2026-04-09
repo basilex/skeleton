@@ -1,1 +1,5 @@
 scripts/seed/seed
+
+# Script binaries
+scripts/migrate/migrate
+scripts/seed/seed
