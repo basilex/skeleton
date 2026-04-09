@@ -9,9 +9,9 @@
 ## 📊 Overall Progress
 
 **Total Tasks:** 42  
-**Completed:** 5  
+**Completed:** 6  
 **In Progress:** 0  
-**Pending:** 37
+**Pending:** 36
 
 ---
 
@@ -264,15 +264,15 @@
 
 ### 6. Invoicing Context (Score: 90/100 → Target: 95/100)
 
-**Status:** ⬜ Not Started  
+**Status:** ✅ Completed  
 **Effort:** 2 days  
 **Priority:** HIGH
 
 #### Tasks:
 
-- [ ] Create `CreditNote` aggregate
+- [x] Create `CreditNote` aggregate
   - File: `internal/invoicing/domain/credit_note.go`
-  - Status: ⬜ Not Started
+  - Status: ✅ Completed
   - Effort: 1 day
   - Requires:
     - Link to invoice
@@ -280,18 +280,18 @@
     - Reason
     - Status management
 
-- [ ] Create `Installment` aggregate
+- [x] Create `Installment` aggregate
   - File: `internal/invoicing/domain/installment.go`
-  - Status: ⬜ Not Started
+  - Status: ✅ Completed
   - Effort: 0.5 day
   - Requires:
     - Payment schedule
     - Due dates
     - Amount tracking
 
-- [ ] Add tax calculation to `Invoice`
+- [x] Add tax calculation to `Invoice`
   - File: `internal/invoicing/domain/invoice.go` (modify)
-  - Status: ⬜ Not Started
+  - Status: ✅ Completed
   - Effort: 0.5 day
   - Requires:
     - Tax rate

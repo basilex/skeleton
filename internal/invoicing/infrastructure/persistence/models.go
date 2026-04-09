@@ -17,6 +17,7 @@ type invoiceDTO struct {
 	DueDate       time.Time `db:"due_date"`
 	Status        string    `db:"status"`
 	Subtotal      float64   `db:"subtotal"`
+	TaxRate       float64   `db:"tax_rate"`
 	TaxAmount     float64   `db:"tax_amount"`
 	Discount      float64   `db:"discount"`
 	Total         float64   `db:"total"`
@@ -56,6 +57,7 @@ func (dto *invoiceDTO) toDomain(lines []*invoiceLineDTO, payments []*paymentDTO)
 		status,
 		domainLines,
 		dto.Subtotal,
+		dto.TaxRate,
 		dto.TaxAmount,
 		dto.Discount,
 		dto.Total,

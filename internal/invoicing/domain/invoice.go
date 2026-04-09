@@ -20,6 +20,7 @@ type Invoice struct {
 	status        InvoiceStatus
 	lines         []*InvoiceLine
 	subtotal      float64
+	taxRate       float64
 	taxAmount     float64
 	discount      float64
 	total         float64
@@ -80,6 +81,7 @@ func RestoreInvoice(
 	status InvoiceStatus,
 	lines []*InvoiceLine,
 	subtotal float64,
+	taxRate float64,
 	taxAmount float64,
 	discount float64,
 	total float64,
@@ -102,6 +104,7 @@ func RestoreInvoice(
 		status:        status,
 		lines:         lines,
 		subtotal:      subtotal,
+		taxRate:       taxRate,
 		taxAmount:     taxAmount,
 		discount:      discount,
 		total:         total,
@@ -311,7 +314,48 @@ func (i *Invoice) recalculateTotals() {
 	for _, line := range i.lines {
 		i.subtotal += line.GetTotal()
 	}
+
+	// Calculate tax based on rate and net amount
+	netAmount := i.subtotal - i.discount
+	if i.taxRate > 0 {
+		i.taxAmount = netAmount * (i.taxRate / 100)
+	}
+
 	i.total = i.subtotal + i.taxAmount - i.discount
+}
+
+func (i *Invoice) SetTaxRate(taxRate float64) error {
+	if i.status != InvoiceStatusDraft {
+		return errors.New("cannot set tax rate on non-draft invoice")
+	}
+	if taxRate < 0 {
+		return errors.New("tax rate cannot be negative")
+	}
+	if taxRate > 100 {
+		return errors.New("tax rate cannot exceed 100%")
+	}
+
+	i.taxRate = taxRate
+	i.recalculateTotals()
+	i.updatedAt = time.Now()
+	return nil
+}
+
+func (i *Invoice) SetDiscount(discount float64) error {
+	if i.status != InvoiceStatusDraft {
+		return errors.New("cannot set discount on non-draft invoice")
+	}
+	if discount < 0 {
+		return errors.New("discount cannot be negative")
+	}
+	if discount > i.subtotal {
+		return errors.New("discount cannot exceed subtotal")
+	}
+
+	i.discount = discount
+	i.recalculateTotals()
+	i.updatedAt = time.Now()
+	return nil
 }
 
 func (i *Invoice) GetID() InvoiceID {
@@ -358,8 +402,20 @@ func (i *Invoice) GetSubtotal() float64 {
 	return i.subtotal
 }
 
+func (i *Invoice) GetTaxRate() float64 {
+	return i.taxRate
+}
+
 func (i *Invoice) GetTaxAmount() float64 {
 	return i.taxAmount
+}
+
+func (i *Invoice) GetNetAmount() float64 {
+	return i.subtotal - i.discount
+}
+
+func (i *Invoice) GetGrossAmount() float64 {
+	return i.subtotal + i.taxAmount - i.discount
 }
 
 func (i *Invoice) GetDiscount() float64 {
