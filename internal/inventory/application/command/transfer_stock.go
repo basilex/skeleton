@@ -5,17 +5,24 @@ import (
 	"fmt"
 
 	"github.com/basilex/skeleton/internal/inventory/domain"
+	"github.com/basilex/skeleton/pkg/transaction"
 )
 
 type TransferStockHandler struct {
 	stock     domain.StockRepository
 	movements domain.StockMovementRepository
+	txManager transaction.Manager
 }
 
-func NewTransferStockHandler(stock domain.StockRepository, movements domain.StockMovementRepository) *TransferStockHandler {
+func NewTransferStockHandler(
+	stock domain.StockRepository,
+	movements domain.StockMovementRepository,
+	txManager transaction.Manager,
+) *TransferStockHandler {
 	return &TransferStockHandler{
 		stock:     stock,
 		movements: movements,
+		txManager: txManager,
 	}
 }
 
@@ -31,54 +38,68 @@ type TransferStockResult struct {
 }
 
 func (h *TransferStockHandler) Handle(ctx context.Context, cmd TransferStockCommand) (*TransferStockResult, error) {
-	fromWarehouseID, err := domain.ParseWarehouseID(cmd.FromWarehouse)
-	if err != nil {
-		return nil, fmt.Errorf("parse from warehouse ID: %w", err)
-	}
+	var result *TransferStockResult
 
-	toWarehouseID, err := domain.ParseWarehouseID(cmd.ToWarehouse)
-	if err != nil {
-		return nil, fmt.Errorf("parse to warehouse ID: %w", err)
-	}
-
-	fromStock, err := h.stock.FindByItemAndWarehouse(ctx, cmd.ItemID, fromWarehouseID)
-	if err != nil {
-		return nil, fmt.Errorf("find from stock: %w", err)
-	}
-
-	if !fromStock.IsAvailable(cmd.Quantity) {
-		return nil, domain.ErrInsufficientStock
-	}
-
-	toStock, err := h.stock.FindByItemAndWarehouse(ctx, cmd.ItemID, toWarehouseID)
-	if err != nil {
-		toStock, err = domain.NewStock(cmd.ItemID, toWarehouseID)
+	err := h.txManager.Execute(ctx, func(ctx context.Context) error {
+		// Parse IDs
+		fromWarehouseID, err := domain.ParseWarehouseID(cmd.FromWarehouse)
 		if err != nil {
-			return nil, fmt.Errorf("create to stock: %w", err)
+			return fmt.Errorf("parse from warehouse ID: %w", err)
 		}
-	}
 
-	movement, err := domain.NewTransfer(cmd.ItemID, fromWarehouseID, toWarehouseID, cmd.Quantity)
-	if err != nil {
-		return nil, fmt.Errorf("create transfer movement: %w", err)
-	}
+		toWarehouseID, err := domain.ParseWarehouseID(cmd.ToWarehouse)
+		if err != nil {
+			return fmt.Errorf("parse to warehouse ID: %w", err)
+		}
 
-	fromStock.AdjustQuantity(-cmd.Quantity, movement.GetID())
-	toStock.AdjustQuantity(cmd.Quantity, movement.GetID())
+		// Load from stock
+		fromStock, err := h.stock.FindByItemAndWarehouse(ctx, cmd.ItemID, fromWarehouseID)
+		if err != nil {
+			return fmt.Errorf("find from stock: %w", err)
+		}
 
-	if err := h.movements.Save(ctx, movement); err != nil {
-		return nil, fmt.Errorf("save movement: %w", err)
-	}
+		if !fromStock.IsAvailable(cmd.Quantity) {
+			return domain.ErrInsufficientStock
+		}
 
-	if err := h.stock.Save(ctx, fromStock); err != nil {
-		return nil, fmt.Errorf("save from stock: %w", err)
-	}
+		// Load or create to stock
+		toStock, err := h.stock.FindByItemAndWarehouse(ctx, cmd.ItemID, toWarehouseID)
+		if err != nil {
+			toStock, err = domain.NewStock(cmd.ItemID, toWarehouseID)
+			if err != nil {
+				return fmt.Errorf("create to stock: %w", err)
+			}
+		}
 
-	if err := h.stock.Save(ctx, toStock); err != nil {
-		return nil, fmt.Errorf("save to stock: %w", err)
-	}
+		// Create transfer movement
+		movement, err := domain.NewTransfer(cmd.ItemID, fromWarehouseID, toWarehouseID, cmd.Quantity)
+		if err != nil {
+			return fmt.Errorf("create transfer movement: %w", err)
+		}
 
-	return &TransferStockResult{
-		MovementID: movement.GetID().String(),
-	}, nil
+		// Adjust quantities
+		fromStock.AdjustQuantity(-cmd.Quantity, movement.GetID())
+		toStock.AdjustQuantity(cmd.Quantity, movement.GetID())
+
+		// Save all within transaction
+		if err := h.movements.Save(ctx, movement); err != nil {
+			return fmt.Errorf("save movement: %w", err)
+		}
+
+		if err := h.stock.Save(ctx, fromStock); err != nil {
+			return fmt.Errorf("save from stock: %w", err)
+		}
+
+		if err := h.stock.Save(ctx, toStock); err != nil {
+			return fmt.Errorf("save to stock: %w", err)
+		}
+
+		result = &TransferStockResult{
+			MovementID: movement.GetID().String(),
+		}
+
+		return nil
+	})
+
+	return result, err
 }

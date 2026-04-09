@@ -87,6 +87,7 @@ import (
 	membus "github.com/basilex/skeleton/pkg/eventbus/memory"
 	redisbus "github.com/basilex/skeleton/pkg/eventbus/redis"
 	"github.com/basilex/skeleton/pkg/ratelimit"
+	"github.com/basilex/skeleton/pkg/transaction"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 )
@@ -220,6 +221,9 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 	} else {
 		bus = membus.New()
 	}
+
+	// Initialize transaction manager for atomic database operations.
+	txManager := transaction.NewPgxTransactionManager(pool)
 
 	// Initialize caching infrastructure.
 	// Uses Redis cache in production, in-memory for development.
@@ -414,7 +418,7 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 
 	// Initialize command handlers for accounting use cases.
 	createAccountHandler := accountingCommand.NewCreateAccountHandler(accountRepo, bus)
-	recordTransactionHandler := accountingCommand.NewRecordTransactionHandler(accountRepo, transactionRepo, bus)
+	recordTransactionHandler := accountingCommand.NewRecordTransactionHandler(accountRepo, transactionRepo, bus, txManager)
 	// Initialize query handlers for accounting use cases.
 	getAccountHandler := accountingQuery.NewGetAccountHandler(accountRepo)
 	listAccountsHandler := accountingQuery.NewListAccountsHandler(accountRepo)
@@ -533,8 +537,8 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 	adjustStockHandler := inventoryCommand.NewAdjustStockHandler(stockRepo, stockMovementRepo, bus)
 	receiptStockHandler := inventoryCommand.NewReceiptStockHandler(stockRepo, stockMovementRepo)
 	issueStockHandler := inventoryCommand.NewIssueStockHandler(stockRepo, stockMovementRepo)
-	transferStockHandler := inventoryCommand.NewTransferStockHandler(stockRepo, stockMovementRepo)
-	reserveStockHandler := inventoryCommand.NewReserveStockHandler(stockRepo, stockReservationRepo)
+	transferStockHandler := inventoryCommand.NewTransferStockHandler(stockRepo, stockMovementRepo, txManager)
+	reserveStockHandler := inventoryCommand.NewReserveStockHandler(stockRepo, stockReservationRepo, txManager)
 	fulfillReservationHandler := inventoryCommand.NewFulfillReservationHandler(stockRepo, stockReservationRepo)
 	cancelReservationHandler := inventoryCommand.NewCancelReservationHandler(stockRepo, stockReservationRepo)
 	// Initialize query handlers for inventory use cases.
