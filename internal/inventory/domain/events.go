@@ -26,7 +26,9 @@ type StockAdjusted struct {
 	StockID     StockID
 	ItemID      string
 	WarehouseID WarehouseID
-	Quantity    float64
+	OldQty      float64
+	NewQty      float64
+	MovementID  StockMovementID
 	Reason      string
 	occurredAt  time.Time
 }
@@ -44,6 +46,10 @@ type StockReserved struct {
 	StockID       StockID
 	OrderID       string
 	Quantity      float64
+	OldReserved   float64
+	NewReserved   float64
+	OldAvailable  float64
+	NewAvailable  float64
 	occurredAt    time.Time
 }
 
@@ -52,6 +58,44 @@ func (e StockReserved) EventName() string {
 }
 
 func (e StockReserved) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+type StockReservationReleased struct {
+	StockID      StockID
+	Quantity     float64
+	OldReserved  float64
+	NewReserved  float64
+	OldAvailable float64
+	NewAvailable float64
+	occurredAt   time.Time
+}
+
+func (e StockReservationReleased) EventName() string {
+	return "inventory.stock_reservation_released"
+}
+
+func (e StockReservationReleased) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+type StockReservationFulfilled struct {
+	StockID      StockID
+	Quantity     float64
+	OldQty       float64
+	NewQty       float64
+	OldReserved  float64
+	NewReserved  float64
+	OldAvailable float64
+	NewAvailable float64
+	occurredAt   time.Time
+}
+
+func (e StockReservationFulfilled) EventName() string {
+	return "inventory.stock_reservation_fulfilled"
+}
+
+func (e StockReservationFulfilled) OccurredAt() time.Time {
 	return e.occurredAt
 }
 

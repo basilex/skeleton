@@ -3,6 +3,8 @@ package domain
 import (
 	"errors"
 	"time"
+
+	"github.com/basilex/skeleton/pkg/eventbus"
 )
 
 type Stock struct {
@@ -17,6 +19,7 @@ type Stock struct {
 	lastMovementID  StockMovementID
 	createdAt       time.Time
 	updatedAt       time.Time
+	events          []eventbus.Event
 }
 
 func NewStock(
@@ -27,8 +30,8 @@ func NewStock(
 		return nil, errors.New("item ID cannot be empty")
 	}
 
-	now := time.Now()
-	return &Stock{
+	now := time.Now().UTC()
+	stock := &Stock{
 		id:           NewStockID(),
 		itemID:       itemID,
 		warehouseID:  warehouseID,
@@ -37,7 +40,10 @@ func NewStock(
 		availableQty: 0,
 		createdAt:    now,
 		updatedAt:    now,
-	}, nil
+		events:       make([]eventbus.Event, 0),
+	}
+
+	return stock, nil
 }
 
 func RestoreStock(
@@ -65,6 +71,7 @@ func RestoreStock(
 		lastMovementID:  lastMovementID,
 		createdAt:       createdAt,
 		updatedAt:       updatedAt,
+		events:          make([]eventbus.Event, 0),
 	}
 }
 
@@ -112,21 +119,62 @@ func (s *Stock) GetUpdatedAt() time.Time {
 	return s.updatedAt
 }
 
+// PullEvents returns all pending domain events and clears the buffer.
+func (s *Stock) PullEvents() []eventbus.Event {
+	events := s.events
+	s.events = make([]eventbus.Event, 0)
+	return events
+}
+
+// publishEvent adds an event to the aggregate's event buffer.
+func (s *Stock) publishEvent(event eventbus.Event) {
+	s.events = append(s.events, event)
+	s.updatedAt = time.Now().UTC()
+}
+
 func (s *Stock) AdjustQuantity(quantity float64, movementID StockMovementID) {
+	oldQty := s.quantity
 	s.quantity += quantity
 	s.availableQty = s.quantity - s.reservedQty
 	s.lastMovementID = movementID
-	s.updatedAt = time.Now()
+	s.updatedAt = time.Now().UTC()
+
+	s.publishEvent(StockAdjusted{
+		StockID:     s.id,
+		ItemID:      s.itemID,
+		WarehouseID: s.warehouseID,
+		OldQty:      oldQty,
+		NewQty:      s.quantity,
+		MovementID:  movementID,
+		Reason:      "adjustment",
+		occurredAt:  s.updatedAt,
+	})
 }
 
-func (s *Stock) Reserve(reservedQty float64) error {
+func (s *Stock) Reserve(reservedQty float64, reservationID StockReservationID) error {
 	if s.availableQty < reservedQty {
 		return ErrInsufficientStock
 	}
 
+	oldReserved := s.reservedQty
+	oldAvailable := s.availableQty
+
 	s.reservedQty += reservedQty
 	s.availableQty = s.quantity - s.reservedQty
-	s.updatedAt = time.Now()
+	s.updatedAt = time.Now().UTC()
+
+	s.publishEvent(StockReserved{
+		ReservationID: reservationID,
+		StockID:       s.id,
+		OrderID:       "",
+		Quantity:      reservedQty,
+		OldReserved:   oldReserved,
+		NewReserved:   s.reservedQty,
+		OldAvailable:  oldAvailable,
+		NewAvailable:  s.availableQty,
+		occurredAt:    s.updatedAt,
+	})
+
 	return nil
 }
 
@@ -135,9 +183,22 @@ func (s *Stock) ReleaseReservation(reservedQty float64) {
 		reservedQty = s.reservedQty
 	}
 
+	oldReserved := s.reservedQty
+	oldAvailable := s.availableQty
+
 	s.reservedQty -= reservedQty
 	s.availableQty = s.quantity - s.reservedQty
-	s.updatedAt = time.Now()
+	s.updatedAt = time.Now().UTC()
+
+	s.publishEvent(StockReservationReleased{
+		StockID:      s.id,
+		Quantity:     reservedQty,
+		OldReserved:  oldReserved,
+		NewReserved:  s.reservedQty,
+		OldAvailable: oldAvailable,
+		NewAvailable: s.availableQty,
+		occurredAt:   s.updatedAt,
+	})
 }
 
 func (s *Stock) FulfillReservation(quantity float64) {
@@ -145,10 +206,26 @@ func (s *Stock) FulfillReservation(quantity float64) {
 		quantity = s.reservedQty
 	}
 
+	oldQty := s.quantity
+	oldReserved := s.reservedQty
+	oldAvailable := s.availableQty
+
 	s.quantity -= quantity
 	s.reservedQty -= quantity
 	s.availableQty = s.quantity - s.reservedQty
-	s.updatedAt = time.Now()
+	s.updatedAt = time.Now().UTC()
+
+	s.publishEvent(StockReservationFulfilled{
+		StockID:      s.id,
+		Quantity:     quantity,
+		OldQty:       oldQty,
+		NewQty:       s.quantity,
+		OldReserved:  oldReserved,
+		NewReserved:  s.reservedQty,
+		OldAvailable: oldAvailable,
+		NewAvailable: s.availableQty,
+		occurredAt:   s.updatedAt,
+	})
 }
 
 func (s *Stock) SetReorderPoint(reorderPoint float64) error {

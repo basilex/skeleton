@@ -537,8 +537,8 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 	adjustStockHandler := inventoryCommand.NewAdjustStockHandler(stockRepo, stockMovementRepo, bus)
 	receiptStockHandler := inventoryCommand.NewReceiptStockHandler(stockRepo, stockMovementRepo)
 	issueStockHandler := inventoryCommand.NewIssueStockHandler(stockRepo, stockMovementRepo)
-	transferStockHandler := inventoryCommand.NewTransferStockHandler(stockRepo, stockMovementRepo, txManager)
-	reserveStockHandler := inventoryCommand.NewReserveStockHandler(stockRepo, stockReservationRepo, txManager)
+	transferStockHandler := inventoryCommand.NewTransferStockHandler(stockRepo, stockMovementRepo, bus, txManager)
+	reserveStockHandler := inventoryCommand.NewReserveStockHandler(stockRepo, stockReservationRepo, bus, txManager)
 	fulfillReservationHandler := inventoryCommand.NewFulfillReservationHandler(stockRepo, stockReservationRepo)
 	cancelReservationHandler := inventoryCommand.NewCancelReservationHandler(stockRepo, stockReservationRepo)
 	// Initialize query handlers for inventory use cases.

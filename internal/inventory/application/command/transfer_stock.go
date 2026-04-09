@@ -5,23 +5,27 @@ import (
 	"fmt"
 
 	"github.com/basilex/skeleton/internal/inventory/domain"
+	"github.com/basilex/skeleton/pkg/eventbus"
 	"github.com/basilex/skeleton/pkg/transaction"
 )
 
 type TransferStockHandler struct {
 	stock     domain.StockRepository
 	movements domain.StockMovementRepository
+	bus       eventbus.Bus
 	txManager transaction.Manager
 }
 
 func NewTransferStockHandler(
 	stock domain.StockRepository,
 	movements domain.StockMovementRepository,
+	bus eventbus.Bus,
 	txManager transaction.Manager,
 ) *TransferStockHandler {
 	return &TransferStockHandler{
 		stock:     stock,
 		movements: movements,
+		bus:       bus,
 		txManager: txManager,
 	}
 }
@@ -92,6 +96,19 @@ func (h *TransferStockHandler) Handle(ctx context.Context, cmd TransferStockComm
 
 		if err := h.stock.Save(ctx, toStock); err != nil {
 			return fmt.Errorf("save to stock: %w", err)
+		}
+
+		// Publish domain events from both stocks
+		for _, event := range fromStock.PullEvents() {
+			if err := h.bus.Publish(ctx, event); err != nil {
+				return fmt.Errorf("publish from stock event: %w", err)
+			}
+		}
+
+		for _, event := range toStock.PullEvents() {
+			if err := h.bus.Publish(ctx, event); err != nil {
+				return fmt.Errorf("publish to stock event: %w", err)
+			}
 		}
 
 		result = &TransferStockResult{
