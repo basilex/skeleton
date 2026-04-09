@@ -7,7 +7,9 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/basilex/skeleton/internal/accounting/domain"
 	"github.com/basilex/skeleton/pkg/pagination"
+	"github.com/basilex/skeleton/pkg/transaction"
 	"github.com/georgysavva/scany/v2/pgxscan"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,6 +23,32 @@ func NewAccountRepository(pool *pgxpool.Pool) *AccountRepository {
 		pool: pool,
 		psql: squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar),
 	}
+}
+
+// exec executes a query using transaction from context if available, otherwise uses pool
+func (r *AccountRepository) exec(ctx context.Context, query string, args ...interface{}) error {
+	if tx, ok := transaction.FromContext(ctx); ok {
+		_, err := tx.Exec(ctx, query, args...)
+		return err
+	}
+	_, err := r.pool.Exec(ctx, query, args...)
+	return err
+}
+
+// queryRow queries a single row using transaction from context if available, otherwise uses pool
+func (r *AccountRepository) queryRow(ctx context.Context, query string, args ...interface{}) pgx.Row {
+	if tx, ok := transaction.FromContext(ctx); ok {
+		return tx.QueryRow(ctx, query, args...)
+	}
+	return r.pool.QueryRow(ctx, query, args...)
+}
+
+// query queries multiple rows using transaction from context if available, otherwise uses pool
+func (r *AccountRepository) query(ctx context.Context, query string, args ...interface{}) (pgx.Rows, error) {
+	if tx, ok := transaction.FromContext(ctx); ok {
+		return tx.Query(ctx, query, args...)
+	}
+	return r.pool.Query(ctx, query, args...)
 }
 
 func (r *AccountRepository) Save(ctx context.Context, account *domain.Account) error {
@@ -50,8 +78,7 @@ func (r *AccountRepository) Save(ctx context.Context, account *domain.Account) e
 		return fmt.Errorf("build insert query: %w", err)
 	}
 
-	_, err = r.pool.Exec(ctx, query, args...)
-	if err != nil {
+	if err := r.exec(ctx, query, args...); err != nil {
 		return fmt.Errorf("save account: %w", err)
 	}
 	return nil
