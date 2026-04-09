@@ -190,6 +190,26 @@ func (n NotificationSettings) Timezone() string {
 	return n.timezone
 }
 
+// ReconstituteNotificationSettings reconstructs NotificationSettings from persisted state.
+func ReconstituteNotificationSettings(
+	emailEnabled, smsEnabled, pushEnabled, inAppEnabled bool,
+	marketingEmails, weeklyDigest bool,
+	quietHoursStart, quietHoursEnd *int,
+	timezone string,
+) NotificationSettings {
+	return NotificationSettings{
+		emailEnabled:    emailEnabled,
+		smsEnabled:      smsEnabled,
+		pushEnabled:     pushEnabled,
+		inAppEnabled:    inAppEnabled,
+		marketingEmails: marketingEmails,
+		weeklyDigest:    weeklyDigest,
+		quietHoursStart: quietHoursStart,
+		quietHoursEnd:   quietHoursEnd,
+		timezone:        timezone,
+	}
+}
+
 // UserPreferences represents user preference settings.
 type UserPreferences struct {
 	id            PreferencesID
