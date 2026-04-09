@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api/client'
 import type { User, LoginCredentials, RegisterCredentials, AuthResponse } from './types'
@@ -25,31 +25,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    checkAuth()
-  }, [])
+    let mounted = true
+    
+    async function checkAuth() {
+      try {
+        const token = localStorage.getItem('access_token')
+        if (!token) {
+          if (mounted) setIsLoading(false)
+          return
+        }
 
-  async function checkAuth() {
-    try {
-      const token = localStorage.getItem('access_token')
-      if (!token) {
-        setIsLoading(false)
-        return
+        apiClient.setToken(token)
+        const currentUser = await apiClient.get<User>('/api/v1/auth/me')
+        if (mounted) setUser(currentUser)
+      } catch (error) {
+        console.error('Auth check failed:', error)
+        localStorage.removeItem('access_token')
+        localStorage.removeItem('refresh_token')
+        apiClient.clearToken()
+      } finally {
+        if (mounted) setIsLoading(false)
       }
-
-      apiClient.setToken(token)
-      const currentUser = await apiClient.get<User>('/api/v1/auth/me')
-      setUser(currentUser)
-    } catch (error) {
-      console.error('Auth check failed:', error)
-      localStorage.removeItem('access_token')
-      localStorage.removeItem('refresh_token')
-      apiClient.clearToken()
-    } finally {
-      setIsLoading(false)
     }
-  }
+    
+    checkAuth()
+    
+    return () => {
+      mounted = false
+    }
+  }, []) // Empty deps - only run once
 
-  async function login(credentials: LoginCredentials) {
+  const login = useCallback(async (credentials: LoginCredentials) => {
     const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', credentials)
     
     localStorage.setItem('access_token', response.access_token)
@@ -58,9 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setUser(response.user)
     router.push('/dashboard')
-  }
+  }, [router])
 
-  async function register(credentials: RegisterCredentials) {
+  const register = useCallback(async (credentials: RegisterCredentials) => {
     const response = await apiClient.post<AuthResponse>('/api/v1/auth/register', credentials)
     
     localStorage.setItem('access_token', response.access_token)
@@ -69,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     setUser(response.user)
     router.push('/dashboard')
-  }
+  }, [router])
 
-  async function logout() {
+  const logout = useCallback(async () => {
     try {
       await apiClient.post('/api/v1/auth/logout')
     } catch (error) {
@@ -83,16 +89,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null)
       router.push('/login')
     }
-  }
+  }, [router])
 
-  async function refreshToken() {
-    const refreshToken = localStorage.getItem('refresh_token')
-    if (!refreshToken) {
+  const refreshToken = useCallback(async () => {
+    const refreshTokenValue = localStorage.getItem('refresh_token')
+    if (!refreshTokenValue) {
       throw new Error('No refresh token')
     }
 
     const response = await apiClient.post<AuthResponse>('/api/v1/auth/refresh', {
-      refresh_token: refreshToken,
+      refresh_token: refreshTokenValue,
     })
 
     localStorage.setItem('access_token', response.access_token)
@@ -100,9 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiClient.setToken(response.access_token)
     
     setUser(response.user)
-  }
+  }, [])
 
-  function hasPermission(resource: string, action: string): boolean {
+  const hasPermission = useCallback((resource: string, action: string): boolean => {
     if (!user) return false
     
     // Super admin has all permissions
@@ -110,12 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     // Check specific permission
     return user.permissions.includes(`${resource}:${action}`)
-  }
+  }, [user])
 
-  function hasRole(role: string): boolean {
+  const hasRole = useCallback((role: string): boolean => {
     if (!user) return false
     return user.roles.includes(role)
-  }
+  }, [user])
 
   return (
     <AuthContext.Provider

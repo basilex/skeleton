@@ -2,7 +2,6 @@ import type { Metadata } from "next"
 import { Inter, Geist } from "next/font/google"
 import { cn } from "@/lib/utils"
 import { AuthProvider } from "@/lib/auth"
-import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
@@ -23,7 +22,6 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           {children}
-          <Toaster />
         </AuthProvider>
       </body>
     </html>
