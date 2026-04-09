@@ -70,14 +70,13 @@ Product catalog with hierarchical categories.
 ### Design Patterns
 
 #### Domain-Driven Design (DDD)
-```
-Domain Layer
-├── Aggregates: Customer, Contract, Account, Order, Item
-├── Entities: OrderLine, Transaction
-├── Value Objects: Money, ContactInfo, Address, PaymentTerms
-├── Domain Events: CustomerCreated, OrderPlaced, TransactionRecorded
-└── Repository Interfaces: CustomerRepository, OrderRepository
-```
+
+**Domain Layer Components:**
+- Aggregates: Customer, Contract, Account, Order, Item
+- Entities: OrderLine, Transaction
+- Value Objects: Money, ContactInfo, Address, PaymentTerms
+- Domain Events: CustomerCreated, OrderPlaced, TransactionRecorded
+- Repository Interfaces: CustomerRepository, OrderRepository
 
 #### Hexagonal Architecture (Ports & Adapters)
 ```
