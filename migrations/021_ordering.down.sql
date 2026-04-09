@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS order_lines;
+DROP TABLE IF EXISTS orders;
+DROP TABLE IF EXISTS quotes;
+DROP TYPE IF EXISTS order_status;
+DROP TYPE IF EXISTS quote_status;

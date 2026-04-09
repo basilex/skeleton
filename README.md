@@ -357,6 +357,76 @@ make db-stats
 make db-slow-queries
 ```
 
+## Bounded Contexts
+
+The skeleton implements the following bounded contexts with full Domain-Driven Design:
+
+### Core Contexts
+
+1. **Identity** - Authentication, authorization, user management
+   - Users, Roles, Permissions, Sessions
+   - JWT tokens, password hashing
+   - RBAC middleware
+
+2. **Audit** - Audit logging for compliance
+   - Action tracking, entity changes
+   - Queryable audit records
+
+3. **Notifications** - Multi-channel notifications
+   - Email, SMS, Push, In-App
+   - Templates, preferences
+   - Background workers
+
+4. **Files** - File management
+   - Upload, download, processing
+   - Storage backends (local, S3)
+   - Image transformations
+
+### Business Contexts
+
+5. **Parties** - Customer, supplier, partner, employee management
+   - Party types with JSONB attributes
+   - Contact information, addresses
+
+6. **Contracts** - Contract lifecycle management
+   - DATERANGE for validity periods
+   - Contract status machine
+
+7. **Accounting** - Chart of accounts, double-entry transactions
+   - Account hierarchy
+   - Balance tracking
+
+8. **Ordering** - Order management
+   - Orders with lines, quotes
+   - Order status transitions
+
+9. **Catalog** - Product catalog
+   - LTREE for category hierarchy
+   - JSONB for product attributes
+
+10. **Invoicing** - Invoice management
+    - Invoices, invoice lines, payments
+    - Invoice status workflow
+
+11. **Documents** - Document management
+    - PDF generation, templates
+    - Digital signatures
+
+12. **Inventory** 🆕 - Warehouse and stock management
+    - Warehouses with status tracking
+    - Stock levels with availability calculations
+    - Stock movements (receipt/issue/transfer/adjustment)
+    - Stock reservations with expiration
+    - 18 HTTP endpoints, 4 database tables
+    - 26 domain tests
+
+### Integration
+
+All contexts communicate through:
+- **Event Bus** - Domain events for cross-context integration
+- **Clean Architecture** - No direct dependencies between contexts
+- **Repository Pattern** - Interfaces in domain, implementations in infrastructure
+
 ## Documentation
 
 - **[DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Complete development guide

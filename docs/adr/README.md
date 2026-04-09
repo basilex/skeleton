@@ -1,27 +1,24 @@
-# Architecture Decision Records (ADR)
+# Architecture Decision Records
 
-This directory contains all architecture decisions for the Skeleton API project.
+This directory contains Architecture Decision Records (ADRs) for the Skeleton API project.
 
-## Active Standards
+## What is an ADR?
+
+An ADR is a document that captures an important architectural decision made along with its context and consequences.
+
+## Quick Navigation
 
 ### Core Architecture
 
 | ADR | Title | Status | Description |
 |-----|-------|--------|-------------|
-| [ADR-001](ADR-001-hexagonal-architecture.md) | Hexagonal Architecture | ✅ ACCEPTED | DDD + Clean Architecture, bounded contexts |
-| [ADR-003](ADR-003-event-bus.md) | Event Bus | ✅ ACCEPTED | In-memory event bus for domain events |
-| [ADR-004](ADR-004-rbac-model.md) | RBAC Model | ✅ ACCEPTED | Role-Based Access Control with permissions |
+| [ADR-001](ADR-001-hexagonal-architecture.md) | Hexagonal Architecture | ✅ ACCEPTED | Clean architecture separation |
+| [ADR-003](ADR-003-event-bus.md) | Event Bus | ✅ ACCEPTED | Domain event system |
+| [ADR-004](ADR-004-rbac-model.md) | RBAC Model | ✅ ACCEPTED | Role-based access control |
+| [ADR-006](ADR-006-uuid-v7.md) | UUID v7 | ✅ ACCEPTED | Time-sortable identifiers |
+| [ADR-007](ADR-007-cursor-pagination.md) | Cursor Pagination | ✅ ACCEPTED | Efficient cursor-based pagination |
 
-### Database & Storage
-
-| ADR | Title | Status | Description |
-|-----|-------|--------|-------------|
-**[ADR-016](ADR-016-database-stack.md)** | **Database Stack Standard** | ✅ **ACCEPTED** | **PostgreSQL 16 + pgx v5 + scany v2 + squirrel** |
-| [ADR-006](ADR-006-uuid-v7.md) | UUID v7 Implementation | ✅ ACCEPTED | Time-ordered UUIDs, 56% storage savings |
-| [ADR-007](ADR-007-cursor-pagination.md) | Cursor Pagination | ✅ ACCEPTED | Keyset pagination for large datasets |
-| [ADR-012](ADR-012-files-storage.md) | Files Storage | ✅ ACCEPTED | Multi-provider file storage abstraction |
-
-### API & Integration
+### API Design
 
 | ADR | Title | Status | Description |
 |-----|-------|--------|-------------|
@@ -72,6 +69,25 @@ PostgreSQL 16
 | **sqlc** | Code generation, poor dynamic queries | ❌ BANNED |
 
 See [ADR-016](ADR-016-database-stack.md) for full implementation details.
+
+## Bounded Contexts
+
+The following architectural decisions define each bounded context in the system:
+
+| ADR | Context | Description |
+|-----|---------|-------------|
+| [ADR-017](ADR-017-parties.md) | Parties | Customer, supplier, partner, employee management |
+| [ADR-018](ADR-018-contracts.md) | Contracts | Contract lifecycle with DATERANGE |
+| [ADR-019](ADR-019-accounting.md) | Accounting | Chart of accounts, double-entry transactions |
+| [ADR-020](ADR-020-ordering.md) | Ordering | Order management with state machine |
+| [ADR-021](ADR-021-catalog.md) | Catalog | Product catalog with LTREE categories |
+| [ADR-022](ADR-022-inventory.md) | Inventory | Warehouse and stock management 🆕 |
+
+Each context follows:
+- **Domain-Driven Design** - Aggregates, value objects, domain events
+- **Hexagonal Architecture** - Domain → Application → Infrastructure → HTTP
+- **CQRS-lite** - Commands for writes, queries for reads
+- **Event-Driven** - Cross-context communication via EventBus
 
 ## Repository Implementation Example
 
@@ -152,56 +168,50 @@ func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) 
 
 The following ADRs have been superseded or are no longer relevant:
 
-| ADR | Title | Status | Superseded By |
-|-----|-------|--------|---------------|
-| [ADR-002](archive/ADR-002-sqlite-wal.md) | SQLite WAL | ❌ OBSOLETE | ADR-016 (PostgreSQL Standard) |
-| [ADR-005](archive/ADR-005-no-orm.md) | No ORM | ❌ SUPERSEDED | ADR-016 (Database Stack) |
-| [ADR-016 (old)](archive/ADR-016-pgx-with-postgres.md) | pgx with PostgreSQL | ❌ SUPERSEDED | ADR-016 (Database Stack Standard) |
-| [ADR-017](archive/ADR-017-scany-squirrel-standard.md) | scany + squirrel | ❌ SUPERSEDED | ADR-016 (Database Stack Standard) |
+- ADR-002: SQLite WAL - SQLite support removed (PostgreSQL only)
+- ADR-005: No ORM - Merged into ADR-016
+- ADR-016 (old): pgx with PostgreSQL - Merged into ADR-016
+- ADR-017 (old): Scany/Squirrel Standard - Merged into ADR-016
 
-## Quick Reference
+## Creating a New ADR
 
-### When to Use Each Tool
+1. Copy the template below
+2. Name it `ADR-NNN-short-title.md` where NNN is the next sequential number
+3. Fill in all sections
+4. Add to the appropriate table above
 
-| Scenario | Tool | Example |
-|----------|------|---------|
-| Single result | `pgxscan.Get()` | Find by ID |
-| Multiple results | `pgxscan.Select()` | List all |
-| Dynamic filters | `squirrel` | Search with optional filters |
-| Pagination | `squirrel` | Cursor/keyset pagination |
-| 5+ parameters | `pgx.NamedArgs` | Complex updates |
-| Parallel queries | `pgx.Batch` | Independent updates |
-| Bulk insert (1000+) | `pgx.CopyFrom` | Import CSV |
-| Simple static query | Raw SQL + `pgxscan` | Get by ID |
+## Template
 
-### Code Reduction Benefits
+```markdown
+# ADR-NNN: Title
 
-- ✅ **30-47% less code** in repositories
-- ✅ **Type-safe queries** (compile-time checks)
-- ✅ **No parameter counting bugs** (`$1`, `$2`...)
-- ✅ **Consistent error handling** with `pgxscan.NotFound()`
+## Status
 
-### Performance Characteristics
+[Proposed|Accepted|Deprecated|Superseded]
 
-| Tool | Reflection | Overhead | Performance |
-|------|------------|----------|-------------|
-| pgx/v5 | ❌ None | Zero | ⚡⚡⚡ Fastest |
-| scany v2 | ✅ Minimal (struct tags) | Negligible | ⚡⚡ Fast |
-| squirrel | ❌ None | Build time | ⚡⚡ Fast |
+## Context
 
-## Contributing
+What is the issue we're addressing?
 
-When creating a new ADR:
+## Decision
 
-1. Follow the numbering sequence
-2. Use the template: `docs/adr/templates/ADR-template.md`
-3. Include: Status, Context, Decision, Consequences
-4. Update this README.md with the new ADR
+What is the change we're proposing/have made?
 
-## References
+## Consequences
 
-- ADR Template: `docs/adr/templates/ADR-template.md`
-- PostgreSQL 16 Documentation: https://www.postgresql.org/docs/16/
-- pgx v5: https://github.com/jackc/pgx
-- scany v2: https://github.com/georgysavva/scany
-- squirrel: https://github.com/Masterminds/squirrel
+What becomes easier or harder because of this change?
+
+## Alternatives Considered
+
+What other options were evaluated?
+
+## Implementation
+
+How will this be implemented?
+```
+
+## Related Documentation
+
+- **[README.md](../README.md)** - Project overview
+- **[IMPLEMENTATION_STATUS.md](../IMPLEMENTATION_STATUS.md)** - Current implementation status
+- **[ARCHITECTURE.md](../architecture/ARCHITECTURE.md)** - Architecture overview

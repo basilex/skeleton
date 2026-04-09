@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS receivables;
+DROP TABLE IF EXISTS payables;
+DROP TABLE IF EXISTS invoices;
+DROP TABLE IF EXISTS transactions;
+DROP TABLE IF EXISTS accounts;
+DROP TYPE IF EXISTS payment_method;
+DROP TYPE IF EXISTS payment_status;
+DROP TYPE IF EXISTS invoice_status;
+DROP TYPE IF EXISTS invoice_direction;
+DROP TYPE IF EXISTS account_type;

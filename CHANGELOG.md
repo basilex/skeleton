@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SQLite support removed completely** - PostgreSQL 16 is now the only supported database
 - **All TEXT IDs changed to UUID v7** - Time-ordered UUIDs with native PostgreSQL support
 - **All TEXT metadata changed to JSONB** - Native JSON with GIN indexes for querying
-- **Config files location changed** - All`.env` files must be in `configs/` directory
+- **Config files location changed** - All `.env` files must be in `configs/` directory
 
 #### Repository Pattern
 - **Manual scanning replaced with DTO pattern** - All repositories now use `scany v2`
@@ -24,10 +24,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Infrastructure
 - **Docker setup changed** - New multi-stage Dockerfiles with health checks
-- **Migrations consolidated** - Only PostgreSQL 16 migrations (001-017)
+- **Migrations consolidated** - Only PostgreSQL 16 migrations (001-025)
 - **Test infrastructure updated** - All tests use PostgreSQL testcontainers
 
 ### Added ✨
+
+#### Cross-Context Integration (NEW) 🔗
+- **Event-Driven Architecture**: Domain events enable bounded context communication
+- **Order → Inventory Integration**: Automatic stock reservation on OrderConfirmed
+- **Order → Invoice Integration**: Automatic invoice creation on OrderConfirmed
+- **Invoice → Accounting Integration**: Automatic journal entries on InvoiceCreated
+- **Event Handlers**: 
+  - `inventory/infrastructure/eventhandler/order_handler.go` - Stock reservation lifecycle
+  - `invoicing/infrastructure/eventhandler/order_handler.go` - Auto-invoice creation
+  - `accounting/infrastructure/eventhandler/invoice_handler.go` - Journal entry automation
+- **Wire Integration**: All event handlers registered in `cmd/api/wire.go`
+- **Event Bus**: Type-safe `eventbus.Handler` interface for event subscription
+
+#### Ordering Domain Events
+- **OrderCreated**: Published when order is created
+- **OrderConfirmed**: Published when order status changes to confirmed (triggers inventory + invoicing)
+- **OrderCancelled**: Published when order is cancelled (triggers stock release)
+- **OrderCompleted**: Published when order is completed (triggers stock fulfillment)
+- **OrderStatusChanged**: Published on any status transition (backward compatibility)
+
+#### Inventory Management (NEW) 🏭
+- **Warehouse Management**: Create, update, activate/deactivate/maintenance warehouses
+- **Stock Management**: Real-time inventory levels with quantity tracking
+- **Stock Movements**: Receipts, issues, transfers, adjustments with full history
+- **Stock Reservations**: Order-based reservations with expiration tracking
+- **HTTP Endpoints**: 18 endpoints for complete inventory management
+  - Warehouses: Create, Update, Get, List (4 endpoints)
+  - Stock: Create, Adjust, Receipt, Issue, Transfer, Reserve, Get, List (8 endpoints)
+  - Reservations: Fulfill, Cancel, Get, List (4 endpoints)
+  - Movements: Get, List (2 endpoints)
+- **Domain Tests**: 26 tests covering all aggregates (Warehouse, Stock, Movement, Reservation)
+- **Database Migration**: 4 tables with ENUMs for status management
+  - `warehouses` with `warehouse_status` enum (active/inactive/maintenance)
+  - `stock` with available quantity constraints
+  - `stock_movements` with `movement_type` enum (receipt/issue/transfer/adjustment/return)
+  - `stock_reservations` with `reservation_status` enum (active/fulfilled/cancelled/expired)
+- **Wire Integration**: Full dependency injection in `cmd/api/wire.go`
+- **Routes Integration**: All endpoints registered with auth + RBAC middleware
 
 #### Database & Infrastructure
 - PostgreSQL 16 as primary database with native UUID v7 support

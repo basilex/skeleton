@@ -1,604 +1,1273 @@
-# PostgreSQL Migration Execution Plan
+# Universal Business Engine - Execution Plan
 
-Step-by-step guide to execute the PostgreSQL migration from development to production.
+## Overview
 
-## Phase 1: Staging Deployment
+Цей документ описує план трансформації skeleton з базового API starter в універсальний Business Engine, придатний для будь-якого B2B/B2C бізнесу.
 
-### Pre-Deployment Checklist
+**Мета:** Створити reusable foundation, який містить універсальні бізнес-модулі, спільні для всіх бізнес-систем:
 
-```bash
-# 1. Verify staging environment
-export STAGING_DATABASE_URL="postgres://skeleton:password@staging-db:5432/skeleton"
+- **Parties** - Customers, Suppliers, Partners, Employees
+- **Contracts** - Agreements between parties
+- **Accounting** - Financial operations, transactions
+- **Ordering** - Universal order system
+- **Catalog** - Products/Services/Properties
 
-# 2. Check current state
-psql $STAGING_DATABASE_URL -c "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;"
+## Architecture Principles
 
-# 3. Verify scripts are ready
-ls -lh scripts/deploy-staging.sh
-ls -lh scripts/run-benchmarks.sh
-ls -lh migrations/*.sql
+### Core Principles
+
+1. **Domain-Driven Design (DDD)** - Bounded contexts, aggregates, domain events
+2. **Hexagonal Architecture** - Domain in center, infrastructure as adapters
+3. **Event-Driven** - Async communication between contexts
+4. **PostgreSQL 16** - Native UUID v7, JSONB, full-text search
+5. **Repository Pattern** - scany v2 + squirrel for data access
+6. **Clean Code** - Separation of concerns, clear boundaries
+
+### Context Map
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      Business Engine                             │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │   Identity   │  │    Audit     │  │ Notifications│        │
+│  │  (Existing) │  │  (Existing)  │  │  (Existing)  │        │
+│  └──────────────┘  └──────────────┘  └──────────────┘        │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │                    Parties                            │      │
+│  │   Customers, Suppliers, Partners, Employees         │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                           │                                      │
+│                           │ PartyID                              │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │                   Contracts                           │      │
+│  │   Agreements, Terms, Documents                        │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                           │                                      │
+│                           │ ContractID                            │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │                  Accounting                          │      │
+│  │   Accounts, Transactions, Payables, Receivables      │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                           │                                      │
+│                           │ Atomic transactions                   │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │                   Ordering                           │      │
+│  │   Orders, Quotes, Carts, Order Lines                │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                           │                                      │
+│                           │ ItemID                                │
+│                           ▼                                      │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │                    Catalog                           │      │
+│  │   Items, Categories, Prices, Attributes              │      │
+│  └──────────────────────────────────────────────────────┘      │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │    Files     │  │    Tasks     │  │  EventBus    │        │
+│  │  (Existing) │  │  (Existing)  │  │  (Existing)  │        │
+│  └──────────────┘  └──────────────┘  └──────────────┘        │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Step 1.1: Backup Staging Database
+## Phase-by-Phase Implementation
 
-```bash
-# Create backup directory
-mkdir -p backups/staging/$(date +%Y%m%d_%H%M%S)
-cd backups/staging/$(date +%Y%m%d_%H%M%S)
+### Phase 1: Foundation & Planning (Current) ✅
 
-# Backup current database
-pg_dump $STAGING_DATABASE_URL \
-  --schema-only \
-  --no-owner \
-  --no-privileges \
-  > schema_backup.sql
+**Status:** Completed
+- ✅ Skeleton repository optimization (scany v2 + squirrel)
+- ✅ ADR-016: Database Stack Standard
+- ✅ Environment configuration cleanup
+- ✅ Documentation suite (45K+ words)
+- ✅ PostgreSQL 16 migrations (001-017)
+- ✅ CHANGELOG with breaking changes
 
-pg_dump $STAGING_DATABASE_URL \
-  --data-only \
-  --table=users \
-  --table=roles \
-  --table=files \
-  --table=tasks \
-  --table=notifications \
-  --table=audit_records \
-  > data_backup.sql
+**Next:** Start Phase 2
+
+---
+
+### Phase 2: Parties Context 🔜
+
+**Estimated Time:** 2-3 days
+**Priority:** HIGH (Required by all other contexts)
+
+#### 2.1 Domain Layer
+
+```
+internal/parties/domain/
+├── party.go                 # Base party interface
+├── party_type.go           # CUSTOMER, SUPPLIER, PARTNER, EMPLOYEE
+├── customer.go              # Customer aggregate root
+├── supplier.go              # Supplier aggregate root
+├── partner.go               # Partner aggregate root
+├── employee.go              # Employee aggregate root
+├── contact_info.go          # Value object: email, phone, address
+├── bank_account.go          # Value object: bank details
+├── errors.go                # Domain errors
+├── events.go                # Domain events
+└── repository.go           # Repository interfaces
 ```
 
-### Step 1.2: Run Deployment Script
+**Key Domain Objects:**
 
-```bash
-# Execute deployment
-cd /path/to/skeleton
+```go
+type PartyType string
 
-# This will:
-# ✅ Check database connection
-# ✅ Create backup
-# ✅ Run migrations
-# ✅ Verify schema
-# ✅ Run health checks
-# ✅ Generate report
-./scripts/deploy-staging.sh
+const (
+    PartyTypeCustomer  PartyType = "customer"
+    PartyTypeSupplier   PartyType = "supplier"
+    PartyTypePartner    PartyType = "partner"
+    PartyTypeEmployee   PartyType = "employee"
+)
 
-# Monitor progress
-tail -f logs/staging-deploy-*.log
+type Party interface {
+    GetID() PartyID
+    GetType() PartyType
+    GetName() string
+    GetContactInfo() ContactInfo
+    GetTaxID() string
+    GetStatus() PartyStatus
+}
+
+type Customer struct {
+    id              PartyID
+    partyType       PartyType     // Always CUSTOMER
+    name            string
+    taxID           string
+    contactInfo     ContactInfo
+    bankAccount    BankAccount
+    status         PartyStatus
+    loyaltyLevel   LoyaltyLevel    // Optional
+    totalPurchases Money           // Calculated
+    createdAt      time.Time
+    updatedAt      time.Time
+    events         []domain.Event
+}
+
+type Supplier struct {
+    id              PartyID
+    partyType       PartyType     // Always SUPPLIER
+    name            string
+    taxID           string
+    contactInfo     ContactInfo
+    bankAccount    BankAccount
+    status         PartyStatus
+    rating         SupplierRating
+    contracts      []ContractID    // Active contracts
+    createdAt      time.Time
+    updatedAt      time.Time
+    events         []domain.Event
+}
+
+type ContactInfo struct {
+    Email       string
+    Phone       string
+    Address     Address
+    Website     string
+    SocialMedia map[string]string
+}
 ```
 
-### Step 1.3: Verify Deployment
+#### 2.2 Application Layer
 
-```bash
-# Check migration status
-psql $STAGING_DATABASE_URL <<SQL
-SELECT version, applied_at FROM schema_migrations ORDER BY applied_at DESC LIMIT 10;
-SQL
-
-# Verify indexes were created
-psql $STAGING_DATABASE_URL <<SQL
-SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public';
--- Expected: 40+ indexes
-SQL
-
-# Check JSONB columns
-psql $STAGING_DATABASE_URL <<SQL
-SELECT column_name, data_type 
-FROM information_schema.columns 
-WHERE table_name = 'files' AND column_name = 'metadata';
--- Expected: jsonb
-SQL
-
-# Verify materialized views
-psql $STAGING_DATABASE_URL <<SQL
-SELECT matviewname FROM pg_matviews WHERE schemaname = 'public';
--- Expected: user_activity_summary, file_storage_stats
-SQL
-
-# Check extensions
-psql $STAGING_DATABASE_URL <<SQL
-SELECT extname, extversion FROM pg_extension WHERE extname IN ('uuid-ossp', 'pgcrypto');
--- Expected: Both extensions installed
-SQL
+```
+internal/parties/application/
+├── commands/
+│   ├── create_customer.go
+│   ├── update_customer.go
+│   ├── create_supplier.go
+│   ├── update_supplier.go
+│   ├── assign_contract.go
+│   └── change_status.go
+└── queries/
+    ├── get_customer.go
+    ├── list_customers.go
+    ├── get_supplier.go
+    ├── list_suppliers.go
+    ├── search_parties.go
+    └── get_party_stats.go
 ```
 
-### Step 1.4: Run Application Tests
+#### 2.3 Infrastructure Layer
 
-```bash
-# Run integration tests against staging
-export DATABASE_URL=$STAGING_DATABASE_URL
-make test-integration
-
-# Check for errors
-echo $?  # Should be 0
-
-# Run specific tests
-go test ./internal/files/infrastructure/persistence -v
-go test ./internal/tasks/infrastructure/persistence -v
-go test ./internal/notifications/infrastructure/persistence -v
+```
+internal/parties/infrastructure/
+└── persistence/
+    ├── party_repository.go       # Implements domain repository
+    ├── customer_repository.go    # Customer-specific queries
+    ├── supplier_repository.go    # Supplier-specific queries
+    └── models.go                 # DTOs for scany v2
 ```
 
-## Phase 2: Performance Benchmarks
+**Repository Pattern (using scany v2 + squirrel):**
 
-### Step 2.1: Prepare Benchmark Environment
+```go
+type partyDTO struct {
+    ID           string         `db:"id"`
+    PartyType    string         `db:"party_type"`
+    Name         string         `db:"name"`
+    TaxID        string         `db:"tax_id"`
+    ContactInfo  json.RawMessage `db:"contact_info"`
+    BankAccount  json.RawMessage `db:"bank_account"`
+    Status      string         `db:"status"`
+    Metadata    json.RawMessage `db:"metadata"`
+    CreatedAt   time.Time      `db:"created_at"`
+    UpdatedAt   time.Time      `db:"updated_at"`
+}
 
-```bash
-# Set benchmark database
-export BENCHMARK_DATABASE_URL="postgres://skeleton:password@benchmark-db:5432/skeleton_benchmark"
+type PartyRepository struct {
+    pool *pgxpool.Pool
+    psql sq.StatementBuilderType
+}
 
-# Create benchmark database
-psql postgres://skeleton:password@localhost:5432/postgres <<SQL
-DROP DATABASE IF EXISTS skeleton_benchmark;
-CREATE DATABASE skeleton_benchmark;
-SQL
-
-# Run initial schema
-psql $BENCHMARK_DATABASE_URL -f migrations/001_initial_schema.sql
+func (r *PartyRepository) FindByID(ctx context.Context, id PartyID) (*Party, error) {
+    var dto partyDTO
+    err := pgxscan.Get(ctx, r.pool, &dto,
+        `SELECT * FROM parties WHERE id = $1`, id)
+    if err != nil {
+        if pgxscan.NotFound(err) {
+            return nil, ErrPartyNotFound
+        }
+        return nil, fmt.Errorf("find party: %w", err)
+    }
+    return r.dtoToDomain(dto)
+}
 ```
 
-### Step 2.2: Execute Benchmarks
+#### 2.4 HTTP Layer
 
-```bash
-# Run all benchmarks
-./scripts/run-benchmarks.sh
-
-# Or run specific benchmark
-./scripts/run-benchmarks.sh BenchmarkGetFileByID
-
-# Monitor progress
-tail -f benchmark_results/*/benchmark_results.txt
+```
+internal/parties/ports/http/
+├── handler.go                  # HTTP handlers
+├── dto.go                      # Request/Response DTOs
+├── routes.go                   # Route registration
+└── validation.go               # Request validation
 ```
 
-### Step 2.3: Analyze Results
+**API Endpoints:**
 
-```bash
-# View benchmark results
-cat benchmark_results/*/report.md
+```
+POST   /api/v1/customers                 # Create customer
+GET    /api/v1/customers/:id             # Get customer
+GET    /api/v1/customers                 # List customers (paginated)
+PUT    /api/v1/customers/:id             # Update customer
+DELETE /api/v1/customers/:id             # Deactivate customer
 
-# Compare with baseline
-benchstat benchmark_results/baseline.txt benchmark_results/*/benchmark_results.txt
+POST   /api/v1/suppliers                 # Create supplier
+GET    /api/v1/suppliers/:id             # Get supplier
+GET    /api/v1/suppliers                 # List suppliers
+PUT    /api/v1/suppliers/:id             # Update supplier
+DELETE /api/v1/suppliers/:id             # Deactivate supplier
 
-# Check database stats
-cat benchmark_results/*/database_stats.txt
+POST   /api/v1/partners                  # Create partner
+GET    /api/v1/partners/:id              # Get partner
+GET    /api/v1/partners                  # List partners
+PUT    /api/v1/partners/:id              # Update partner
 
-# Key metrics to verify:
-# ✓ File lookup: < 1ms
-# ✓ JSONB search: < 10ms
-# ✓ Task queue: < 2ms
-# ✓ Index hit ratio: > 99%
-# ✓ Cache hit ratio: > 99%
+POST   /api/v1/employees                 # Create employee
+GET    /api/v1/employees/:id              # Get employee
+GET    /api/v1/employees                  # List employees
+PUT    /api/v1/employees/:id             # Update employee
 ```
 
-### Step 2.4: Save Baseline
+#### 2.5 Database Migration
 
-```bash
-# Create baseline for future comparison
-cp benchmark_results/*/benchmark_results.txt benchmark_results/baseline.txt
+```sql
+-- migrations/018_parties.up.sql
 
-# Commit to repository
-git add benchmark_results/baseline.txt
-git commit -m "chore: add performance baseline"
-```
+CREATE TYPE party_type AS ENUM ('customer', 'supplier', 'partner', 'employee');
+CREATE TYPE party_status AS ENUM ('active', 'inactive', 'blacklisted');
+CREATE TYPE loyalty_level AS ENUM ('bronze', 'silver', 'gold', 'platinum');
 
-## Phase 3: Production Rollout
-
-### Pre-Production Checklist
-
-```bash
-# 1. Schedule maintenance window
-# Recommended: Low-traffic period (e.g., Sunday 3 AM)
-
-# 2. Notify stakeholders
-
-# 3. Verify production backups
-aws s3 ls s3://backups/postgresql/production/$(date +%Y%m)/
-
-# 4. Check monitoring systems
-# Ensure alerts are configured
-
-# 5. Prepare rollback plan
-# Document: How to restore from backup
-```
-
-### Step 3.1: Production Backup
-
-```bash
-# Create timestamp
-BACKUP_TS=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="backups/production/$BACKUP_TS"
-
-# Full backup
-pg_dump $PRODUCTION_DATABASE_URL \
-  --format=custom \
-  --no-owner \
-  --no-privileges \
-  --verbose \
-  > "$BACKUP_DIR/full_backup.dump"
-
-# WAL backup
-rsync -av /var/lib/postgresql/wal/ "$BACKUP_DIR/wal/"
-
-# Verify backup integrity
-pg_restore --list "$BACKUP_DIR/full_backup.dump" | head -20
-
-# Store backup metadata
-echo "{
-  \"timestamp\": \"$BACKUP_TS\",
-  \"database\": \"skeleton_production\",
-  \"size\": \"$(du -h $BACKUP_DIR/full_backup.dump | cut -f1)\",
-  \"migrations\": \"$(psql $PRODUCTION_DATABASE_URL -t -c 'SELECT MAX(version) FROM schema_migrations')\"
-}" > "$BACKUP_DIR/metadata.json"
-```
-
-### Step 3.2: Migration Execution
-
-```bash
-# Stop application (if needed)
-kubectl scale deployment skeleton-api --replicas=0
-
-# Run migrations with monitoring
-psql $PRODUCTION_DATABASE_URL <<SQL
-BEGIN;
-
--- Check current state
-SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;
-
--- Run migration
-\i migrations/023_upgrade_to_postgres_types.up.sql
-
--- Verify
-SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'public';
-SELECT COUNT(*) FROM pg_matviews WHERE schemaname = 'public';
-
-COMMIT;
-SQL
-
-# Refresh materialized views
-psql $PRODUCTION_DATABASE_URL <<SQL
-REFRESH MATERIALIZED VIEW user_activity_summary;
-REFRESH MATERIALIZED VIEW file_storage_stats;
-SQL
-
-# Analyze tables
-psql $PRODUCTION_DATABASE_URL -c "ANALYZE;"
-```
-
-### Step 3.3: Application Deployment
-
-```bash
-# Deploy new application version
-kubectl apply -f k8s/deployment.yaml
-
-# Wait for rollout
-kubectl rollout status deployment/skeleton-api
-
-# Check application health
-curl -f https://api.example.com/health || exit 1
-
-# Verify application functionality
-curl -f https://api.example.com/system/ready || exit 1
-```
-
-### Step 3.4: Smoke Tests
-
-```bash
-# Run smoke tests
-./scripts/smoke-tests.sh
-
-# Test critical paths
-curl https://api.example.com/api/v1/health
-curl https://api.example.com/api/v1/system/info
-
-# Verify database connectivity
-psql $PRODUCTION_DATABASE_URL -c "SELECT COUNT(*) FROM users;"
-
-# Check logs for errors
-kubectl logs -l app=skeleton-api --tail=100 | grep -i error
-```
-
-### Step 3.5: Monitor Production
-
-```bash
-# Watch query performance
-watch -n 5 'psql $PRODUCTION_DATABASE_URL -c "SELECT datname, numbackends, xact_commit, xact_rollback FROM pg_stat_database WHERE datname = '\''skeleton'\'';"'
-
-# Monitor slow queries
-psql $PRODUCTION_DATABASE_URL <<SQL
-SELECT query, calls, mean_time/1000 as avg_ms
-FROM pg_stat_statements
-ORDER BY mean_time DESC
-LIMIT 10;
-SQL
-
-# Check index usage
-psql $PRODUCTION_DATABASE_URL <<SQL
-SELECT schemaname, tablename, indexname, idx_scan
-FROM pg_stat_user_indexes
-WHERE idx_scan = 0
-  AND indexname NOT LIKE '%_pkey';
-SQL
-
-# Monitor connections
-psql $PRODUCTION_DATABASE_URL -c "SELECT COUNT(*) FROM pg_stat_activity;"
-```
-
-## Phase 4: Optimization & Iteration
-
-### Step 4.1: Collect Performance Metrics
-
-```bash
-# Run monitoring queries daily
-./scripts/collect-metrics.sh
-
-# Store metrics for trending
-psql monitoring_db <<SQL
-INSERT INTO performance_metrics (
-  timestamp,
-  index_hit_ratio,
-  cache_hit_ratio,
-  avg_query_time,
-  connection_count,
-  table_bloat
-) VALUES (
-  NOW(),
-  /* ... */
+CREATE TABLE parties (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    party_type party_type NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    tax_id VARCHAR(50),
+    
+    -- Contact info (JSONB for flexibility)
+    contact_info JSONB NOT NULL DEFAULT '{}',
+    
+    -- Bank account (optional)
+    bank_account JSONB,
+    
+    -- Status
+    status party_status NOT NULL DEFAULT 'active',
+    
+    -- Loyalty (for customers)
+    loyalty_level loyalty_level,
+    total_purchases DECIMAL(15,2) DEFAULT 0,
+    
+    -- Rating (for suppliers)
+    rating JSONB,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    -- Timestamps
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    
+    -- Constraints
+    CONSTRAINT valid_tax_id CHECK (tax_id IS NULL OR LENGTH(tax_id) >= 8)
 );
-SQL
+
+-- Indexes
+CREATE INDEX idx_parties_type ON parties(party_type);
+CREATE INDEX idx_parties_status ON parties(status);
+CREATE INDEX idx_parties_tax_id ON parties(tax_id) WHERE tax_id IS NOT NULL;
+CREATE INDEX idx_parties_name ON parties(name);
+CREATE INDEX idx_parties_created ON parties(created_at);
+
+-- GIN index for JSONB
+CREATE INDEX idx_parties_contact ON parties USING GIN(contact_info);
+
+-- Updated_at trigger
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER parties_updated_at
+    BEFORE UPDATE ON parties
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
+
+-- Comments
+COMMENT ON TABLE parties IS 'Universal parties: customers, suppliers, partners, employees';
+COMMENT ON COLUMN parties.party_type IS 'Type: customer, supplier, partner, employee';
+COMMENT ON COLUMN parties.tax_id IS 'Tax identification number (IPN, EDRPOU, etc.)';
+COMMENT ON COLUMN parties.total_purchases IS 'Total purchases amount (for customers)';
+COMMENT ON COLUMN parties.rating IS 'Supplier rating: quality, delivery speed, price';
 ```
 
-### Step 4.2: Analyze Slow Queries
+#### 2.6 Tests
 
-```bash
-# Weekly slow query analysis
-psql $PRODUCTION_DATABASE_URL <<SQL
-SELECT 
-    query,
-    calls,
-    total_time/1000 as total_seconds,
-    mean_time/1000 as avg_ms,
-    rows
-FROM pg_stat_statements
-WHERE mean_time > 100  -- Queries slower than 100ms
-ORDER BY mean_time DESC
-LIMIT 20;
-SQL
-
-# For each slow query, analyze:
-# 1. EXPLAIN ANALYZE <query>
-# 2. Check if index exists
-# 3. Consider adding index or rewriting query
+```
+internal/parties/
+├── domain/
+│   ├── customer_test.go
+│   ├── supplier_test.go
+│   └── contact_info_test.go
+├── application/
+│   ├── commands/
+│   │   ├── create_customer_test.go
+│   │   └── create_supplier_test.go
+│   └── queries/
+│       ├── get_customer_test.go
+│       └── list_customers_test.go
+└── infrastructure/
+    └── persistence/
+        ├── party_repository_test.go
+        ├── customer_repository_test.go
+        └── supplier_repository_test.go
 ```
 
-### Step 4.3: Index Optimization
+#### 2.7 ADR Document
 
-```bash
-# Run weekly index analysis
-./scripts/optimize-indexes.sh --dry-run
-
-# Review recommendations
-cat index_analysis/*/recommendations.md
-
-# Test in staging first
-export DATABASE_URL=$STAGING_DATABASE_URL
-./scripts/optimize-indexes.sh
-
-# If successful, apply to production
-export DATABASE_URL=$PRODUCTION_DATABASE_URL
-./scripts/optimize-indexes.sh
+```
+docs/adr/ADR-017-parties.md
 ```
 
-### Step 4.4: Continuous Improvement
+---
 
-**Weekly Tasks:**
-```bash
-# Monday: Review slow queries
-psql $PRODUCTION_DATABASE_URL < docs/monitoring/postgres_monitoring_queries.sql
+### Phase 3: Contracts Context 🔜
 
-# Wednesday: Check index usage
-./scripts/optimize-indexes.sh --dry-run
+**Estimated Time:** 2-3 days
+**Priority:** HIGH (Required by Accounting, Ordering)
+**Dependencies:** Phase 2 (Parties)
 
-# Friday: Performance baseline
-./scripts/run-benchmarks.sh
-benchstat benchmark_results/baseline.txt benchmark_results/current.txt
+#### 3.1 Domain Layer
+
+```
+internal/contracts/domain/
+├── contract.go              # Contract aggregate root
+├── contract_type.go         # SUPPLY, SERVICE, EMPLOYMENT, PARTNERSHIP
+├── contract_status.go       # DRAFT, ACTIVE, EXPIRED, TERMINATED
+├── payment_terms.go         # Value object: payment conditions
+├── delivery_terms.go        # Value object: delivery conditions
+├── document.go              # Attached documents
+├── errors.go
+├── events.go
+└── repository.go
 ```
 
-**Monthly Tasks:**
-```bash
-# Full VACUUM on high-activity tables
-psql $PRODUCTION_DATABASE_URL <<SQL
-VACUUM FULL ANALYZE files;
-VACUUM FULL ANALYZE tasks;
-VACUUM FULL ANALYZE notifications;
-SQL
+**Key Domain Objects:**
 
-# Reindex large indexes
-psql $PRODUCTION_DATABASE_URL <<SQL
-REINDEX INDEX CONCURRENTLY idx_files_metadata;
-REINDEX INDEX CONCURRENTLY idx_tasks_payload;
-SQL
+```go
+type Contract struct {
+    id              ContractID
+    contractType    ContractType
+    status         ContractStatus
+    
+    // Parties
+    partyID        PartyID           // From parties context
+    
+    // Terms
+    paymentTerms   PaymentTerms      // Days, penalties, discounts
+    deliveryTerms  DeliveryTerms     // Delivery conditions
+    
+    // Validity
+    validityPeriod DateRange
+    
+    // Documents
+    documents      []DocumentID      // From files context
+    
+    // Audit
+    createdBy      UserID            // From identity context
+    createdAt      time.Time
+    updatedAt      time.Time
+    
+    events         []domain.Event
+}
 
-# Update statistics
-psql $PRODUCTION_DATABASE_URL -c "ANALYZE;"
+type PaymentTerms struct {
+    PaymentType    PaymentType    // PREPAID, POSTPAID, CREDIT
+    CreditDays     int            // Days before payment due
+    PenaltyRate   Percentage     // Late payment penalty
+    DiscountRate   Percentage     // Early payment discount
+    Currency      Currency
+}
+
+type DeliveryTerms struct {
+    DeliveryType   DeliveryType   // PICKUP, DELIVERY, DIGITAL
+    EstimatedDays   int
+    ShippingCost   Money
+    Insurance      bool
+}
 ```
 
-**Quarterly Tasks:**
-```bash
-# Review capacity
-psql $PRODUCTION_DATABASE_URL <<SQL
-SELECT 
-    pg_size_pretty(pg_database_size('skeleton')) as db_size,
-    pg_size_pretty(SUM(pg_relation_size(tablename))) as table_size,
-    COUNT(*) as table_count
-FROM pg_tables WHERE schemaname = 'public';
-SQL
+#### 3.2 Database Migration
 
-# Plan capacity
-./scripts/capacity-planning.sh
+```sql
+-- migrations/019_contracts.up.sql
 
-# Review security
-psql $PRODUCTION_DATABASE_URL <<SQL
-SELECT * FROM pg_roles WHERE rolname LIKE 'skeleton%';
-SQL
+CREATE TYPE contract_type AS ENUM (
+    'supply',          -- Supply of goods
+    'service',         -- Service provision
+    'employment',      -- Employment contract
+    'partnership',     -- Partnership agreement
+    'lease',          -- Lease/rent
+    'license'         -- License agreement
+);
+
+CREATE TYPE contract_status AS ENUM (
+    'draft',
+    'pending_approval',
+    'active',
+    'expired',
+    'terminated'
+);
+
+CREATE TYPE payment_type AS ENUM ('prepaid', 'postpaid', 'credit');
+
+CREATE TABLE contracts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    contract_type contract_type NOT NULL,
+    status contract_status NOT NULL DEFAULT 'draft',
+    
+    -- Parties
+    party_id UUID NOT NULL REFERENCES parties(id),
+    
+    -- Terms
+    payment_terms JSONB NOT NULL,
+    delivery_terms JSONB,
+    
+    -- Validity
+    validity_period DATERANGE NOT NULL,
+    
+    -- Documents
+    documents UUID[] DEFAULT '{}',  -- References files.id
+    
+    -- Credit limit
+    credit_limit DECIMAL(15,2),
+    currency VARCHAR(3) DEFAULT 'UAH',
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    -- Audit
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    signed_at TIMESTAMPTZ,
+    terminated_at TIMESTAMPTZ
+);
+
+CREATE INDEX idx_contracts_party ON contracts(party_id);
+CREATE INDEX idx_contracts_status ON contracts(status);
+CREATE INDEX idx_contracts_type ON contracts(contract_type);
+CREATE INDEX idx_contracts_validity ON contracts USING GIST(validity_period);
+CREATE INDEX idx_contracts_active ON contracts(party_id, status) WHERE status = 'active';
+
+-- Trigger for updated_at
+CREATE TRIGGER contracts_updated_at
+    BEFORE UPDATE ON contracts
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at();
+
+COMMENT ON TABLE contracts IS 'Contracts and agreements between parties';
 ```
 
-## Monitoring & Alerting
+---
 
-### Setup Prometheus Metrics
+### Phase 4: Accounting Context 🔜
 
-```yaml
-# prometheus/postgres_exporter.yml
-global:
-  scrape_interval: 15s
+**Estimated Time:** 4-5 days
+**Priority:** HIGH (Core financial engine)
+**Dependencies:** Phase 2 (Parties), Phase 3 (Contracts)
 
-scrape_configs:
-  - job_name: postgresql
-    static_configs:
-      - targets: ['postgres-exporter:9187']
+#### 4.1 Domain Layer
+
+```
+internal/accounting/domain/
+├── account.go               # Chart of accounts
+├── account_type.go          # ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+├── transaction.go           # Double-entry transaction
+├── journal.go               # Journal entry
+├── invoice.go               # Invoice (in/out)
+├── payment.go               # Payment
+├── payable.go               # Money owed to suppliers
+├── receivable.go            # Money owed by customers
+├── money.go                 # Value object: amount + currency
+├── currency.go              # Currency codes
+├── errors.go
+├── events.go
+└── repository.go
 ```
 
-### Setup Grafana Dashboard
+**Key Domain Objects:**
 
-```bash
-# Import dashboard
-curl -X POST http://grafana:3000/api/dashboards/db \
-  -H "Content-Type: application/json" \
-  -d @docs/monitoring/grafana-dashboard.json
+```go
+type Account struct {
+    id          AccountID
+    code        string         // Account code (e.g., "1010")
+    name        string
+    accountType AccountType    // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+    currency    Currency
+    balance     Money
+    parentID    AccountID      // Hierarchy
+    isActive    bool
+}
 
-# Key panels:
-# 1. Connection Count
-# 2. Query Latency (p50, p95, p99)
-# 3. Index Hit Ratio
-# 4. Cache Hit Ratio
-# 5. Table Bloat %
-# 6. Slow Queries (>100ms)
+type Transaction struct {
+    id            TransactionID
+    fromAccount   AccountID      // Credit
+    toAccount     AccountID      // Debit
+    amount        Money
+    currency      Currency
+    reference     Reference      // Invoice, Payment, Order, etc.
+    description   string
+    occurredAt    time.Time
+    postedAt      time.Time
+    postedBy      UserID         // From identity context
+}
+
+type Payable struct {
+    id              PayableID
+    supplierID      PartyID        // From parties context
+    contractID      ContractID     // From contracts context
+    invoiceID       InvoiceID
+    invoiceNumber   string
+    invoiceDate     time.Time
+    
+    amount          Money          // Total amount
+    taxAmount      Money          // VAT/Tax
+    dueAmount      Money          // Amount to pay
+    
+    dueDate        time.Time
+    paidAmount    Money          // Amount already paid
+    paymentStatus PaymentStatus   // UNPAID, PARTIAL, PAID, OVERDUE
+    
+    documents      []DocumentID   // From files context
+    
+    createdAt      time.Time
+    updatedAt      time.Time
+}
 ```
 
-### Configure Alerts
+#### 4.2 Database Migration
 
-```yaml
-# alertmanager/postgres_alerts.yml
-groups:
-  - name: postgresql
-    rules:
-      - alert: PostgresSlowQuery
-        expr: pg_stat_activity_max_tx_duration_seconds > 60
-        for: 5m
-        annotations:
-          summary: "PostgreSQL slow query detected"
-          
-      - alert: PostgresConnectionsHigh
-        expr: pg_stat_activity_count > 180
-        for: 2m
-        annotations:
-          summary: "PostgreSQL connections > 180"
-          
-      - alert: PostgresIndexHitRatioLow
-        expr: pg_stat_user_indexes_hit_ratio < 0.95
-        for: 5m
-        annotations:
-          summary: "Index hit ratio < 95%"
-          
-      - alert: PostgresCacheHitRatioLow
-        expr: pg_statio_user_tables_cache_hit_ratio < 0.95
-        for: 5m
-        annotations:
-          summary: "Cache hit ratio < 95%"
+```sql
+-- migrations/020_accounting.up.sql
+
+-- Chart of Accounts
+CREATE TYPE account_type AS ENUM (
+    'asset',       -- Активи
+    'liability',   -- Пасиви
+    'equity',      -- Капітал
+    'revenue',     -- Доходи
+    'expense'      -- Витрати
+);
+
+CREATE TABLE accounts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    code VARCHAR(20) UNIQUE NOT NULL,  -- Account code
+    name VARCHAR(255) NOT NULL,
+    account_type account_type NOT NULL,
+    currency VARCHAR(3) DEFAULT 'UAH',
+    balance DECIMAL(15,2) DEFAULT 0,
+    parent_id UUID REFERENCES accounts(id),
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_accounts_type ON accounts(account_type);
+CREATE INDEX idx_accounts_parent ON accounts(parent_id);
+
+-- Transactions (Double-entry)
+CREATE TABLE transactions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    from_account UUID NOT NULL REFERENCES accounts(id),  -- Credit
+    to_account UUID NOT NULL REFERENCES accounts(id),    -- Debit
+    amount DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Reference (what is this transaction for?)
+    reference_type VARCHAR(50),  -- 'invoice', 'payment', 'order', etc.
+    reference_id UUID,
+    
+    description TEXT,
+    occurred_at TIMESTAMPTZ NOT NULL,
+    posted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    posted_by UUID REFERENCES users(id),
+    
+    metadata JSONB DEFAULT '{}'
+);
+
+CREATE INDEX idx_transactions_from ON transactions(from_account);
+CREATE INDEX idx_transactions_to ON transactions(to_account);
+CREATE INDEX idx_transactions_date ON transactions(occurred_at);
+CREATE INDEX idx_transactions_reference ON transactions(reference_type, reference_id);
+
+-- Invoices
+CREATE TYPE invoice_status AS ENUM ('draft', 'sent', 'paid', 'overdue', 'cancelled');
+CREATE TYPE invoice_direction AS ENUM ('incoming', 'outgoing');
+
+CREATE TABLE invoices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    invoice_number VARCHAR(50) NOT NULL,
+    direction invoice_direction NOT NULL,  -- incoming from supplier / outgoing to customer
+    
+    -- Party
+    party_id UUID NOT NULL REFERENCES parties(id),
+    contract_id UUID REFERENCES contracts(id),
+    
+    -- Amounts
+    subtotal DECIMAL(15,2) NOT NULL,
+    tax_amount DECIMAL(15,2) DEFAULT 0,
+    total DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Dates
+    invoice_date DATE NOT NULL,
+    due_date DATE NOT NULL,
+    
+    -- Status
+    status invoice_status NOT NULL DEFAULT 'draft',
+    
+    -- Documents
+    documents UUID[] DEFAULT '{}',
+    
+    -- Audit
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_invoices_party ON invoices(party_id);
+CREATE INDEX idx_invoices_status ON invoices(status);
+CREATE INDEX idx_invoices_due ON invoices(due_date);
+
+-- Payables (Money owed to suppliers)
+CREATE TYPE payment_status AS ENUM ('unpaid', 'partially_paid', 'paid', 'overdue');
+
+CREATE TABLE payables (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    supplier_id UUID NOT NULL REFERENCES parties(id),
+    contract_id UUID REFERENCES contracts(id),
+    invoice_id UUID REFERENCES invoices(id),
+    
+    -- Amounts
+    amount DECIMAL(15,2) NOT NULL,
+    tax_amount DECIMAL(15,2) DEFAULT 0,
+    due_amount DECIMAL(15,2) NOT NULL,
+    paid_amount DECIMAL(15,2) DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Dates
+    invoice_date DATE NOT NULL,
+    due_date DATE NOT NULL,
+    
+    -- Status
+    payment_status payment_status NOT NULL DEFAULT 'unpaid',
+    
+    -- Documents
+    documents UUID[] DEFAULT '{}',
+    
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_payables_supplier ON payables(supplier_id);
+CREATE INDEX idx_payables_status ON payables(payment_status);
+CREATE INDEX idx_payables_due ON payables(due_date);
+
+-- Receivables (Money owed by customers)
+CREATE TABLE receivables (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    customer_id UUID NOT NULL REFERENCES parties(id),
+    contract_id UUID REFERENCES contracts(id),
+    invoice_id UUID REFERENCES invoices(id),
+    
+    -- Amounts
+    amount DECIMAL(15,2) NOT NULL,
+    tax_amount DECIMAL(15,2) DEFAULT 0,
+    due_amount DECIMAL(15,2) NOT NULL,
+    paid_amount DECIMAL(15,2) DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Dates
+    invoice_date DATE NOT NULL,
+    due_date DATE NOT NULL,
+    
+    -- Status
+    payment_status payment_status NOT NULL DEFAULT 'unpaid',
+    
+    -- Documents
+    documents UUID[] DEFAULT '{}',
+    
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_receivables_customer ON receivables(customer_id);
+CREATE INDEX idx_receivables_status ON receivables(payment_status);
+CREATE INDEX idx_receivables_due ON receivables(due_date);
+
+-- Payments
+CREATE TYPE payment_method AS ENUM ('cash', 'bank_transfer', 'card', 'check');
+
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    payable_id UUID REFERENCES payables(id),
+    receivable_id UUID REFERENCES receivables(id),
+    invoice_id UUID REFERENCES invoices(id),
+    
+    -- Amount
+    amount DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Method
+    payment_method payment_method NOT NULL,
+    payment_date DATE NOT NULL,
+    
+    -- Reference
+    transaction_id UUID REFERENCES transactions(id),
+    reference_number VARCHAR(100),
+    
+    -- Audit
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_payments_payable ON payments(payable_id);
+CREATE INDEX idx_payments_receivable ON payments(receivable_id);
+CREATE INDEX idx_payments_date ON payments(payment_date);
+
+-- Comments
+COMMENT ON TABLE accounts IS 'Chart of accounts (Plan рахунків)';
+COMMENT ON TABLE transactions IS 'Double-entry bookkeeping transactions';
+COMMENT ON TABLE invoices IS 'Invoices (incoming from suppliers, outgoing to customers)';
+COMMENT ON TABLE payables IS 'Accounts payable (Кредиторська заборгованість)';
+COMMENT ON TABLE receivables IS 'Accounts receivable (Дебіторська заборгованість)';
+COMMENT ON TABLE payments IS 'Payment records';
 ```
 
-## Rollback Procedures
+---
 
-### If Migration Fails
+### Phase 5: Ordering Context 🔜
 
-```bash
-# 1. Stop application
-kubectl scale deployment skeleton-api --replicas=0
+**Estimated Time:** 3-4 days
+**Priority:** HIGH
+**Dependencies:** Phase 2 (Parties), Phase 3 (Contracts), Phase 4 (Accounting)
 
-# 2. Restore from backup
-pg_restore \
-  --dbname=$PRODUCTION_DATABASE_URL \
-  --clean \
-  --if-exists \
-  backups/production/*/full_backup.dump
+#### 5.1 Domain Layer
 
-# 3. Restart application with old version
-kubectl apply -f k8s/deployment-v1.yaml
-
-# 4. Verify functionality
-curl -f https://api.example.com/health
-
-# 5. Notify team
+```
+internal/ordering/domain/
+├── order.go                 # Base order aggregate
+├── order_line.go            # Order line
+├── order_status.go          # DRAFT, PENDING, CONFIRMED, COMPLETED, CANCELLED
+├── quote.go                 # Price quote
+├── cart.go                  # Shopping cart
+├── errors.go
+├── events.go
+└── repository.go
 ```
 
-### If Performance Degrades
+#### 5.2 Database Migration
 
-```bash
-# 1. Identify issue
-psql $PRODUCTION_DATABASE_URL < docs/monitoring/postgres_monitoring_queries.sql
+```sql
+-- migrations/021_ordering.up.sql
 
-# 2. If index-related, reindex
-psql $PRODUCTION_DATABASE_URL <<SQL
-REINDEX INDEX CONCURRENTLY <problematic_index>;
-SQL
+CREATE TYPE order_status AS ENUM (
+    'draft',
+    'pending',
+    'confirmed',
+    'processing',
+    'completed',
+    'cancelled',
+    'refunded'
+);
 
-# 3. If query-related, add missing index
-psql $PRODUCTION_DATABASE_URL <<SQL
-CREATE INDEX CONCURRENTLY idx_new ON table(column);
-SQL
+CREATE TABLE orders (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    order_number VARCHAR(50) UNIQUE NOT NULL,
+    
+    -- Parties
+    customer_id UUID NOT NULL REFERENCES parties(id),
+    supplier_id UUID NOT NULL REFERENCES parties(id),
+    contract_id UUID REFERENCES contracts(id),
+    
+    -- Amounts
+    subtotal DECIMAL(15,2) NOT NULL,
+    tax_amount DECIMAL(15,2) DEFAULT 0,
+    discount DECIMAL(15,2) DEFAULT 0,
+    total DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Status
+    status order_status NOT NULL DEFAULT 'draft',
+    
+    -- Dates
+    order_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    due_date TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    cancelled_at TIMESTAMPTZ,
+    
+    -- Notes
+    notes TEXT,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    -- Audit
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
-# 4. If connection-related, restart pooler
-kubectl rollout restart deployment/pgbouncer
+CREATE INDEX idx_orders_customer ON orders(customer_id);
+CREATE INDEX idx_orders_supplier ON orders(supplier_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_date ON orders(order_date);
+
+CREATE TABLE order_lines (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    
+    -- Item
+    item_id UUID NOT NULL,  -- Reference to catalog item
+    item_name VARCHAR(255) NOT NULL,
+    
+    -- Quantities
+    quantity DECIMAL(10,2) NOT NULL,
+    unit VARCHAR(20),  -- 'piece', 'kg', 'hour', etc.
+    
+    -- Pricing
+    unit_price DECIMAL(15,2) NOT NULL,
+    discount DECIMAL(15,2) DEFAULT 0,
+    total DECIMAL(15,2) NOT NULL,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_order_lines_order ON order_lines(order_id);
+
+-- Quotes (price quotes)
+CREATE TYPE quote_status AS ENUM ('draft', 'sent', 'accepted', 'rejected', 'expired');
+
+CREATE TABLE quotes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    quote_number VARCHAR(50) UNIQUE NOT NULL,
+    
+    -- Parties
+    customer_id UUID NOT NULL REFERENCES parties(id),
+    supplier_id UUID NOT NULL REFERENCES parties(id),
+    
+    -- Amounts
+    subtotal DECIMAL(15,2) NOT NULL,
+    tax_amount DECIMAL(15,2) DEFAULT 0,
+    total DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Validity
+    valid_from DATE NOT NULL,
+    valid_until DATE NOT NULL,
+    
+    -- Status
+    status quote_status NOT NULL DEFAULT 'draft',
+    
+    -- Converted to order
+    order_id UUID REFERENCES orders(id),
+    
+    -- Notes
+    notes TEXT,
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    -- Audit
+    created_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_quotes_customer ON quotes(customer_id);
+CREATE INDEX idx_quotes_status ON quotes(status);
+
+-- Comments
+COMMENT ON TABLE orders IS 'Universal orders: purchase orders, sales orders, bookings, appointments';
+COMMENT ON TABLE order_lines IS 'Order line items';
+COMMENT ON TABLE quotes IS 'Price quotes (commercial proposals)';
 ```
+
+---
+
+### Phase 6: Catalog Context 🔜
+
+**Estimated Time:** 2-3 days
+**Priority:** MEDIUM
+**Dependencies:** None (can be developed in parallel)
+
+#### 6.1 Domain Layer
+
+```
+internal/catalog/domain/
+├── item.go                 # Base catalog item (abstract)
+├── item_type.go           # PRODUCT, SERVICE, PROPERTY
+├── category.go            # Categories
+├── price.go               # Pricing
+├── attribute.go            # Dynamic attributes
+├── errors.go
+├── events.go
+└── repository.go
+```
+
+#### 6.2 Database Migration
+
+```sql
+-- migrations/022_catalog.up.sql
+
+CREATE TYPE item_status AS ENUM ('active', 'inactive', 'discontinued');
+
+CREATE TABLE catalog_categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    parent_id UUID REFERENCES catalog_categories(id),
+    path LTREE,  -- Hierarchical path
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    metadata JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_categories_parent ON catalog_categories(parent_id);
+CREATE INDEX idx_categories_path ON catalog_categories USING GIST(path);
+
+CREATE TABLE catalog_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    category_id UUID REFERENCES catalog_categories(id),
+    
+    -- Basic info
+    sku VARCHAR(100) UNIQUE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    
+    -- Pricing
+    base_price DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    
+    -- Status
+    status item_status NOT NULL DEFAULT 'active',
+    
+    -- Attributes (flexible JSONB)
+    attributes JSONB DEFAULT '{}',
+    
+    -- Metadata
+    metadata JSONB DEFAULT '{}',
+    
+    -- Timestamps
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_items_category ON catalog_items(category_id);
+CREATE INDEX idx_items_sku ON catalog_items(sku);
+CREATE INDEX idx_items_status ON catalog_items(status);
+CREATE INDEX idx_items_attrs ON catalog_items USING GIN(attributes);
+
+-- Prices (support for multiple prices per item)
+CREATE TYPE price_type AS ENUM ('base', 'sale', 'wholesale', 'partner');
+
+CREATE TABLE catalog_prices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    item_id UUID NOT NULL REFERENCES catalog_items(id) ON DELETE CASCADE,
+    price_type price_type NOT NULL DEFAULT 'base',
+    amount DECIMAL(15,2) NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'UAH',
+    valid_from DATE NOT NULL DEFAULT CURRENT_DATE,
+    valid_until DATE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_prices_item ON catalog_prices(item_id);
+CREATE INDEX idx_prices_type ON catalog_prices(price_type);
+CREATE INDEX idx_prices_valid ON catalog_prices(valid_from, valid_until);
+
+-- Comments
+COMMENT ON TABLE catalog_categories IS 'Taxonomy: product/service categories';
+COMMENT ON TABLE catalog_items IS 'Catalog items: products, services, properties';
+COMMENT ON COLUMN catalog_items.attributes IS 'Flexible attributes per item type';
+COMMENT ON TABLE catalog_prices IS 'Multiple prices per item: base, sale, wholesale';
+```
+
+---
+
+## Implementation Sequence
+
+### Recommended Order
+
+```
+Phase 2: Parties (2-3 days)
+    ↓
+Phase 3: Contracts (2-3 days)
+    ↓
+Phase 4: Accounting (4-5 days)
+    ↓
+Phase 5: Ordering (3-4 days)
+    ↓
+Phase 6: Catalog (2-3 days)
+
+Total: 13-18 days
+```
+
+### Parallel Development
+
+Some phases can be developed in parallel:
+
+```
+Phase 2: Parties ────────────────┐
+                                   ↓
+Phase 3: Contracts ─────────────┼── Phase 4: Accounting
+                                   ↓
+Phase 6: Catalog (independent) ──┘
+                                   ↓
+                              Phase 5: Ordering
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+
+- **Domain layer**: Entity creation, business rules, invariants
+- **Value objects**: Money operations, DateRange, ContactInfo
+
+### Integration Tests
+
+- **Repository layer**: Database operations, queries
+- **Use Testcontainers** for PostgreSQL 16
+
+### End-to-End Tests
+
+- **HTTP layer**: API endpoints, authentication
+- **Event flow**: Domain events propagation
+
+### Test Coverage Goals
+
+- Domain: 100%
+- Application: 80%+
+- Infrastructure: 80%+
+- HTTP: 70%+
+
+---
+
+## Documentation Requirements
+
+For each context, create:
+
+1. **ADR (Architecture Decision Record)**
+   - Why this context exists
+   - Key design decisions
+   - Trade-offs
+
+2. **API Documentation**
+   - OpenAPI/Swagger specs
+   - Request/Response examples
+
+3. **Developer Guide**
+   - How to use the context
+   - Code examples
+   - Common patterns
+
+4. **Database Diagram**
+   - ERD for context tables
+   - Relationships
+
+---
 
 ## Success Criteria
 
-### Phase 1 Success
-- [ ] All migrations applied successfully
-- [ ] Schema verified (indexes, extensions, materialized views)
-- [ ] Application tests pass
-- [ ] No errors in logs
-
 ### Phase 2 Success
-- [ ] All benchmarks complete
-- [ ] Performance within targets
-- [ ] Baseline saved
-- [ ] Report generated
+- ✅ Can create/read/update/delete parties
+- ✅ Can search parties by type, name, tax_id
+- ✅ Parties can have multiple contact methods
+- ✅ Parties can be linked to contracts
 
 ### Phase 3 Success
-- [ ] Production deployment successful
-- [ ] Smoke tests pass
-- [ ] Monitoring active
-- [ ] No incidents in 24 hours
+- ✅ Can create contracts with payment/delivery terms
+- ✅ Can track contract lifecycle (draft→active→expired)
+- ✅ Contracts are linked to parties
+- ✅ Can attach documents to contracts
 
 ### Phase 4 Success
-- [ ] Weekly monitoring established
-- [ ] Monthly optimization performed
-- [ ] Quarterly capacity reviewed
-- [ ] Documentation updated
+- ✅ Double-entry bookkeeping works
+- ✅ Can record transactions between accounts
+- ✅ Can create invoices (incoming/outgoing)
+- ✅ Can track payables and receivables
+- ✅ Can record payments
+- ✅ Balance sheet calculates correctly
 
-## Support & Escalation
+### Phase 5 Success
+- ✅ Can create orders with multiple lines
+- ✅ Orders are linked to parties and contract
+- ✅ Can create quotes and convert to orders
+- ✅ Order status transitions work correctly
+- ✅ Can calculate totals, taxes, discounts
 
-### During Migration
-- **Primary**: Database Admin
-- **Secondary**: DevOps Lead
-- **Escalation**: Engineering Manager
+### Phase 6 Success
+- ✅ Can create catalog categories (hierarchical)
+- ✅ Can create catalog items with attributes
+- ✅ Can set multiple prices per item
+- ✅ Can search items by category, attributes, price
+- ✅ Items can be linked to orders
 
-### Contact Information
+---
+
+## Migration Path for Existing Businesses
+
+### Food Store
 ```
-Database Admin: db-admin@example.com
-DevOps Lead: devops@example.com
-Engineering Manager: eng-manager@example.com
+business-engine (skeleton)
+    ├── internal/
+    │   ├── parties/       ✅ Universal
+    │   ├── contracts/      ✅ Universal
+    │   ├── accounting/     ✅ Universal
+    │   ├── ordering/       ✅ Universal
+    │   ├── catalog/        ✅ Universal
+    │   └── food/          🆕 Business-specific
+    │       ├── domain/
+    │       │   ├── product.go      (extends catalog.Item)
+    │       │   ├── inventory.go
+    │       │   ├── expiration.go
+    │       │   └── warehouse.go
+    │       └── ...
 ```
 
-### Issue Tracking
-- GitHub Issues: postgres-migration
-- Slack: #postgres-migration
-- PagerDuty: Database Service
+### Real Estate Agency
+```
+business-engine (skeleton)
+    ├── internal/
+    │   ├── parties/       ✅ Universal
+    │   ├── contracts/      ✅ Universal
+    │   ├── accounting/     ✅ Universal
+    │   ├── ordering/       ✅ Universal (deals)
+    │   ├── catalog/        ✅ Universal (properties)
+    │   └── realestate/    🆕 Business-specific
+    │       ├── domain/
+    │       │   ├── property.go    (extends catalog.Item)
+    │       │   ├── viewing.go
+    │       │   ├── deal.go
+    │       │   └── agent.go
+    │       └── ...
+```
 
-## Timeline
+### Travel Agency
+```
+business-engine (skeleton)
+    ├── internal/
+    │   ├── parties/       ✅ Universal
+    │   ├── contracts/      ✅ Universal
+    │   ├── accounting/     ✅ Universal
+    │   ├── ordering/       ✅ Universal (bookings)
+    │   ├── catalog/        ✅ Universal (tours)
+    │   └── travel/         🆕 Business-specific
+    │       ├── domain/
+    │       │   ├── tour.go       (extends catalog.Item)
+    │       │   ├── booking.go
+    │       │   ├── itinerary.go
+    │       │   └── traveler.go
+    │       └── ...
+```
 
-| Phase | Duration | Start | End |
-|-------|----------|-------|-----|
-| Staging Testing | 2 days | Monday | Tuesday |
-| Benchmarking | 1 day | Wednesday | Wednesday |
-| Production Prep | 1 day | Thursday | Thursday |
-| Production Deploy | 1 day | Friday (Low Traffic) | Friday |
-| Monitoring | Ongoing | Week 2+ | Continuous |
-| Optimization | Ongoing | Week 3+ | Continuous |
+### Healthcare
+```
+business-engine (skeleton)
+    ├── internal/
+    │   ├── parties/       ✅ Universal
+    │   ├── contracts/      ✅ Universal
+    │   ├── accounting/     ✅ Universal
+    │   ├── ordering/       ✅ Universal (appointments)
+    │   ├── catalog/        ✅ Universal (services)
+    │   └── healthcare/     🆕 Business-specific
+    │       ├── domain/
+    │       │   ├── service.go    (extends catalog.Item)
+    │       │   ├── appointment.go
+    │       │   ├── patient.go     (extends parties.Customer)
+    │       │   ├── doctor.go      (extends parties.Employee)
+    │       │   ├── diagnosis.go
+    │       │   └── prescription.go
+    │       └── ...
+```
 
-**Total Duration**: 5 days + ongoing optimization
+---
+
+## Next Steps
+
+1. **Review this plan** and approve
+2. **Start Phase 2: Parties** implementation
+3. **Follow the sequence**: Parties → Contracts → Accounting → Ordering → Catalog
+4. **Test each phase** before moving to next
+5. **Update documentation** as we go
+
+---
+
+## Notes
+
+- All migrations use UUID v7
+- All JSONB columns have GIN indexes
+- All currency amounts are DECIMAL(15,2)
+- All tables have created_at/updated_at
+- All entities use domain events for cross-context communication
+- All repositories use scany v2 + squirrel pattern
+- All HTTP handlers use the same structure as skeleton
+
+---
+
+**Ready to start Phase 2: Parties?** 🚀

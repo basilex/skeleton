@@ -8,6 +8,7 @@
 //   - Role routes (/api/v1/users/:id/roles): Assign and revoke roles
 //   - Audit routes (/api/v1/audit): Query audit records
 //   - Notification routes (/api/v1/notifications): Manage notifications and preferences
+//   - Parties routes (/api/v1/customers, /api/v1/suppliers): Manage customers and suppliers
 //   - Files routes (/api/v1/files): Upload, download, process files
 //   - System routes (/system): Health checks, build info, system status
 //
@@ -106,6 +107,14 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 		registerRoleRoutes(v1, di)
 		registerAuditRoutes(v1, di)
 		registerNotificationRoutes(v1, di)
+		registerPartiesRoutes(v1, di)
+		registerAccountingRoutes(v1, di)
+		registerInvoicingRoutes(v1, di)
+		registerInventoryRoutes(v1, di)
+		registerDocumentsRoutes(v1, di)
+		registerOrderingRoutes(v1, di)
+		registerCatalogRoutes(v1, di)
+		registerFilesRoutes(v1, di)
 	}
 
 	registerStatusRoutes(r, di)
@@ -441,6 +450,219 @@ func registerNotificationRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	v1.GET("/notifications/templates/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.GetTemplate)
 	v1.POST("/notifications/templates", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.CreateTemplate)
 	v1.PATCH("/notifications/templates/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("notifications:admin"), di.NotificationHandler.UpdateTemplate)
+}
+
+// registerPartiesRoutes registers parties management endpoints.
+// Parties include customers, suppliers, partners, and employees.
+//
+// Endpoints:
+//   - POST /api/v1/customers - Create customer
+//   - GET /api/v1/customers/:id - Get customer by ID
+//   - GET /api/v1/customers - List customers
+//   - PUT /api/v1/customers/:id - Update customer
+//   - POST /api/v1/suppliers - Create supplier
+//   - GET /api/v1/suppliers/:id - Get supplier by ID
+//   - GET /api/v1/suppliers - List suppliers
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with parties handler and auth middlewares
+func registerPartiesRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Customer endpoints (require authentication and parties:read/write)
+	v1.POST("/customers", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:write"), di.PartiesHandler.CreateCustomer)
+	v1.GET("/customers/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:read"), di.PartiesHandler.GetCustomer)
+	v1.GET("/customers", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:read"), di.PartiesHandler.ListCustomers)
+	v1.PUT("/customers/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:write"), di.PartiesHandler.UpdateCustomer)
+
+	// Supplier endpoints (require authentication and parties:read/write)
+	v1.POST("/suppliers", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:write"), di.PartiesHandler.CreateSupplier)
+	v1.GET("/suppliers/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:read"), di.PartiesHandler.GetSupplier)
+	v1.GET("/suppliers", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("parties:read"), di.PartiesHandler.ListSuppliers)
+}
+
+// registerDocumentsRoutes registers documents management endpoints.
+// Documents include PDF generation and digital signatures.
+//
+// Endpoints:
+//   - POST /api/v1/documents - Create document (draft)
+//   - GET /api/v1/documents/:id - Get document by ID
+//   - GET /api/v1/documents - List documents with filtering
+//   - POST /api/v1/documents/:id/generate - Generate PDF from template
+//   - POST /api/v1/documents/:id/signatures - Add signature request
+//   - POST /api/v1/documents/:id/sign - Sign document
+//   - GET /api/v1/templates/:id - Get template by ID
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with documents handler and auth middlewares
+func registerDocumentsRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Document endpoints (require authentication and documents:read/write)
+	v1.POST("/documents", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:write"), di.DocumentsHandler.CreateDocument)
+	v1.GET("/documents/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:read"), di.DocumentsHandler.GetDocument)
+	v1.GET("/documents", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:read"), di.DocumentsHandler.ListDocuments)
+
+	// Document actions (require authentication and documents:write)
+	v1.POST("/documents/:id/generate", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:write"), di.DocumentsHandler.GenerateDocument)
+	v1.POST("/documents/:id/signatures", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:write"), di.DocumentsHandler.AddSignature)
+	v1.POST("/documents/:id/sign", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:write"), di.DocumentsHandler.SignDocument)
+
+	// Template endpoints (require authentication and documents:read)
+	v1.GET("/templates/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("documents:read"), di.DocumentsHandler.GetTemplate)
+}
+
+// registerInvoicingRoutes registers invoicing management endpoints.
+// Invoicing includes invoice creation, sending, payments, and cancellation.
+//
+// Endpoints:
+//   - POST /api/v1/invoices - Create invoice (draft status)
+//   - GET /api/v1/invoices/:id - Get invoice by ID with lines and payments
+//   - GET /api/v1/invoices - List invoices with filtering
+//   - POST /api/v1/invoices/:id/lines - Add line to invoice
+//   - POST /api/v1/invoices/:id/send - Send invoice (draft → sent)
+//   - POST /api/v1/invoices/:id/payments - Record payment for invoice
+//   - POST /api/v1/invoices/:id/cancel - Cancel invoice
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with invoicing handler and auth middlewares
+func registerInvoicingRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Invoice endpoints (require authentication and invoicing:read/write)
+	v1.POST("/invoices", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:write"), di.InvoicingHandler.CreateInvoice)
+	v1.GET("/invoices/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:read"), di.InvoicingHandler.GetInvoice)
+	v1.GET("/invoices", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:read"), di.InvoicingHandler.ListInvoices)
+
+	// Invoice actions (require authentication and invoicing:write)
+	v1.POST("/invoices/:id/lines", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:write"), di.InvoicingHandler.AddInvoiceLine)
+	v1.POST("/invoices/:id/send", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:write"), di.InvoicingHandler.SendInvoice)
+	v1.POST("/invoices/:id/payments", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:write"), di.InvoicingHandler.RecordPayment)
+	v1.POST("/invoices/:id/cancel", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("invoicing:write"), di.InvoicingHandler.CancelInvoice)
+}
+
+// registerInventoryRoutes registers inventory management endpoints.
+// Inventory includes warehouses, stock levels, movements, and reservations.
+//
+// Endpoints:
+//   - POST /api/v1/warehouses - Create warehouse
+//   - GET /api/v1/warehouses/:id - Get warehouse by ID
+//   - GET /api/v1/warehouses - List warehouses
+//   - PUT /api/v1/warehouses/:id - Update warehouse (status/capacity)
+//   - POST /api/v1/stock - Create stock record
+//   - GET /api/v1/stock/:id - Get stock by ID
+//   - GET /api/v1/stock - List stock with filtering
+//   - POST /api/v1/stock/:id/adjust - Adjust stock quantity
+//   - POST /api/v1/stock/receipt - Receive stock into warehouse
+//   - POST /api/v1/stock/issue - Issue stock from warehouse
+//   - POST /api/v1/stock/transfer - Transfer stock between warehouses
+//   - POST /api/v1/stock/reserve - Reserve stock for order
+//   - POST /api/v1/reservations/fulfill - Fulfill reservation
+//   - POST /api/v1/reservations/cancel - Cancel reservation
+//   - GET /api/v1/reservations/:id - Get reservation by ID
+//   - GET /api/v1/reservations - List reservations by order
+//   - GET /api/v1/movements/:id - Get movement by ID
+//   - GET /api/v1/movements - List movements with filtering
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with inventory handler and auth middlewares
+func registerInventoryRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Warehouse endpoints (require authentication and inventory:read/write)
+	v1.POST("/warehouses", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.CreateWarehouse)
+	v1.GET("/warehouses/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.GetWarehouse)
+	v1.GET("/warehouses", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.ListWarehouses)
+	v1.PUT("/warehouses/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.UpdateWarehouse)
+
+	// Stock endpoints (require authentication and inventory:read/write)
+	v1.POST("/stock", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.CreateStock)
+	v1.GET("/stock/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.GetStock)
+	v1.GET("/stock", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.ListStock)
+	v1.POST("/stock/:id/adjust", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.AdjustStock)
+
+	// Stock operations (require authentication and inventory:write)
+	v1.POST("/stock/receipt", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.ReceiptStock)
+	v1.POST("/stock/issue", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.IssueStock)
+	v1.POST("/stock/transfer", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.TransferStock)
+	v1.POST("/stock/reserve", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.ReserveStock)
+
+	// Reservation endpoints (require authentication and inventory:read/write)
+	v1.POST("/reservations/fulfill", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.FulfillReservation)
+	v1.POST("/reservations/cancel", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:write"), di.InventoryHandler.CancelReservation)
+	v1.GET("/reservations/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.GetReservation)
+	v1.GET("/reservations", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.ListReservations)
+
+	// Movement endpoints (require authentication and inventory:read)
+	v1.GET("/movements/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.GetStockMovement)
+	v1.GET("/movements", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("inventory:read"), di.InventoryHandler.ListStockMovements)
+}
+
+// registerAccountingRoutes registers accounting management endpoints.
+// Accounting includes chart of accounts and double-entry transaction recording.
+//
+// Endpoints:
+//   - POST /api/v1/accounts - Create account in chart of accounts
+//   - GET /api/v1/accounts/:id - Get account by ID
+//   - GET /api/v1/accounts - List accounts with filtering
+//   - POST /api/v1/transactions - Record a transaction (double-entry bookkeeping)
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with accounting handler and auth middlewares
+func registerAccountingRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Account endpoints (require authentication and accounting:read/write)
+	v1.POST("/accounts", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("accounting:write"), di.AccountingHandler.CreateAccount)
+	v1.GET("/accounts/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("accounting:read"), di.AccountingHandler.GetAccount)
+	v1.GET("/accounts", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("accounting:read"), di.AccountingHandler.ListAccounts)
+
+	// Transaction endpoints (require authentication and accounting:write)
+	v1.POST("/transactions", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("accounting:write"), di.AccountingHandler.RecordTransaction)
+}
+
+// registerOrderingRoutes registers ordering management endpoints.
+// Ordering includes order creation, line management, and order status transitions.
+//
+// Endpoints:
+//   - POST /api/v1/orders - Create a new order (draft status)
+//   - GET /api/v1/orders/:id - Get order by ID with order lines
+//   - GET /api/v1/orders - List orders with filtering
+//   - POST /api/v1/orders/:id/lines - Add order line to order
+//   - PATCH /api/v1/orders/:id/status - Update order status (state machine transitions)
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with ordering handler and auth middlewares
+func registerOrderingRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Order endpoints (require authentication and ordering:read/write)
+	v1.POST("/orders", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("ordering:write"), di.OrderingHandler.CreateOrder)
+	v1.GET("/orders/:id", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("ordering:read"), di.OrderingHandler.GetOrder)
+	v1.GET("/orders", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("ordering:read"), di.OrderingHandler.ListOrders)
+
+	// Order line management (require authentication and ordering:write)
+	v1.POST("/orders/:id/lines", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("ordering:write"), di.OrderingHandler.AddOrderLine)
+
+	// Order status transitions (require authentication and ordering:write)
+	v1.PATCH("/orders/:id/status", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("ordering:write"), di.OrderingHandler.UpdateOrderStatus)
+}
+
+// registerCatalogRoutes registers catalog management endpoints.
+// Catalog includes inventory items and category management.
+//
+// Endpoints:
+//   - POST /api/v1/catalog/items - Create a new catalog item
+//   - GET /api/v1/catalog/items/:id - Get item by ID
+//   - GET /api/v1/catalog/items - List items with filtering
+//   - PUT /api/v1/catalog/items/:id - Update item details
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with catalog handler and auth middlewares
+func registerCatalogRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	// Catalog item endpoints (require authentication and catalog:read/write)
+	items := v1.Group("/catalog/items")
+	items.Use(di.AuthMiddleware.Authenticate())
+
+	items.POST("", di.RBACMiddleware.Require("catalog:write"), di.CatalogHandler.CreateItem)
+	items.GET("/:id", di.RBACMiddleware.Require("catalog:read"), di.CatalogHandler.GetItem)
+	items.GET("", di.RBACMiddleware.Require("catalog:read"), di.CatalogHandler.ListItems)
+	items.PUT("/:id", di.RBACMiddleware.Require("catalog:write"), di.CatalogHandler.UpdateItem)
 }
 
 // recoveryMiddleware returns a Gin middleware that recovers from panics.
