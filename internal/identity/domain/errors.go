@@ -19,4 +19,8 @@ var (
 	ErrRoleNotAssigned        = errors.New("role not assigned")
 	ErrInvalidPermission      = errors.New("invalid permission format")
 	ErrInsufficientPermission = errors.New("insufficient permission")
+	ErrSessionNotFound        = errors.New("session not found")
+	ErrSessionExpired         = errors.New("session has expired")
+	ErrSessionRevoked         = errors.New("session has been revoked")
+	ErrSessionAlreadyRevoked  = errors.New("session is already revoked")
 )

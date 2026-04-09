@@ -135,3 +135,144 @@ func (e UserLoggedOut) OccurredAt() time.Time {
 func (e UserLoggedOut) GetUserID() string {
 	return e.UserID.String()
 }
+
+// SessionCreated is emitted when a new session is created.
+type SessionCreated struct {
+	SessionID  SessionID
+	UserID     UserID
+	DeviceType string
+	UserAgent  string
+	IPAddress  string
+	ExpiresAt  time.Time
+	occurredAt time.Time
+}
+
+// EventName returns the event name for SessionCreated.
+func (e SessionCreated) EventName() string {
+	return "identity.session_created"
+}
+
+// OccurredAt returns when the SessionCreated event occurred.
+func (e SessionCreated) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// GetSessionID returns the session ID as a string.
+func (e SessionCreated) GetSessionID() string {
+	return e.SessionID.String()
+}
+
+// GetUserID returns the user ID as a string.
+func (e SessionCreated) GetUserID() string {
+	return e.UserID.String()
+}
+
+// SessionRefreshed is emitted when a session is refreshed.
+type SessionRefreshed struct {
+	SessionID  SessionID
+	UserID     UserID
+	ExpiresAt  time.Time
+	occurredAt time.Time
+}
+
+// EventName returns the event name for SessionRefreshed.
+func (e SessionRefreshed) EventName() string {
+	return "identity.session_refreshed"
+}
+
+// OccurredAt returns when the SessionRefreshed event occurred.
+func (e SessionRefreshed) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// GetSessionID returns the session ID as a string.
+func (e SessionRefreshed) GetSessionID() string {
+	return e.SessionID.String()
+}
+
+// GetUserID returns the user ID as a string.
+func (e SessionRefreshed) GetUserID() string {
+	return e.UserID.String()
+}
+
+// SessionRevoked is emitted when a session is revoked.
+type SessionRevoked struct {
+	SessionID  SessionID
+	UserID     UserID
+	Reason     string
+	occurredAt time.Time
+}
+
+// EventName returns the event name for SessionRevoked.
+func (e SessionRevoked) EventName() string {
+	return "identity.session_revoked"
+}
+
+// OccurredAt returns when the SessionRevoked event occurred.
+func (e SessionRevoked) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// GetSessionID returns the session ID as a string.
+func (e SessionRevoked) GetSessionID() string {
+	return e.SessionID.String()
+}
+
+// GetUserID returns the user ID as a string.
+func (e SessionRevoked) GetUserID() string {
+	return e.UserID.String()
+}
+
+// SessionExpired is emitted when a session expires.
+type SessionExpired struct {
+	SessionID  SessionID
+	UserID     UserID
+	occurredAt time.Time
+}
+
+// EventName returns the event name for SessionExpired.
+func (e SessionExpired) EventName() string {
+	return "identity.session_expired"
+}
+
+// OccurredAt returns when the SessionExpired event occurred.
+func (e SessionExpired) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// GetSessionID returns the session ID as a string.
+func (e SessionExpired) GetSessionID() string {
+	return e.SessionID.String()
+}
+
+// GetUserID returns the user ID as a string.
+func (e SessionExpired) GetUserID() string {
+	return e.UserID.String()
+}
+
+// SessionLoggedOut is emitted when a user logs out.
+type SessionLoggedOut struct {
+	SessionID  SessionID
+	UserID     UserID
+	occurredAt time.Time
+}
+
+// EventName returns the event name for SessionLoggedOut.
+func (e SessionLoggedOut) EventName() string {
+	return "identity.session_logged_out"
+}
+
+// OccurredAt returns when the SessionLoggedOut event occurred.
+func (e SessionLoggedOut) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
+// GetSessionID returns the session ID as a string.
+func (e SessionLoggedOut) GetSessionID() string {
+	return e.SessionID.String()
+}
+
+// GetUserID returns the user ID as a string.
+func (e SessionLoggedOut) GetUserID() string {
+	return e.UserID.String()
+}

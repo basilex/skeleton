@@ -68,3 +68,23 @@ func (h *BcryptHasher) Hash(plainPassword string) (PasswordHash, error) {
 func (h *BcryptHasher) Compare(hash PasswordHash, plainPassword string) bool {
 	return hash.Matches(plainPassword)
 }
+
+// SessionRepository defines the contract for session persistence operations.
+type SessionRepository interface {
+	Save(ctx context.Context, session *Session) error
+	FindByID(ctx context.Context, id SessionID) (*Session, error)
+	FindByUserID(ctx context.Context, userID UserID) ([]*Session, error)
+	FindActiveByUserID(ctx context.Context, userID UserID) ([]*Session, error)
+	Delete(ctx context.Context, id SessionID) error
+	DeleteByUserID(ctx context.Context, userID UserID) error
+	DeleteExpired(ctx context.Context) (int64, error)
+}
+
+// PreferencesRepository defines the contract for user preferences persistence operations.
+type PreferencesRepository interface {
+	Save(ctx context.Context, prefs *UserPreferences) error
+	FindByID(ctx context.Context, id PreferencesID) (*UserPreferences, error)
+	FindByUserID(ctx context.Context, userID UserID) (*UserPreferences, error)
+	Delete(ctx context.Context, id PreferencesID) error
+	DeleteByUserID(ctx context.Context, userID UserID) error
+}
