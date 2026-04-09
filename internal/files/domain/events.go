@@ -72,3 +72,33 @@ func (e FileProcessed) OccurredAt() time.Time { return e.CompletedAt }
 func (e FileProcessed) EventName() string {
 	return "files.file_processed"
 }
+
+// FileScanStarted event is published when a file scan begins.
+type FileScanStarted struct {
+	FileID    FileID
+	StartedAt time.Time
+}
+
+// OccurredAt implements eventbus.Event interface.
+func (e FileScanStarted) OccurredAt() time.Time { return e.StartedAt }
+
+// EventName returns the event name.
+func (e FileScanStarted) EventName() string {
+	return "files.scan_started"
+}
+
+// FileScanCompleted event is published when a file scan completes.
+type FileScanCompleted struct {
+	FileID     FileID
+	Status     ScanStatus
+	ThreatInfo string
+	ScannedAt  time.Time
+}
+
+// OccurredAt implements eventbus.Event interface.
+func (e FileScanCompleted) OccurredAt() time.Time { return e.ScannedAt }
+
+// EventName returns the event name.
+func (e FileScanCompleted) EventName() string {
+	return "files.scan_completed"
+}

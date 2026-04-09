@@ -29,6 +29,16 @@ const (
 	AccessRestricted AccessLevel = "restricted" // Specific permissions required
 )
 
+// ScanStatus represents the virus scanning status of a file.
+type ScanStatus string
+
+const (
+	ScanStatusPending  ScanStatus = "pending"  // Not yet scanned
+	ScanStatusScanning ScanStatus = "scanning" // Currently being scanned
+	ScanStatusClean    ScanStatus = "clean"    // Scanned, no threats found
+	ScanStatusInfected ScanStatus = "infected" // Scanned, threat detected
+)
+
 // FileMetadata contains additional file metadata.
 type FileMetadata struct {
 	Width      *int              // Image width in pixels
@@ -55,6 +65,9 @@ type File struct {
 	checksum        string // SHA-256 hash
 	metadata        FileMetadata
 	accessLevel     AccessLevel
+	scanStatus      ScanStatus
+	threatInfo      string     // Description of detected threat (if infected)
+	scannedAt       *time.Time // Timestamp when scan completed
 	uploadedAt      time.Time
 	expiresAt       *time.Time
 	processedAt     *time.Time
@@ -103,6 +116,7 @@ func NewFile(
 		size:            size,
 		storageProvider: provider,
 		accessLevel:     accessLevel,
+		scanStatus:      ScanStatusPending,
 		uploadedAt:      now,
 		createdAt:       now,
 		updatedAt:       now,
@@ -124,6 +138,9 @@ func ReconstituteFile(
 	checksum string,
 	metadata FileMetadata,
 	accessLevel AccessLevel,
+	scanStatus ScanStatus,
+	threatInfo string,
+	scannedAt *time.Time,
 	uploadedAt time.Time,
 	expiresAt *time.Time,
 	processedAt *time.Time,
@@ -142,6 +159,9 @@ func ReconstituteFile(
 		checksum:        checksum,
 		metadata:        metadata,
 		accessLevel:     accessLevel,
+		scanStatus:      scanStatus,
+		threatInfo:      threatInfo,
+		scannedAt:       scannedAt,
 		uploadedAt:      uploadedAt,
 		expiresAt:       expiresAt,
 		processedAt:     processedAt,
@@ -191,6 +211,15 @@ func (f *File) ExpiresAt() *time.Time { return f.expiresAt }
 
 // ProcessedAt returns the processing completion timestamp (nil if not processed).
 func (f *File) ProcessedAt() *time.Time { return f.processedAt }
+
+// ScanStatus returns the virus scanning status.
+func (f *File) ScanStatus() ScanStatus { return f.scanStatus }
+
+// ThreatInfo returns the threat information (if infected).
+func (f *File) ThreatInfo() string { return f.threatInfo }
+
+// ScannedAt returns the timestamp when scan completed (nil if not scanned).
+func (f *File) ScannedAt() *time.Time { return f.scannedAt }
 
 // CreatedAt returns the creation timestamp.
 func (f *File) CreatedAt() time.Time { return f.createdAt }
@@ -363,4 +392,170 @@ func isValidAccessLevel(level AccessLevel) bool {
 	default:
 		return false
 	}
+}
+
+// StartScan marks the file as currently being scanned for viruses.
+// Returns an error if the file is already being scanned or has been scanned.
+func (f *File) StartScan() error {
+	if f.scanStatus == ScanStatusScanning {
+		return NewValidationError("scanStatus", "file is already being scanned")
+	}
+	if f.scanStatus == ScanStatusClean || f.scanStatus == ScanStatusInfected {
+		return NewValidationError("scanStatus", "file has already been scanned")
+	}
+	f.scanStatus = ScanStatusScanning
+	f.updatedAt = time.Now()
+	return nil
+}
+
+// MarkClean marks the file as clean after successful virus scan.
+// Returns an error if the file is not currently being scanned.
+func (f *File) MarkClean() error {
+	if f.scanStatus != ScanStatusScanning {
+		return NewValidationError("scanStatus", "file must be in scanning status")
+	}
+	now := time.Now()
+	f.scanStatus = ScanStatusClean
+	f.scannedAt = &now
+	f.updatedAt = now
+	return nil
+}
+
+// MarkInfected marks the file as infected and records threat information.
+// Returns an error if the file is not currently being scanned.
+func (f *File) MarkInfected(threatInfo string) error {
+	if f.scanStatus != ScanStatusScanning {
+		return NewValidationError("scanStatus", "file must be in scanning status")
+	}
+	now := time.Now()
+	f.scanStatus = ScanStatusInfected
+	f.threatInfo = threatInfo
+	f.scannedAt = &now
+	f.updatedAt = now
+	return nil
+}
+
+// IsScanned returns true if the file has been scanned (clean or infected).
+func (f *File) IsScanned() bool {
+	return f.scanStatus == ScanStatusClean || f.scanStatus == ScanStatusInfected
+}
+
+// IsClean returns true if the file was scanned and found clean.
+func (f *File) IsClean() bool {
+	return f.scanStatus == ScanStatusClean
+}
+
+// IsInfected returns true if the file was scanned and found infected.
+func (f *File) IsInfected() bool {
+	return f.scanStatus == ScanStatusInfected
+}
+
+// CanBeDownloaded returns true if the file can be safely downloaded.
+// Files must be scanned clean to be downloadable.
+func (f *File) CanBeDownloaded() bool {
+	return f.scanStatus == ScanStatusClean
+}
+
+// AllowedMimeTypes defines the default allowed MIME types by category.
+var AllowedMimeTypes = map[string][]string{
+	"images": {
+		"image/jpeg",
+		"image/png",
+		"image/gif",
+		"image/webp",
+		"image/svg+xml",
+		"image/bmp",
+	},
+	"documents": {
+		"application/pdf",
+		"application/msword",
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"application/vnd.ms-excel",
+		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		"application/vnd.ms-powerpoint",
+		"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"text/plain",
+		"text/csv",
+		"application/rtf",
+	},
+	"video": {
+		"video/mp4",
+		"video/mpeg",
+		"video/webm",
+		"video/quicktime",
+		"video/x-msvideo",
+	},
+	"audio": {
+		"audio/mpeg",
+		"audio/wav",
+		"audio/ogg",
+		"audio/aac",
+		"audio/flac",
+	},
+	"archives": {
+		"application/zip",
+		"application/x-rar-compressed",
+		"application/x-7z-compressed",
+		"application/x-tar",
+		"application/gzip",
+	},
+}
+
+// FileTypePolicy defines allowed file types for upload.
+type FileTypePolicy struct {
+	allowedTypes map[string]bool // Set of allowed MIME types
+	maxSize      int64           // Maximum file size in bytes
+}
+
+// NewFileTypePolicy creates a new file type policy with allowed types and max size.
+func NewFileTypePolicy(allowedMimeTypes []string, maxSize int64) *FileTypePolicy {
+	allowed := make(map[string]bool)
+	for _, mt := range allowedMimeTypes {
+		allowed[mt] = true
+	}
+	return &FileTypePolicy{
+		allowedTypes: allowed,
+		maxSize:      maxSize,
+	}
+}
+
+// DefaultFileTypePolicy returns a policy with common allowed types.
+func DefaultFileTypePolicy() *FileTypePolicy {
+	var allTypes []string
+	for _, types := range AllowedMimeTypes {
+		allTypes = append(allTypes, types...)
+	}
+	return NewFileTypePolicy(allTypes, 100*1024*1024) // 100MB default
+}
+
+// Validate checks if a file meets the policy requirements.
+func (p *FileTypePolicy) Validate(mimeType string, size int64) error {
+	if !p.allowedTypes[mimeType] {
+		return fmt.Errorf("%w: %s not allowed", ErrInvalidFileType, mimeType)
+	}
+	if size > p.maxSize {
+		return fmt.Errorf("%w: size %d exceeds maximum %d", ErrFileTooLarge, size, p.maxSize)
+	}
+	return nil
+}
+
+// ValidateMimeType checks if a MIME type is allowed.
+func (p *FileTypePolicy) ValidateMimeType(mimeType string) error {
+	if !p.allowedTypes[mimeType] {
+		return fmt.Errorf("%w: %s not allowed", ErrInvalidFileType, mimeType)
+	}
+	return nil
+}
+
+// ValidateSize checks if file size is within limits.
+func (p *FileTypePolicy) ValidateSize(size int64) error {
+	if size > p.maxSize {
+		return fmt.Errorf("%w: size %d exceeds maximum %d", ErrFileTooLarge, size, p.maxSize)
+	}
+	return nil
+}
+
+// IsTypeAllowed returns true if the MIME type is in the allowed list.
+func (p *FileTypePolicy) IsTypeAllowed(mimeType string) bool {
+	return p.allowedTypes[mimeType]
 }

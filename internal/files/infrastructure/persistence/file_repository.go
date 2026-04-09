@@ -37,6 +37,9 @@ type fileDTO struct {
 	Checksum        string     `db:"checksum"`
 	Metadata        []byte     `db:"metadata"`
 	AccessLevel     string     `db:"access_level"`
+	ScanStatus      string     `db:"scan_status"`
+	ThreatInfo      string     `db:"threat_info"`
+	ScannedAt       *time.Time `db:"scanned_at"`
 	UploadedAt      time.Time  `db:"uploaded_at"`
 	ExpiresAt       *time.Time `db:"expires_at"`
 	ProcessedAt     *time.Time `db:"processed_at"`
@@ -58,11 +61,14 @@ func (r *FileRepository) Create(ctx context.Context, file *domain.File) error {
 
 	query, args, err := r.psql.Insert("files").
 		Columns("id", "owner_id", "filename", "stored_name", "mime_type", "size", "path",
-			"storage_provider", "checksum", "metadata", "access_level",
+			"storage_provider", "checksum", "metadata", "access_level", "scan_status",
+			"threat_info", "scanned_at",
 			"uploaded_at", "expires_at", "processed_at", "created_at", "updated_at").
 		Values(file.ID().String(), ownerID, file.Filename(), file.StoredName(), file.MimeType(),
 			file.Size(), file.Path(), string(file.StorageProvider()), file.Checksum(),
-			metadataJSON, string(file.AccessLevel()), file.UploadedAt(), file.ExpiresAt(),
+			metadataJSON, string(file.AccessLevel()), string(file.ScanStatus()),
+			file.ThreatInfo(), file.ScannedAt(),
+			file.UploadedAt(), file.ExpiresAt(),
 			file.ProcessedAt(), file.CreatedAt(), file.UpdatedAt()).
 		ToSql()
 	if err != nil {
@@ -81,7 +87,8 @@ func (r *FileRepository) GetByID(ctx context.Context, id domain.FileID) (*domain
 	var dto fileDTO
 	err := pgxscan.Get(ctx, r.pool, &dto,
 		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
+			storage_provider, checksum, metadata, access_level, scan_status,
+			threat_info, scanned_at,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
 		FROM files WHERE id = $1`,
 		id.String())
@@ -149,7 +156,8 @@ func (r *FileRepository) GetByPath(ctx context.Context, path string) (*domain.Fi
 	var dto fileDTO
 	err := pgxscan.Get(ctx, r.pool, &dto,
 		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
+			storage_provider, checksum, metadata, access_level, scan_status,
+			threat_info, scanned_at,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
 		FROM files WHERE path = $1`,
 		path)
@@ -167,7 +175,8 @@ func (r *FileRepository) GetByOwner(ctx context.Context, ownerID string, limit, 
 	var dtos []fileDTO
 	err := pgxscan.Select(ctx, r.pool, &dtos,
 		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
+			storage_provider, checksum, metadata, access_level, scan_status,
+			threat_info, scanned_at,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
 		FROM files 
 		WHERE owner_id = $1
@@ -185,7 +194,8 @@ func (r *FileRepository) GetExpired(ctx context.Context, before time.Time, limit
 	var dtos []fileDTO
 	err := pgxscan.Select(ctx, r.pool, &dtos,
 		`SELECT id, owner_id, filename, stored_name, mime_type, size, path,
-			storage_provider, checksum, metadata, access_level,
+			storage_provider, checksum, metadata, access_level, scan_status,
+			threat_info, scanned_at,
 			uploaded_at, expires_at, processed_at, created_at, updated_at
 		FROM files 
 		WHERE expires_at IS NOT NULL AND expires_at < $1
@@ -201,7 +211,8 @@ func (r *FileRepository) GetExpired(ctx context.Context, before time.Time, limit
 
 func (r *FileRepository) List(ctx context.Context, filter *domain.FileFilter, limit, offset int) ([]*domain.File, error) {
 	q := r.psql.Select("id", "owner_id", "filename", "stored_name", "mime_type", "size", "path",
-		"storage_provider", "checksum", "metadata", "access_level",
+		"storage_provider", "checksum", "metadata", "access_level", "scan_status",
+		"threat_info", "scanned_at",
 		"uploaded_at", "expires_at", "processed_at", "created_at", "updated_at").
 		From("files")
 
@@ -321,6 +332,9 @@ func (r *FileRepository) dtoToDomain(dto fileDTO) (*domain.File, error) {
 		dto.Checksum,
 		metadata,
 		domain.AccessLevel(dto.AccessLevel),
+		domain.ScanStatus(dto.ScanStatus),
+		dto.ThreatInfo,
+		dto.ScannedAt,
 		dto.UploadedAt,
 		dto.ExpiresAt,
 		dto.ProcessedAt,

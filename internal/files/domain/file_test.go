@@ -440,6 +440,9 @@ func TestFileCanAccess(t *testing.T) {
 			"abc123",
 			FileMetadata{Custom: make(map[string]string)},
 			AccessPublic,
+			ScanStatusPending,
+			"",
+			nil,
 			now,
 			&pastTime, // Expires in the past
 			nil,
@@ -476,6 +479,7 @@ func TestReconstituteFile(t *testing.T) {
 	now := time.Now()
 	expiresAt := now.Add(24 * time.Hour)
 	processedAt := now.Add(1 * time.Hour)
+	scannedAt := now.Add(30 * time.Minute)
 
 	metadata := FileMetadata{
 		Custom: map[string]string{"key": "value"},
@@ -493,6 +497,9 @@ func TestReconstituteFile(t *testing.T) {
 		"abc123",
 		metadata,
 		AccessPrivate,
+		ScanStatusClean,
+		"",
+		&scannedAt,
 		now,
 		&expiresAt,
 		&processedAt,
