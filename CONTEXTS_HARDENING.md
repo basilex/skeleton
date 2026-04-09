@@ -9,9 +9,9 @@
 ## 📊 Overall Progress
 
 **Total Tasks:** 42  
-**Completed:** 6  
+**Completed:** 7  
 **In Progress:** 0  
-**Pending:** 36
+**Pending:** 35
 
 ---
 
@@ -304,24 +304,24 @@
 
 ### 7. Contracts Context (Score: 80/100 → Target: 85/100)
 
-**Status:** ⬜ Not Started  
+**Status:** ✅ Completed  
 **Effort:** 1 day  
 **Priority:** MEDIUM
 
 #### Tasks:
 
-- [ ] Add renewal logic to `Contract`
+- [x] Add renewal logic to `Contract`
   - File: `internal/contracts/domain/contract.go` (modify)
-  - Status: ⬜ Not Started
+  - Status: ✅ Completed
   - Effort: 4 hours
   - Requires:
     - Renew method
     - Auto-renewal flag
     - Renewal count
 
-- [ ] Add amendment tracking
+- [x] Add amendment tracking
   - File: `internal/contracts/domain/contract.go` (modify)
-  - Status: ⬜ Not Started
+  - Status: ✅ Completed
   - Effort: 4 hours
   - Requires:
     - Amendment history

@@ -94,12 +94,19 @@ func (dto *contractDTO) toDomain() (*domain.Contract, error) {
 		dto.Documents,
 		dto.CreditLimit,
 		dto.Currency,
+		false,
+		0,
+		0,
+		0,
+		make([]domain.Amendment, 0),
+		1,
 		metadata,
 		dto.CreatedBy,
 		dto.CreatedAt,
 		dto.UpdatedAt,
 		dto.SignedAt,
 		dto.TerminatedAt,
+		nil,
 	)
 }
 
