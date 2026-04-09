@@ -44,3 +44,6 @@ vendor/
 
 # Docker
 .docker/
+*/*.exe
+*/*.test
+*/seed

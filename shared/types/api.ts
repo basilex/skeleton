@@ -200,6 +200,141 @@ export interface ProductVariant {
 }
 
 // ============================================
+// Documents Context
+// ============================================
+
+export type DocumentStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'archived';
+export type DocumentType = 'invoice' | 'order' | 'quote' | 'report' | 'contract' | 'other';
+
+export interface Document {
+  id: string;
+  documentNumber: string;
+  documentType: DocumentType;
+  referenceId: string;
+  fileId?: string;
+  status: DocumentStatus;
+  metadata: Record<string, string>;
+  signatures: Signature[];
+  versions: DocumentVersion[];
+  currentVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Signature {
+  id: string;
+  documentId: string;
+  signatoryId: string;
+  signatoryName: string;
+  signedAt?: string;
+  status: 'pending' | 'signed' | 'rejected';
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  fileId: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+// ============================================
+// Tasks Context
+// ============================================
+
+export type TaskType = 
+  | 'send_email'
+  | 'send_sms'
+  | 'send_push'
+  | 'send_in_app'
+  | 'process_file'
+  | 'generate_thumbnail'
+  | 'cleanup_old_data'
+  | 'generate_report';
+
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface Task {
+  id: string;
+  taskType: TaskType;
+  payload: Record<string, unknown>;
+  status: TaskStatus;
+  priority: number;
+  retries: number;
+  maxRetries: number;
+  scheduledAt: string;
+  executedAt?: string;
+  completedAt?: string;
+  errorMessage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================
+// Notifications Context
+// ============================================
+
+export type NotificationType = 'email' | 'sms' | 'push' | 'in_app';
+export type NotificationStatus = 'pending' | 'sent' | 'delivered' | 'failed';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  data?: Record<string, unknown>;
+  status: NotificationStatus;
+  read: boolean;
+  sentAt?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+// ============================================
+// Audit Context
+// ============================================
+
+export type AuditAction = 'create' | 'read' | 'update' | 'delete' | 'login' | 'logout' | 'assign_role' | 'revoke_role' | 'register';
+
+export interface AuditRecord {
+  id: string;
+  actorId: string;
+  actorType: 'user' | 'system';
+  action: AuditAction;
+  resourceType: string;
+  resourceId: string;
+  oldValues?: Record<string, unknown>;
+  newValues?: Record<string, unknown>;
+  metadata: Record<string, string>;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+}
+
+// ============================================
+// Files Context
+// ============================================
+
+export type FileStatus = 'uploading' | 'processing' | 'ready' | 'error' | 'expired';
+
+export interface File {
+  id: string;
+  name: string;
+  path: string;
+  mimeType: string;
+  size: number;
+  hash: string;
+  status: FileStatus;
+  ownerId?: string;
+  expiresAt?: string;
+  metadata: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================
 // Pagination
 // ============================================
 
