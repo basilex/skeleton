@@ -79,30 +79,28 @@ Product catalog with hierarchical categories.
 - Repository Interfaces: CustomerRepository, OrderRepository
 
 #### Hexagonal Architecture (Ports & Adapters)
-```
-Ports (Interfaces)
-├── HTTP (REST API)
-├── Application (Commands/Queries)
-└── Domain (Business Logic)
 
-Adapters (Implementations)
-├── Infrastructure (PostgreSQL, Redis)
-├── Persistence (Repositories)
-└── External (EventBus)
-```
+**Ports (Interfaces):**
+- HTTP (REST API)
+- Application (Commands/Queries)
+- Domain (Business Logic)
+
+**Adapters (Implementations):**
+- Infrastructure (PostgreSQL, Redis)
+- Persistence (Repositories)
+- External (EventBus)
 
 #### CQRS (Command Query Separation)
-```
-├── Commands (Write)
-│   ├── CreateCustomer
-│   ├── ConfirmOrder
-│   └── RecordTransaction
-│
-└── Queries (Read)
-    ├── GetCustomer
-    ├── ListOrders
-    └── ListAccounts
-```
+
+**Commands (Write):**
+- CreateCustomer
+- ConfirmOrder
+- RecordTransaction
+
+**Queries (Read):**
+- GetCustomer
+- ListOrders
+- ListAccounts
 
 ### Technology Stack
 
@@ -240,67 +238,79 @@ func TestAccountingIntegration(t *testing.T) {
 
 ### Entity Relationship Diagram
 
-```
-┌─────────────┐        ┌──────────────┐
-│   parties   │        │  contracts   │
-├─────────────┤        ├──────────────┤
-│ id (PK)     │◄───────│ party_id (FK)│
-│ party_type  │        │ validity     │
-│ contact_info│        │ payment_terms│
-│ status      │        │ status       │
-└─────────────┘        └──────────────┘
-        │                     │
-        │                     │
-        ▼                     ▼
-┌─────────────┐        ┌──────────────┐
-│   orders    │        │  accounting  │
-├─────────────┤        ├──────────────┤
-│ customer_id │        │ accounts     │
-│ supplier_id │        │ transactions │
-│ contract_id │        └──────────────┘
-│ total       │
-└─────────────┘
-        │
-        ▼
-┌─────────────┐
-│ order_lines │
-├─────────────┤
-│ item_id     │
-│ quantity    │
-│ unit_price  │
-└─────────────┘
-        │
-        ▼
-┌─────────────┐
-│catalog_items│
-├─────────────┤
-│ category_id │
-│ attributes  │
-└─────────────┘
+```mermaid
+erDiagram
+    parties ||--o{ contracts : "has"
+    parties ||--o{ orders : "places"
+    contracts ||--o{ orders : "governs"
+    orders ||--|{ order_lines : "contains"
+    order_lines }o--|| catalog_items : "references"
+    accounting ||--o{ transactions : "records"
+
+    parties {
+        uuid id PK
+        string party_type
+        jsonb contact_info
+        string status
+    }
+
+    contracts {
+        uuid id PK
+        uuid party_id FK
+        daterange validity
+        jsonb payment_terms
+        string status
+    }
+
+    orders {
+        uuid id PK
+        uuid customer_id FK
+        uuid supplier_id FK
+        uuid contract_id FK
+        decimal total
+    }
+
+    order_lines {
+        uuid id PK
+        uuid item_id FK
+        int quantity
+        decimal unit_price
+    }
+
+    catalog_items {
+        uuid id PK
+        ltree category_id
+        jsonb attributes
+    }
+
+    accounting {
+        uuid id PK
+        jsonb accounts
+        jsonb transactions
+    }
 ```
 
 ## 🔧 Development
 
 ### Project Structure
-```
-skeleton/
-├── cmd/api/              # Application entrypoint
-├── internal/
-│   ├── parties/          # Parties bounded context
-│   ├── contracts/        # Contracts bounded context
-│   ├── accounting/       # Accounting bounded context
-│   ├── ordering/         # Ordering bounded context
-│   ├── catalog/          # Catalog bounded context
-│   ├── identity/         # Auth & Users
-│   ├── audit/             # Audit logging
-│   ├── files/             # File management
-│   ├── notifications/     # Notifications
-│   └── tasks/             # Background tasks
-├── migrations/           # Database migrations
-├── pkg/                  # Shared packages
-├── docs/                 # Documentation
-└── tests/                # Integration tests
-```
+
+- `skeleton/`
+  - `cmd/api/` - Application entrypoint
+  - `internal/`
+    - `parties/` - Parties bounded context
+    - `contracts/` - Contracts bounded context
+    - `accounting/` - Accounting bounded context
+    - `ordering/` - Ordering bounded context
+    - `catalog/` - Catalog bounded context
+    - `identity/` - Auth & Users
+    - `audit/` - Audit logging
+    - `files/` - File management
+    - `notifications/` - Notifications
+    - `tasks/` - Background tasks
+  - `migrations/` - Database migrations
+  - `pkg/` - Shared packages
+  - `docs/` - Documentation
+  - `tests/` - Integration tests
 
 ### Make Commands
 ```bash

@@ -19,51 +19,40 @@ Notifications bounded context provides a multi-channel messaging system with sup
 
 ### Domain Layer
 
-```
-notification.go         # Notification aggregate
-notification_template.go # Template aggregate
-preferences.go          # User preferences aggregate
-├── events.go           # Domain events
-├── repository.go       # Repository interfaces
-└── errors.go           # Domain errors
-```
+- `notification.go` - Notification aggregate
+- `notification_template.go` - Template aggregate
+- `preferences.go` - User preferences aggregate
+  - `events.go` - Domain events
+  - `repository.go` - Repository interfaces
+  - `errors.go` - Domain errors
 
 ### Application Layer
 
-```
-command/
-  ├── create_notification.go      # Create notification command
-  ├── create_from_template.go     # Create from template command
-  ├── mark_status.go              # Mark sent/delivered/failed
-  ├── update_preferences.go       # Update user preferences
-  └── template.go                 # Template CRUD commands
-
-query/
-  ├── queries.go                  # Get/List notifications, templates, preferences
-
-eventhandler/
-  └── identity_handler.go         # Subscribe to identity events
-```
+- `command/`
+  - `create_notification.go` - Create notification command
+  - `create_from_template.go` - Create from template command
+  - `mark_status.go` - Mark sent/delivered/failed
+  - `update_preference.go` - Update user preferences
+  - `template.go` - Template CRUD commands
+- `query/`
+  - `queries.go` - Get/List notifications, templates, preferences
+- `eventhandler/`
+  - `identity_handler.go` - Subscribe to identity events
 
 ### Infrastructure Layer
 
-```
-persistence/
-  ├── notification_repository.go   # PostgreSQL implementation
-  ├── template_repository.go       # PostgreSQL implementation
-  └── preferences_repository.go    # PostgreSQL implementation
-
-sender/
-  ├── interfaces.go               # EmailSender, SMSSender, etc.
-  ├── console_sender.go           # Development logger
-  └── smtp_sender.go              # Production SMTP
-
-worker/
-  └── notification_worker.go      # Background processor
-
-template/
-  └── engine.go                   # Go template engine
-```
+- `persistence/`
+  - `notification_repository.go` - PostgreSQL implementation
+  - `template_repository.go` - PostgreSQL implementation
+  - `preferences_repository.go` - PostgreSQL implementation
+- `sender/`
+  - `interfaces.go` - EmailSender, SMSSender, etc.
+  - `console_sender.go` - Development logger
+  - `smtp_sender.go` - Production SMTP
+- `worker/`
+  - `notification_worker.go` - Background processor
+- `template/`
+  - `engine.go` - Go template engine
 
 ## Database Schema
 

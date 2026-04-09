@@ -354,13 +354,11 @@ ORDER BY applied_at DESC;
 
 ### Migration Files
 
-```
-migrations/
-├── 001_initial_schema.sql          # Complete optimized schema
-├── 001_create_users.up.sql         # Legacy incremental migrations
-├── ...
-└── 023_upgrade_to_postgres_types.up.sql  # TEXT → JSONB/UUID
-```
+- `migrations/`
+  - `001_initial_schema.sql` - Complete optimized schema
+  - `001_create_users.up.sql` - Legacy incremental migrations
+  - `...`
+  - `023_upgrade_to_postgres_types.up.sql` - TEXT → JSONB/UUID
 
 ### Create New Migration
 

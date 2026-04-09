@@ -456,23 +456,21 @@ go tool pprof cpu.prof
 
 ### Project Structure
 
-```
-internal/
-├── identity/                 # Bounded context
-│   ├── domain/              # Domain layer
-│   │   ├── user.go          # Aggregate root
-│   │   ├── email.go         # Value object
-│   │   ├── ids.go           # Typed IDs (UUID v7)
-│   │   └── events.go        # Domain events
-│   ├── application/          # Application layer
-│   │   ├── commands.go      # Write operations
-│   │   ├── queries.go       # Read operations
-│   │   └── handlers.go      # Event handlers
-│   └── infrastructure/       # Infrastructure layer
-│       └── persistence/
-│           └── user_repository.go
-└── ...
-```
+- `internal/`
+  - `identity/` - Bounded context
+    - `domain/` - Domain layer
+      - `user.go` - Aggregate root
+      - `email.go` - Value object
+      - `ids.go` - Typed IDs (UUID v7)
+      - `events.go` - Domain events
+    - `application/` - Application layer
+      - `commands.go` - Write operations
+      - `queries.go` - Read operations
+      - `handlers.go` - Event handlers
+    - `infrastructure/` - Infrastructure layer
+      - `persistence/`
+        - `user_repository.go`
+  - `...`
 
 ### Domain-Driven Design Rules
 

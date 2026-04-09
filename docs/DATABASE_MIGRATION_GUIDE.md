@@ -64,18 +64,16 @@ go run ./scripts/migrate -action=status  // Check status
 
 Sequential numbering starting from 001:
 
-```
-migrations/
-├── 001_init_schema.up.sql           # UUID v7 functions
-├── 001_init_schema.down.sql
-├── 002_users.up.sql                # Users table
-├── 002_users.down.sql
-├── 003_roles.up.sql                # Roles table
-├── 003_roles.down.sql
-...
-├── 017_file_processings.up.sql      # Last table
-└── 017_file_processings.down.sql
-```
+- `migrations/`
+  - `001_init_schema.up.sql` - UUID v7 functions
+  - `001_init_schema.down.sql`
+  - `002_users.up.sql` - Users table
+  - `002_users.down.sql`
+  - `003_roles.up.sql` - Roles table
+  - `003_roles.down.sql`
+  - `...`
+  - `017_file_processings.up.sql` - Last table
+  - `017_file_processings.down.sql`
 
 ### Migration Table
 

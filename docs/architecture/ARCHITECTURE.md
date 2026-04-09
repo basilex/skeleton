@@ -75,16 +75,15 @@ Dependencies go **inward**:
 - Ports: `http/handler.go`, `http/middleware.go`
 
 ### Package Structure
-```
-internal/{context}/
-├── domain/           # Aggregates, Value Objects, Events, Interfaces
-├── application/      # Command/Query Handlers
-│   ├── command/
-│   └── query/
-├── infrastructure/   # Implementations (DB, external services)
-│   ├── persistence/
-│   ├── token/
-│   └── session/
-└── ports/            # Entry points (HTTP, gRPC, CLI)
-    └── http/
-```
+
+- `internal/{context}/`
+  - `domain/` - Aggregates, Value Objects, Events, Interfaces
+  - `application/` - Command/Query Handlers
+    - `command/`
+    - `query/`
+  - `infrastructure/` - Implementations (DB, external services)
+    - `persistence/`
+    - `token/`
+    - `session/`
+  - `ports/` - Entry points (HTTP, gRPC, CLI)
+    - `http/`
