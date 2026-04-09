@@ -7,28 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Breaking Changes ⚠️
-
-> **MIGRATION REQUIRED**: This release contains breaking changes. See [Migration Guide](#migration-guide) below.
-
-#### Database
-- **SQLite support removed completely** - PostgreSQL 16 is now the only supported database
-- **All TEXT IDs changed to UUID v7** - Time-ordered UUIDs with native PostgreSQL support
-- **All TEXT metadata changed to JSONB** - Native JSON with GIN indexes for querying
-- **Config files location changed** - All `.env` files must be in `configs/` directory
-
-#### Repository Pattern
-- **Manual scanning replaced with DTO pattern** - All repositories now use `scany v2`
-- **String concatenation replaced with squirrel** - Dynamic queries use type-safe builders
-- **Error handling standardized** - Use `pgxscan.NotFound()` for checking not found errors
-
-#### Infrastructure
-- **Docker setup changed** - New multi-stage Dockerfiles with health checks
-- **Migrations consolidated** - Only PostgreSQL 16 migrations (001-025)
-- **Test infrastructure updated** - All tests use PostgreSQL testcontainers
-
 ### Added ✨
 
+#### Integration Tests & Development Environment (April 2026) 🧪
+- **Integration Test Suite**: Cross-context flow verification
+  - `tests/integration/testutil.go` - Test database helpers
+  - `tests/integration/event_bus_test.go` - Event bus functionality tests  
+  - `tests/integration/order_invoice_test.go` - Order → Invoice integration tests
+  - All tests passing, verification of event-driven architecture
+  
+- **Docker Compose Development Environment**: Complete local development setup
+  - PostgreSQL 16 with health checks and persistent storage
+  - Redis 7 for caching and event bus
+  - API Server with hot reload support
+  - Swagger UI standalone server (port 8081)
+  - pgAdmin database management UI (port 5050)
+  - Full documentation in `docs/DOCKER_DEVELOPMENT.md`
+  
+- **Swagger/OpenAPI Documentation**: Interactive API documentation
+  - Complete OpenAPI 2.0 specification (`docs/swagger/`)
+  - Interactive Swagger UI at `/swagger/index.html`
+  - 12+ bounded contexts documented with authentication methods
+  - Session and Bearer authentication support documented
+  - Removed obsolete `docs/api/` directory
+  
+- **Makefile Improvements**: Updated swagger commands
+  - `make swagger` - Instructions for manually maintained docs
+  - `make swagger-serve` - Local documentation serving guide
+  
 #### Cross-Context Integration (NEW) 🔗
 - **Event-Driven Architecture**: Domain events enable bounded context communication
 - **Order → Inventory Integration**: Automatic stock reservation on OrderConfirmed
@@ -41,7 +47,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wire Integration**: All event handlers registered in `cmd/api/wire.go`
 - **Event Bus**: Type-safe `eventbus.Handler` interface for event subscription
 
-#### Ordering Domain Events
+#### Integration Tests ✅
+- **Test Infrastructure**: `tests/integration/testutil.go` with test database helpers
+- **Event Bus Tests**: Cross-context event delivery verification
+- **Order → Invoice Tests**: End-to-end invoice creation from order events
+- **Integration Coverage**: Order confirmation flow, invoice calculation, event bus pub/sub
+
+#### Development Environment 🐳
+- **Docker Compose**: Complete development environment setup
+  - PostgreSQL 16 with health checks
+  - Redis 7 for caching and event bus
+  - API Server with hot reload (Dockerfile.dev)
+  - Swagger UI standalone server (port 8081)
+  - pgAdmin for database management (port 5050)
+- **Development Documentation**: `docs/DOCKER_DEVELOPMENT.md` with complete guide
+- **Production Dockerfile**: Multi-stage build for optimized images
+
+#### API Documentation 📖
+- **Swagger/OpenAPI 2.0**: Complete API specification
+  - `docs/swagger/swagger.json` - JSON format
+  - `docs/swagger/swagger.yaml` - YAML format
+  - `docs/swagger/index.html` - Swagger UI interface
+- **Interactive Documentation**: Access at http://localhost:8080/swagger/index.html
+- **API Tags**: 12+ bounded contexts documented (auth, users, parties, contracts, accounting, ordering, catalog, invoicing, inventory, documents, files, status)
+- **Authentication Docs**: Session and Bearer token authentication methods
+- **Swagger UI**: Standalone container with Docker Compose
+
+#### Ordering Domain Events 📢
 - **OrderCreated**: Published when order is created
 - **OrderConfirmed**: Published when order status changes to confirmed (triggers inventory + invoicing)
 - **OrderCancelled**: Published when order is cancelled (triggers stock release)
