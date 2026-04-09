@@ -8,44 +8,22 @@ The system uses domain events to implement cross-context integration following t
 
 ## Architecture
 
-```
-┌─────────────────┐
-│   ORDERING      │
-│   Context       │
-│                 │
-│  Order          │───┐
-│  (Aggregate)    │   │ OrderConfirmed
-│                 │   │ OrderCancelled
-│                 │   │ OrderCompleted
-└─────────────────┘   │
-                      │
-                      ├──► ┌──────────────────┐
-                      │    │   INVENTORY      │
-                      │    │   Context        │
-                      │    │                  │
-                      │    │  Stock           │
-                      │    │  Reservation     │
-                      │    └──────────────────┘
-                      │
-                      └──► ┌──────────────────┐
-                           │   INVOICING      │
-                           │   Context        │
-                           │                  │
-                           │  Invoice         │
-                           │  (Aggregate)     │
-                           └──────────────────┘
-                                    │
-                                    │ InvoiceCreated
-                                    │
-                                    ▼
-                           ┌──────────────────┐
-                           │   ACCOUNTING     │
-                           │   Context        │
-                           │                  │
-                           │  Transaction     │
-                           │  (Aggregate)     │
-                           └──────────────────┘
-```
+### Cross-Context Communication Flow
+
+**Order Confirmed triggers:**
+1. → **Inventory Context**: Reserve stock
+2. → **Invoicing Context**: Create invoice
+   - → **Accounting Context**: Create journal entry
+
+### Communication Pattern
+
+| Source Context | Event | Target Context | Action |
+|---------------|-------|----------------|--------|
+| Ordering | `OrderConfirmed` | Inventory | Reserve stock quantities |
+| Ordering | `OrderConfirmed` | Invoicing | Create invoice automatically |
+| Ordering | `OrderCancelled` | Inventory | Release stock reservations |
+| Ordering | `OrderCompleted` | Inventory | Fulfill reservations, adjust stock |
+| Invoicing | `InvoiceCreated` | Accounting | Create journal entries |
 
 ## Event Flow
 

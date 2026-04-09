@@ -6,39 +6,25 @@ Production-ready Go API skeleton with Domain-Driven Design (DDD) and Hexagonal A
 
 ## Architecture Overview
 
-```
-Domain-Driven Design + Hexagonal Architecture
-=============================================
+**Domain-Driven Design + Hexagonal Architecture**
 
-┌──────────────────────────────────────────┐
-│           Ports (HTTP/API)                │
-│  - REST endpoints                         │
-│  - Request validation                     │
-│  - Response formatting                   │
-└────────────────┬─────────────────────────┘│
-                  ▼                           │
-┌──────────────────────────────────────────┐│
-│        Application Layer                  ││
-│  - Commands & Queries (CQRS-lite)        ││
-│  - Event handlers                        ││
-│  - Use case orchestration                 ││
-└────────────────┬─────────────────────────┘│
-                  ▼                           │
-┌──────────────────────────────────────────┐│
-│          Domain Layer                     ││
-│  - Aggregates (User, File, Task)         ││
-│  - Value Objects (Email, ID)              ││
-│  - Domain Events                          ││
-│  - Business Rules                         ││
-└────────────────┬─────────────────────────┘│
-                  ▼                           │
-┌──────────────────────────────────────────┐│
-│      Infrastructure Layer                 ││
-│  - PostgreSQL 16 (pgxpool)                ││
-│  - Redis 7 (caching, events)             ││
-│  - File storage (S3, local)              ││
-└──────────────────────────────────────────┘│
-```
+### Layers (Inside to Outside)
+
+| Layer | Components | Responsibility |
+|-------|------------|----------------|
+| **Domain** | Aggregates, Value Objects, Domain Events, Business Rules | Pure business logic, no dependencies |
+| **Application** | Commands, Queries, Event Handlers, Use Cases | Orchestration, use case logic |
+| **Infrastructure** | PostgreSQL, Redis, File Storage | External services, persistence |
+| **Ports** | HTTP/API, REST Endpoints, Request/Response | Public interface, validation |
+
+### Technology Stack
+
+| Component | Technology | Why |
+|-----------|------------|-----|
+| Domain | Pure Go | Business rules isolation |
+| Application | Go + CQRS-lite | Use case orchestration |
+| Infrastructure | PostgreSQL 16 + Redis 7 | Performance, features |
+| HTTP | Gin framework | Performance, middleware ecosystem |
 
 ## Features
 
