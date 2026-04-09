@@ -17,38 +17,37 @@ Implement Parties as a bounded context with:
 - **Employee**: Internal staff with position tracking
 
 ### Architecture
-```
-internal/parties/
-├── domain/
-│   ├── party.go          # Abstract base
-│   ├── customer.go       # Customer aggregate
-│   ├── supplier.go       # Supplier aggregate
-│   ├── partner.go        # Partner aggregate
-│   ├── employee.go       # Employee aggregate
-│   ├── contact_info.go   # Value object (JSONB)
-│   ├── bank_account.go   # Value object (JSONB)
-│   ├── ids.go            # Identifiers
-│   ├── events.go         # Domain events
-│   └── repository.go     # Repository interfaces
-├── infrastructure/
-│   └── persistence/
-│       ├── models.go             # DTO mapping
-│       ├── customer_repository.go
-│       ├── supplier_repository.go
-│       ├── partner_repository.go
-│       └── employee_repository.go
-├── application/
-│   ├── command/
-│   │   ├── create_customer.go
-│   │   ├── update_customer.go
-│   │   └── create_supplier.go
-│   └── query/
-│       ├── customer.go
-│       └── supplier.go
-└── ports/http/
-    ├── handler.go        # REST handlers
-    └── dto.go           # Request/response DTOs
-```
+
+- `internal/parties/`
+  - `domain/`
+    - `party.go` - Abstract base
+    - `customer.go` - Customer aggregate
+    - `supplier.go` - Supplier aggregate
+    - `partner.go` - Partner aggregate
+    - `employee.go` - Employee aggregate
+    - `contact_info.go` - Value object (JSONB)
+    - `bank_account.go` - Value object (JSONB)
+    - `ids.go` - Identifiers
+    - `events.go` - Domain events
+    - `repository.go` - Repository interfaces
+  - `infrastructure/`
+    - `persistence/`
+      - `models.go` - DTO mapping
+      - `customer_repository.go`
+      - `supplier_repository.go`
+      - `partner_repository.go`
+      - `employee_repository.go`
+  - `application/`
+    - `command/`
+      - `create_customer.go`
+      - `update_customer.go`
+      - `create_supplier.go`
+    - `query/`
+      - `customer.go`
+      - `supplier.go`
+  - `ports/http/`
+    - `handler.go` - REST handlers
+    - `dto.go` - Request/response DTOs
 
 ### Database Schema
 ```sql

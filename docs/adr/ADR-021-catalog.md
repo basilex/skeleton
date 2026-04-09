@@ -16,31 +16,30 @@ Implement Catalog as a bounded context with LTREE for category hierarchy and JSO
 - **ItemStatus**: Active, Inactive, Discontinued
 
 ### Architecture
-```
-internal/catalog/
-├── domain/
-│   ├── item.go              # Item aggregate
-│   ├── category.go           # Category aggregate
-│   ├── item_status.go        # Status enum
-│   ├── ids.go                # Identifiers
-│   ├── errors.go             # Domain errors
-│   └── repository.go         # Repository interfaces
-├── infrastructure/
-│   └── persistence/
-│       ├── models.go
-│       ├── item_repository.go
-│       └── category_repository.go
-├── application/
-│   ├── command/
-│   │   ├── create_item.go
-│   │   └── update_item.go
-│   └── query/
-│       ├── item.go
-│       └── list_items.go
-└── ports/http/
-    ├── handler.go
-    └── dto.go
-```
+
+- `internal/catalog/`
+  - `domain/`
+    - `item.go` - Item aggregate
+    - `category.go` - Category aggregate
+    - `item_status.go` - Status enum
+    - `ids.go` - Identifiers
+    - `errors.go` - Domain errors
+    - `repository.go` - Repository interfaces
+  - `infrastructure/`
+    - `persistence/`
+      - `models.go`
+      - `item_repository.go`
+      - `category_repository.go`
+  - `application/`
+    - `command/`
+      - `create_item.go`
+      - `update_item.go`
+    - `query/`
+      - `item.go`
+      - `list_items.go`
+  - `ports/http/`
+    - `handler.go`
+    - `dto.go`
 
 ### Database Schema
 

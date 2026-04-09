@@ -16,31 +16,30 @@ Implement Accounting as a bounded context with double-entry transactions.
 - **AccountType**: Asset, Liability, Equity, Revenue, Expense
 
 ### Architecture
-```
-internal/accounting/
-├── domain/
-│   ├── account.go          # Account aggregate
-│   ├── transaction.go       # Transaction aggregate
-│   ├── money.go              # Money value object
-│   ├── ids.go                # Identifiers
-│   ├── events.go             # Domain events
-│   └── repository.go         # Repository interfaces
-├── infrastructure/
-│   └── persistence/
-│       ├── models.go
-│       ├── account_repository.go
-│       └── transaction_repository.go
-├── application/
-│   ├── command/
-│   │   ├── create_account.go
-│   │   └── record_transaction.go
-│   └── query/
-│       ├── account.go
-│       └── list_accounts.go
-└── ports/http/
-    ├── handler.go
-    └── dto.go
-```
+
+- `internal/accounting/`
+  - `domain/`
+    - `account.go` - Account aggregate
+    - `transaction.go` - Transaction aggregate
+    - `money.go` - Money value object
+    - `ids.go` - Identifiers
+    - `events.go` - Domain events
+    - `repository.go` - Repository interfaces
+  - `infrastructure/`
+    - `persistence/`
+      - `models.go`
+      - `account_repository.go`
+      - `transaction_repository.go`
+  - `application/`
+    - `command/`
+      - `create_account.go`
+      - `record_transaction.go`
+    - `query/`
+      - `account.go`
+      - `list_accounts.go`
+  - `ports/http/`
+    - `handler.go`
+    - `dto.go`
 
 ### Database Schema
 

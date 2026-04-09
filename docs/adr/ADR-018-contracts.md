@@ -17,30 +17,29 @@ Implement Contracts as a bounded context with DATERANGE for validity periods.
 - **ContractStatus**: Draft, active, suspended, terminated
 
 ### Architecture
-```
-internal/contracts/
-├── domain/
-│   ├── contract.go          # Contract aggregate
-│   ├── payment_terms.go     # Value object
-│   ├── delivery_terms.go    # Value object
-│   ├── ids.go                # Identifiers
-│   ├── events.go             # Domain events
-│   └── repository.go         # Repository interfaces
-├── infrastructure/
-│   └── persistence/
-│       ├── models.go
-│       └── contract_repository.go
-├── application/
-│   ├── command/
-│   │   ├── create_contract.go
-│   │   ├── activate_contract.go
-│   │   └── terminate_contract.go
-│   └── query/
-│       └── contract.go
-└── ports/http/
-    ├── handler.go
-    └── dto.go
-```
+
+- `internal/contracts/`
+  - `domain/`
+    - `contract.go` - Contract aggregate
+    - `payment_terms.go` - Value object
+    - `delivery_terms.go` - Value object
+    - `ids.go` - Identifiers
+    - `events.go` - Domain events
+    - `repository.go` - Repository interfaces
+  - `infrastructure/`
+    - `persistence/`
+      - `models.go`
+      - `contract_repository.go`
+  - `application/`
+    - `command/`
+      - `create_contract.go`
+      - `activate_contract.go`
+      - `terminate_contract.go`
+    - `query/`
+      - `contract.go`
+  - `ports/http/`
+    - `handler.go`
+    - `dto.go`
 
 ### Database Schema
 ```sql

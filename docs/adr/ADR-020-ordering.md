@@ -16,31 +16,30 @@ Implement Ordering as a bounded context with order state machine and order lines
 - **OrderStatus**: Draft, Pending, Confirmed, Processing, Completed, Cancelled, Refunded
 
 ### Architecture
-```
-internal/ordering/
-├── domain/
-│   ├── order.go            # Order aggregate with lines
-│   ├── order_status.go     # Status enum
-│   ├── ids.go               # Identifiers
-│   ├── errors.go            # Domain errors
-│   ├── events.go            # Domain events
-│   └── repository.go         # Repository interfaces
-├── infrastructure/
-│   └── persistence/
-│       ├── models.go
-│       └── order_repository.go
-├── application/
-│   ├── command/
-│   │   ├── create_order.go
-│   │   ├── add_order_line.go
-│   │   └── update_order_status.go
-│   └── query/
-│       ├── order.go
-│       └── list_orders.go
-└── ports/http/
-    ├── handler.go
-    └── dto.go
-```
+
+- `internal/ordering/`
+  - `domain/`
+    - `order.go` - Order aggregate with lines
+    - `order_status.go` - Status enum
+    - `ids.go` - Identifiers
+    - `errors.go` - Domain errors
+    - `events.go` - Domain events
+    - `repository.go` - Repository interfaces
+  - `infrastructure/`
+    - `persistence/`
+      - `models.go`
+      - `order_repository.go`
+  - `application/`
+    - `command/`
+      - `create_order.go`
+      - `add_order_line.go`
+      - `update_order_status.go`
+    - `query/`
+      - `order.go`
+      - `list_orders.go`
+  - `ports/http/`
+    - `handler.go`
+    - `dto.go`
 
 ### Database Schema
 
