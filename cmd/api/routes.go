@@ -105,6 +105,8 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 		registerAuthRoutes(v1, di)
 		registerUserRoutes(v1, di)
 		registerRoleRoutes(v1, di)
+		registerSessionRoutes(v1, di)
+		registerPreferencesRoutes(v1, di)
 		registerAuditRoutes(v1, di)
 		registerNotificationRoutes(v1, di)
 		registerPartiesRoutes(v1, di)
@@ -209,6 +211,44 @@ func registerUserRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 func registerRoleRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 	v1.POST("/users/:id/roles", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("roles:manage"), di.IdentityHandler.AssignRole)
 	v1.DELETE("/users/:id/roles/:rid", di.AuthMiddleware.Authenticate(), di.RBACMiddleware.Require("roles:manage"), di.IdentityHandler.RevokeRole)
+}
+
+// registerSessionRoutes registers session management endpoints.
+// All session routes require authentication.
+//
+// Endpoints:
+//   - GET /api/v1/sessions/:id - Get session by ID (requires authentication)
+//   - POST /api/v1/sessions/:id/refresh - Refresh session (requires authentication)
+//   - DELETE /api/v1/sessions/:id - Revoke session (requires authentication)
+//   - GET /api/v1/users/:id/sessions - List user sessions (requires authentication)
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with session handler and auth middlewares
+func registerSessionRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	v1.POST("/sessions", di.AuthMiddleware.Authenticate(), di.SessionHandler.CreateSession)
+	v1.POST("/sessions/:id/refresh", di.AuthMiddleware.Authenticate(), di.SessionHandler.RefreshSession)
+	v1.DELETE("/sessions/:id", di.AuthMiddleware.Authenticate(), di.SessionHandler.RevokeSession)
+	v1.GET("/users/:id/sessions", di.AuthMiddleware.Authenticate(), di.SessionHandler.GetUserSessions)
+}
+
+// registerPreferencesRoutes registers user preferences endpoints.
+// All preferences routes require authentication.
+//
+// Endpoints:
+//   - GET /api/v1/users/:id/preferences - Get user preferences (requires authentication)
+//   - PUT /api/v1/users/:id/preferences - Update preferences (requires authentication)
+//   - PUT /api/v1/users/:id/preferences/theme - Set theme (requires authentication)
+//   - PUT /api/v1/users/:id/preferences/language - Set language (requires authentication)
+//
+// Parameters:
+//   - v1: Router group for /api/v1 endpoints
+//   - di: Dependency container with preferences handler and auth middlewares
+func registerPreferencesRoutes(v1 *gin.RouterGroup, di *Dependencies) {
+	v1.GET("/users/:id/preferences", di.AuthMiddleware.Authenticate(), di.PreferencesHandler.GetPreferences)
+	v1.PUT("/users/:id/preferences", di.AuthMiddleware.Authenticate(), di.PreferencesHandler.UpdatePreferences)
+	v1.PUT("/users/:id/preferences/theme", di.AuthMiddleware.Authenticate(), di.PreferencesHandler.SetTheme)
+	v1.PUT("/users/:id/preferences/language", di.AuthMiddleware.Authenticate(), di.PreferencesHandler.SetLanguage)
 }
 
 // registerStatusRoutes registers system status and monitoring endpoints.
