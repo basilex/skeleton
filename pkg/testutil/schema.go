@@ -195,4 +195,51 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
 CREATE INDEX IF NOT EXISTS idx_audit_records_user_id ON audit_records(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_records_created_at ON audit_records(created_at);
+
+-- Sessions table
+CREATE TABLE IF NOT EXISTS sessions (
+	id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	status TEXT NOT NULL DEFAULT 'active',
+	device_type TEXT,
+	os TEXT,
+	browser TEXT,
+	device_name TEXT,
+	user_agent TEXT,
+	ip_address TEXT,
+	expires_at TIMESTAMPTZ NOT NULL,
+	last_activity TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	revoked_at TIMESTAMPTZ,
+	revoked_reason TEXT
+);
+
+-- User preferences table
+CREATE TABLE IF NOT EXISTS user_preferences (
+	id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+	theme TEXT NOT NULL DEFAULT 'auto',
+	language TEXT NOT NULL DEFAULT 'en',
+	date_format TEXT NOT NULL DEFAULT 'yyyy-mm-dd',
+	timezone TEXT NOT NULL DEFAULT 'UTC',
+	email_notifications BOOLEAN NOT NULL DEFAULT true,
+	sms_notifications BOOLEAN NOT NULL DEFAULT false,
+	push_notifications BOOLEAN NOT NULL DEFAULT true,
+	in_app_notifications BOOLEAN NOT NULL DEFAULT true,
+	marketing_emails BOOLEAN NOT NULL DEFAULT false,
+	weekly_digest BOOLEAN NOT NULL DEFAULT true,
+	quiet_hours_start INTEGER,
+	quiet_hours_end INTEGER,
+	notifications_timezone TEXT DEFAULT 'UTC',
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Indexes for sessions
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+-- Index for user_preferences
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id);
 `
