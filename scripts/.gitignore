@@ -1,5 +1,13 @@
+<<<<<<< Updated upstream
 scripts/seed/seed
 
 # Script binaries
 scripts/migrate/migrate
 scripts/seed/seed
+=======
+# Script binaries
+migrate/migrate
+seed/seed
+*.exe
+*.test
+>>>>>>> Stashed changes
