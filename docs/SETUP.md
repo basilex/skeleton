@@ -1,475 +1,469 @@
 # Setup Guide
 
-Complete guide to setting up and running the Skeleton Business Engine locally.
+> **Installation and Configuration Guide for Skeleton CRM**
+
+## 📋 Prerequisites
+
+### Required
+
+- **Go** 1.25+ - [Download Go](https://golang.org/dl/)
+- **Node.js** 20+ (24 recommended) - [Download Node.js](https://nodejs.org/)
+- **PostgreSQL** 16+ - [Download PostgreSQL](https://www.postgresql.org/download/)
+- **Redis** 7+ - [Download Redis](https://redis.io/download)
+
+### Optional (Recommended)
+
+- **Docker** & **Docker Compose** - [Install Docker](https://docs.docker.com/get-docker/)
+- **Make** - Build automation (pre-installed on macOS/Linux)
+- **Air** - Go hot reload - `go install github.com/air-verse/air@latest`
 
 ---
 
-## Table of Contents
+## 🚀 Quick Start
 
-1. [Prerequisites](#prerequisites)
-2. [Quick Start](#quick-start)
-3. [Local Development Setup](#local-development-setup)
-4. [Docker Setup](#docker-setup)
-5. [Database Setup](#database-setup)
-6. [Configuration](#configuration)
-7. [IDE Setup](#ide-setup)
-8. [Troubleshooting](#troubleshooting)
+### Option 1: Docker (Recommended)
 
----
+```bash
+# Clone repository
+git clone https://github.com/basilex/skeleton.git
+cd skeleton
 
-## Prerequisites
+# Start all services (PostgreSQL + Redis + Backend + Frontend)
+make dev
 
-### Required Software
+# Wait for services to start...
+# PostgreSQL: localhost:5432
+# Redis: localhost:6379
+# Backend API: localhost:8080
+# Frontend: localhost:3000
 
-| Software | Version | Purpose |
-|----------|---------|---------|
-| Go | 1.25+ | Programming language |
-| PostgreSQL | 16+ | Database |
-| Docker | 24+ | Containerization (optional) |
-| Docker Compose | 2+ | Multi-container orchestration |
-| Make | 3.x | Build automation |
-| Git | 2.x | Version control |
+# In a new terminal, run migrations
+make db-migrate
 
-### Operating Systems
+# (Optional) Seed database with sample data
+make db-seed
 
-- macOS 12+
-- Ubuntu 20.04+
-- Windows 10+ (with WSL2)
+# Default credentials after seed:
+# Email: admin@skeleton.local
+# Password: Admin1234!
+```
 
----
-
-## Quick Start
-
-### Minimal Setup (5 minutes)
+### Option 2: Manual Setup
 
 ```bash
 # 1. Clone repository
-git clone <repository-url>
+git clone https://github.com/basilex/skeleton.git
 cd skeleton
 
-# 2. Install Go dependencies
-make deps
+# 2. Install dependencies
+make install
 
-# 3. Setup PostgreSQL database
-createdb skeleton
-psql -d skeleton -f migrations/*.up.sql
+# 3. Start database services (PostgreSQL + Redis)
+make db-up
 
-# 4. Run the application
-make run
+# 4. Run database migrations
+make db-migrate
 
-# Server running at http://localhost:8080
-```
+# 5. (Optional) Seed sample data
+make db-seed
 
-### Docker Setup (2 minutes)
+# 6. Start backend (Terminal 1)
+make backend
 
-```bash
-# 1. Start all services
-docker-compose up -d
-
-# 2. Run migrations
-docker-compose exec api make migrate
-
-# 3. View logs
-docker-compose logs -f api
-
-# Server running at http://localhost:8080
+# 7. Start frontend (Terminal 2)
+make frontend
 ```
 
 ---
 
-## Local Development Setup
-
-### Step 1: Install Go
-
-**macOS:**
-```bash
-brew install go
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install -y golang-go
-```
-
-**Verify installation:**
-```bash
-go version  # Should show go1.25+
-```
-
-### Step 2: Install PostgreSQL
-
-**macOS:**
-```bash
-brew install postgresql@16
-brew services start postgresql@16
-```
-
-**Ubuntu:**
-```bash
-sudo apt install -y postgresql-16
-sudo systemctl start postgresql
-```
-
-**Create database:**
-```bash
-psql -U postgres -c "CREATE DATABASE skeleton;"
-psql -U postgres -c "CREATE USER skeleton WITH PASSWORD 'secret';"
-psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE skeleton TO skeleton;"
-```
-
-### Step 3: Clone and Configure
-
-```bash
-# Clone
-git clone <repository-url>
-cd skeleton
-
-# Install dependencies
-make deps
-
-# Configuration
-cp .env.example .env
-```
-
-Edit `.env`:
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=skeleton
-DB_PASSWORD=secret
-DB_NAME=skeleton
-SERVER_PORT=8080
-JWT_SECRET=your-secret-key-change-in-production
-```
-
-### Step 4: Database Setup
-
-```bash
-# Run migrations
-make migrate
-
-# Or manually
-psql -d skeleton -f migrations/001_uuid.up.sql
-psql -d skeleton -f migrations/002_audit.up.sql
-# ... continue for all migrations
-```
-
-### Step 5: Run Application
-
-```bash
-# Development mode (with hot reload)
-make dev
-
-# Production mode
-make run
-
-# Specific package
-go run ./cmd/api
-```
-
----
-
-## Docker Setup
-
-### Docker Compose Configuration
-
-`docker-compose.yml` includes:
-- API server
-- PostgreSQL database
-- Redis (optional)
-- Adminer (database UI)
-
-### Commands
-
-```bash
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f api
-
-# Stop services
-docker-compose down
-
-# Rebuild
-docker-compose build --no-cache
-
-# Access container
-docker-compose exec api sh
-```
+## ⚙️ Configuration
 
 ### Environment Variables
 
-Create `.env` file:
-```env
-# Database
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
-POSTGRES_USER=skeleton
-POSTGRES_PASSWORD=skeleton_secret
-POSTGRES_DB=skeleton
+#### Backend Configuration
 
+Create `backend/.env` (or use system environment variables):
+
+```bash
 # Application
-APP_ENV=development
-APP_PORT=8080
-APP_SECRET=change-me-in-production
+APP_ENV=development              # development | staging | production
+APP_PORT=8080                    # HTTP server port
+
+# Database
+DATABASE_URL=postgres://skeleton:skeleton@localhost:5432/skeleton?sslmode=disable
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Session
+SESSION_SECRET=your-secret-key-change-in-production
+SESSION_TTL=168h                 # 7 days
 
 # JWT
-JWT_SECRET=your-jwt-secret
-JWT_EXPIRY=24h
+JWT_SECRET=your-jwt-secret-key-change-in-production
+JWT_ACCESS_TTL=15m               # 15 minutes
+JWT_REFRESH_TTL=168h             # 7 days
+
+# CORS (optional)
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080
+
+# Logging
+LOG_LEVEL=debug                  # debug | info | warn | error
+
+# Email (optional - for notifications)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=your-email@example.com
+SMTP_PASSWORD=your-password
+SMTP_FROM=noreply@example.com
+
+# Storage (optional - for file uploads)
+STORAGE_TYPE=local               # local | s3 | minio
+STORAGE_PATH=./uploads           # for local storage
+# AWS_S3_BUCKET=your-bucket      # for S3
+# AWS_S3_REGION=us-east-1
+# AWS_ACCESS_KEY_ID=your-key
+# AWS_SECRET_ACCESS_KEY=your-secret
 ```
 
----
+#### Frontend Configuration
 
-## Database Setup
-
-### Migrations
-
-Migrations are located in `migrations/` directory:
-
-```
-migrations/
-├── 001_uuid.up.sql           # UUID extension
-├── 002_audit.up.sql          # Audit tables
-├── 003_identity.up.sql       # Users, roles, sessions
-├── ...
-└── 023_invoicing.up.sql     # Invoice tables
-```
-
-### Run Migrations
+Create `frontend/.env.local`:
 
 ```bash
-# All migrations
-make migrate
+# API Endpoint
+NEXT_PUBLIC_API_URL=http://localhost:8080
 
-# Or use golang-migrate
-migrate -path migrations -database "postgres://user:pass@localhost:5432/skeleton?sslmode=disable" up
+# Application
+NEXT_PUBLIC_APP_NAME=Skeleton CRM
+
+# Environment
+NODE_ENV=development              # development | production
 ```
 
-### Create New Migration
+### Production Environment
 
 ```bash
-migrate create -ext sql -dir migrations -seq migration_name
+# Backend
+APP_ENV=production
+DATABASE_URL=postgres://user:password@prod-db:5432/skeleton?sslmode=require
+REDIS_URL=redis://prod-redis:6379
+SESSION_SECRET=complex-random-secret-min-32-chars
+JWT_SECRET=complex-random-secret-min-32-chars
+LOG_LEVEL=info
+
+# Frontend
+NEXT_PUBLIC_API_URL=https://api.skeleton.com
+NODE_ENV=production
 ```
 
-### Migration Best Practices
+---
 
-1. **Always use BIGINT for money**:
-   ```sql
-   total BIGINT NOT NULL DEFAULT 0,  -- Stores cents
-   ```
+## 🗄️ Database Setup
 
-2. **Use UUIDv7 for primary keys**:
-   ```sql
-   id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
-   ```
+### Initial Setup
 
-3. **Add timestamps**:
-   ```sql
-   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-   ```
+```bash
+# Create database (if not using Docker)
+createdb skeleton
 
-4. **Add audit trigger**:
-   ```sql
-   CREATE TRIGGER table_updated_at
-       BEFORE UPDATE ON table
-       FOR EACH ROW
-       EXECUTE FUNCTION update_updated_at();
-   ```
+# Or with psql
+psql -U postgres -c "CREATE DATABASE skeleton;"
+
+# Run migrations
+make db-migrate
+
+# Seed sample data
+make db-seed
+```
+
+### Manual Migration
+
+```bash
+# Using Makefile
+make db-migrate
+
+# Or directly
+cd backend
+go run ./cmd/api migrate
+
+# Migration files are in backend/migrations/
+# Format: 001_description.up.sql / 001_description.down.sql
+```
+
+### Reset Database
+
+```bash
+# Drop and recreate
+make db-reset
+
+# Or manually
+psql -U postgres -c "DROP DATABASE IF EXISTS skeleton;"
+psql -U postgres -c "CREATE DATABASE skeleton;"
+make db-migrate
+make db-seed
+```
 
 ---
 
-## Configuration
+## 🐳 Docker Configuration
 
-### Environment Variables
+### docker-compose.yml
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `APP_ENV` | Environment (development/production) | development |
-| `APP_PORT` | Server port | 8080 |
-| `DB_HOST` | Database host | localhost |
-| `DB_PORT` | Database port | 5432 |
-| `DB_USER` | Database user | skeleton |
-| `DB_PASSWORD` | Database password | - |
-| `DB_NAME` | Database name | skeleton |
-| `JWT_SECRET` | JWT signing secret | - |
-| `JWT_EXPIRY` | Token expiry duration | 24h |
+Located at project root:
 
-### Configuration Files
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: skeleton
+      POSTGRES_USER: skeleton
+      POSTGRES_PASSWORD: skeleton
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
 
-- `.env` - Environment variables (not in git)
-- `.env.example` - Template file
-- `config/config.go` - Configuration struct
-- `cmd/api/main.go` - Application entry point
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  backend:
+    build: ./backend
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: skeleton
+      DB_PASSWORD: skeleton
+      DB_NAME: skeleton
+      REDIS_URL: redis://redis:6379
+      PORT: 8080
+    ports:
+      - "8080:8080"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8080
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
+  redis-data:
+```
+
+### Running Specific Services
+
+```bash
+# Database only
+docker-compose up -d postgres redis
+
+# Backend only
+docker-compose up -d backend
+
+# All services
+docker-compose up -d
+```
 
 ---
 
-## IDE Setup
+## 🔧 Development Tools
 
-### VS Code
+### Air (Hot Reload for Go)
+
+```bash
+# Install
+go install github.com/air-verse/air@latest
+
+# Run backend with hot reload
+cd backend
+air
+
+# Or using Makefile
+make backend-watch
+```
+
+### Database Tools
+
+```bash
+# PostgreSQL CLI
+make db-shell
+
+# Or directly
+docker-compose exec postgres psql -U skeleton -d skeleton
+
+# Redis CLI
+docker-compose exec redis redis-cli
+```
+
+### Useful Commands
+
+```bash
+# View logs
+make dev-logs                  # All services
+docker-compose logs -f backend # Backend only
+docker-compose logs -f frontend # Frontend only
+
+# Check service health
+docker-compose ps
+
+# Restart services
+docker-compose restart backend
+
+# Clean up
+docker-compose down -v         # Stop and remove volumes
+```
+
+---
+
+## 🧪 Testing
+
+### Backend Tests
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage
+make test-coverage
+
+# Run specific package
+cd backend && go test ./internal/invoicing/...
+
+# Run integration tests
+make test-integration
+```
+
+### Frontend Tests
+
+```bash
+# Run tests
+cd frontend && npm test
+
+# Run e2e tests
+cd frontend && npm run test:e2e
+
+# Type check
+cd frontend && npx tsc --noEmit
+```
+
+---
+
+## 📦 IDE Setup
+
+### VSCode (Recommended)
 
 Install extensions:
-```
-ms-vscode.go
-ms-azuretools.vscode-docker
-ckolkman.vscode-postgres
-```
 
-Recommended `settings.json`:
 ```json
 {
-    "go.useLanguageServer": true,
-    "go.lintTool": "golangci-lint",
-    "go.lintOnSave": "package",
-    "go.testFlags": ["-v"],
-    "go.coverOnSave": true
+  "recommendations": [
+    "golang.go",                 // Go language support
+    "ms-vscode.makefile-tools",   // Makefile support
+    "dbaeumer.vscode-eslint",     // ESLint
+    "esbenp.prettier-vscode",     // Prettier
+    "bradlc.vscode-tailwindcss",  // Tailwind CSS
+    "ms-azuretools.vscode-docker", // Docker
+    "cweijan.vscode-database-client", // Database client
+    "redhat.vscode-yaml"          // YAML support
+  ]
 }
 ```
 
-Launch configuration `.vscode/launch.json`:
-```json
-{
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Launch API",
-            "type": "go",
-            "request": "launch",
-            "mode": "auto",
-            "program": "${workspaceFolder}/cmd/api",
-            "envFile": "${workspaceFolder}/.env"
-        }
-    ]
-}
-```
+### GoLand (Alternative)
 
-### GoLand
-
-1. Open project
-2. Enable Go modules support
-3. Set GOROOT to Go installation
-4. Configure run/debug configuration for `cmd/api`
+1. Open project root
+2. Enable Go module support
+3. Configure Go SDK (1.25+)
+4. Enable database tools for PostgreSQL
 
 ---
 
-## Troubleshooting
+## 🚨 Troubleshooting
 
-### Common Issues
+### Port Already in Use
 
-#### 1. Database Connection Failed
-
-**Error**: `connection refused`
-
-**Solution**:
 ```bash
-# Check PostgreSQL is running
-pg_isready
-
-# Start PostgreSQL
-brew services start postgresql@16  # macOS
-sudo systemctl start postgresql      # Ubuntu
-
-# Verify connection
-psql -h localhost -U skeleton -d skeleton
-```
-
-#### 2. Port Already in Use
-
-**Error**: `bind: address already in use`
-
-**Solution**:
-```bash
-# Find process using port 8080
-lsof -i :8080
+# Find process using port
+lsof -i :8080                  # Backend
+lsof -i :3000                  # Frontend
+lsof -i :5432                  # PostgreSQL
+lsof -i :6379                  # Redis
 
 # Kill process
 kill -9 <PID>
 
-# Or change port in .env
-APP_PORT=8081
+# Or change port in config
+APP_PORT=8081 make backend
 ```
 
-#### 3. Migration Failed
+### Database Connection Failed
 
-**Error**: `dirty database version`
-
-**Solution**:
 ```bash
-# Force version
-migrate -path migrations -database "postgres://..." force <version>
+# Check PostgreSQL is running
+docker-compose ps postgres
 
-# Or reset database
-dropdb skeleton
-createdb skeleton
-make migrate
+# Check connection
+psql -h localhost -U skeleton -d skeleton -c "SELECT 1;"
+
+# Reset database
+make db-reset
+make db-migrate
+make db-seed
 ```
 
-#### 4. Go Dependency Issues
+### Frontend Build Errors
 
-**Error**: `package not found`
-
-**Solution**:
 ```bash
-# Clean go module cache
+# Clear Next.js cache
+cd frontend
+rm -rf .next node_modules
+npm install
+npm run build
+
+# Check Node version
+node --version  # Should be 20+
+```
+
+### Go Module Errors
+
+```bash
+# Clean Go cache
+cd backend
 go clean -modcache
-
-# Re-download dependencies
-go mod download
 go mod tidy
-```
-
-#### 5. Docker Issues
-
-**Error**: `no space left on device`
-
-**Solution**:
-```bash
-# Clean Docker
-docker system prune -a
-docker volume prune
-
-# Rebuild
-docker-compose down
-docker-compose build --no-cache
-docker-compose up -d
+go mod download
 ```
 
 ---
 
-## Make Commands
+## 📚 Next Steps
 
-```bash
-deps              # Install dependencies
-build             # Build binary
-run               # Run application
-dev               # Run with hot reload
-test              # Run tests
-test-coverage     # Run tests with coverage
-migrate           # Run database migrations
-db-reset          # Reset database (drop and recreate)
-db-setup          # Setup database from scratch
-clean             # Clean generated files
-help              # Show all commands
-```
+After setup:
+
+1. **Read Architecture**: [docs/ARCHITECTURE.md](ARCHITECTURE.md)
+2. **Development Workflow**: [docs/DEVELOPMENT.md](DEVELOPMENT.md)
+3. **API Reference**: [docs/API.md](API.md)
+4. **Database Schema**: [docs/DATABASE.md](DATABASE.md)
 
 ---
 
-## Next Steps
+## 🆘 Getting Help
 
-After setup, proceed to:
-
-1. **[Architecture Overview](ARCHITECTURE.md)** - Understand the system architecture
-2. **[Development Guide](DEVELOPMENT.md)** - Learn development workflow
-3. **[Testing Strategy](TESTING.md)** - Understand testing approach
-4. **[Main README](../README.md)** - Review project features
+- **Documentation**: [docs/](../docs/)
+- **Issues**: [GitHub Issues](https://github.com/basilex/skeleton/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/basilex/skeleton/discussions)
 
 ---
 
-## Getting Help
-
-- **Documentation**: Check other docs in this directory
-- **Issues**: Open an issue in the repository
-- **Code**: Review inline comments and ADRs
-- **Examples**: See `internal/` for bounded context implementations
+**Setup complete! Run `make dev` to start developing.**
