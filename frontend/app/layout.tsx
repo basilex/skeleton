@@ -1,15 +1,16 @@
 import type { Metadata } from "next"
 import { Inter, Geist } from "next/font/google"
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
+import { AuthProvider } from "@/lib/auth"
+import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Skeleton Business Engine",
-  description: "Production-ready business engine with DDD",
+  title: "Skeleton CRM",
+  description: "Enterprise-grade CRM with DDD architecture",
 }
 
 export default function RootLayout({
@@ -19,7 +20,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
+      </body>
     </html>
   )
 }

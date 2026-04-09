@@ -1,10 +1,26 @@
-export default function Home() {
+'use client'
+
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth'
+import { useEffect } from 'react'
+
+export default function HomePage() {
+  const { isAuthenticated, isLoading } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (isAuthenticated) {
+        router.push('/dashboard')
+      } else {
+        router.push('/login')
+      }
+    }
+  }, [isAuthenticated, isLoading, router])
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold mb-4">Skeleton Business Engine</h1>
-      <p className="text-lg text-gray-600">
-        Next.js 16.2.3 + Go Backend + PostgreSQL
-      </p>
-    </main>
+    <div className="flex min-h-screen items-center justify-center">
+      <p className="text-sm text-muted-foreground">Loading...</p>
+    </div>
   )
 }
