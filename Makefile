@@ -485,10 +485,12 @@ analyze-performance: ## Analyze and optimize database performance
 .PHONY: swagger swagger-serve
 
 swagger: ## Generate OpenAPI/Swagger documentation
-	swag init -g cmd/api/main.go -o docs/api --parseDependency --parseInternal
+	swag init -g cmd/api/main.go -o docs/swagger
 
 swagger-serve: swagger ## Generate and serve Swagger UI
-	swag serve -d docs/api
+	@echo "Swagger UI available at: http://localhost:8080/swagger/index.html"
+	@echo "Or start services with: docker-compose up -d"
+	@echo "Access Swagger UI at: http://localhost:8081"
 
 # ==============================================================================
 # SETUP
