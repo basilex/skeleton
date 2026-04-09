@@ -8,16 +8,15 @@
 
 **PostgreSQL 16 + pgx v5 + scany v2 + squirrel** is the definitive database stack.
 
-```
-PostgreSQL 16
-    └── pgx/v5 (pure driver, zero reflection)
-        └── pgxpool (connection pooling, MANDATORY)
-            ├── scany v2 (struct scanning, eliminates boilerplate)
-            ├── squirrel (type-safe dynamic queries)
-            ├── pgx.NamedArgs (complex static queries, 5+ parameters)
-            ├── pgx.Batch (parallel independent queries)
-            └── pgx.CopyFrom (bulk inserts, 1000+ rows)
-```
+**Database Stack Hierarchy:**
+- PostgreSQL 16
+  - pgx/v5 (pure driver, zero reflection)
+    - pgxpool (connection pooling, MANDATORY)
+      - scany v2 (struct scanning, eliminates boilerplate)
+      - squirrel (type-safe dynamic queries)
+      - pgx.NamedArgs (complex static queries, 5+ parameters)
+      - pgx.Batch (parallel independent queries)
+      - pgx.CopyFrom (bulk inserts, 1000+ rows)
 
 ## What We Use
 

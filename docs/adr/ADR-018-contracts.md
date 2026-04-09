@@ -140,11 +140,23 @@ type PaymentTerms struct {
 ```
 
 #### 3. Contract State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Active: Activate
+    Active --> Suspended: Suspend
+    Suspended --> Active: Resume
+    Active --> Terminated: Terminate
+    Suspended --> Terminated: Terminate
+    Draft --> Terminated: Terminate
+    Terminated --> [*]
 ```
-Draft → Active → Suspended → Active
-                ↓
-            Terminated
-```
+
+**State Transitions:**
+- Draft → Active
+- Active ↔ Suspended
+- Any state → Terminated (irreversible)
 
 ```go
 // State transitions

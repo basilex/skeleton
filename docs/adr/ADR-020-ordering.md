@@ -127,25 +127,25 @@ CREATE TABLE order_lines (
 ### Key Design Decisions
 
 #### 1. Order State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Draft
+    Draft --> Pending: Confirm
+    Pending --> Processing: Process
+    Processing --> Completed: Complete
+    Draft --> Cancelled: Cancel
+    Pending --> Cancelled: Cancel
+    Processing --> Cancelled: Cancel
+    Completed --> [*]
+    Cancelled --> [*]
 ```
-            ┌──────┐
-            │Draft │
-            └──┬───┘
-               │ Confirm
-            ┌──▼───┐
-            │Pending│
-            └──┬───┘
-               │ Process
-            ┌──▼──────┐
-            │Processing│
-            └──┬──────┘
-               │ Complete
-            ┌──▼──────┐
-            │Completed│
-            └────────┘
-            
-            Any ──Cancel──► Cancelled
-```
+
+**State Transitions:**
+- Draft → Pending (Confirm)
+- Pending → Processing (Process)
+- Processing → Completed (Complete)
+- Any state → Cancelled (Cancel)
 
 ```go
 func (o *Order) Confirm() error {

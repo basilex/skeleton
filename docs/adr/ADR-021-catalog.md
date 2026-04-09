@@ -193,16 +193,19 @@ CREATE INDEX idx_items_attributes ON catalog_items USING GIN (attributes);
 ```
 
 #### 3. Item State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Inactive: Deactivate
+    Inactive --> Active: Activate
+    Active --> Discontinued: Discontinue
+    Discontinued --> [*]
 ```
-Active ──Deactivate──► Inactive
-   ▲                        │
-   │                        │
-   └──────Activate──────────┘
-   │
-   │ Discontinue
-   ▼
-Discontinued
-```
+
+**State Transitions:**
+- Active ↔ Inactive (Deactivate/Activate)
+- Active → Discontinued (Discontinue - irreversible)
 
 ```go
 func (i *Item) Activate() {

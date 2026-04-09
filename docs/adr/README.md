@@ -39,16 +39,15 @@ An ADR is a document that captures an important architectural decision made alon
 
 **ADR-016** defines the mandatory database stack for all repository implementations:
 
-```
-PostgreSQL 16
-    └── pgx/v5 (pure driver, zero reflection)
-        └── pgxpool (connection pooling, MANDATORY)
-            ├── scany v2 (struct scanning, eliminates boilerplate)
-            ├── squirrel (type-safe dynamic queries)
-            ├── pgx.NamedArgs (complex static queries)
-            ├── pgx.Batch (parallel queries)
-            └── pgx.CopyFrom (bulk inserts)
-```
+**Database Stack Hierarchy:**
+- PostgreSQL 16
+  - pgx/v5 (pure driver, zero reflection)
+    - pgxpool (connection pooling, MANDATORY)
+      - scany v2 (struct scanning, eliminates boilerplate)
+      - squirrel (type-safe dynamic queries)
+      - pgx.NamedArgs (complex static queries)
+      - pgx.Batch (parallel queries)
+      - pgx.CopyFrom (bulk inserts)
 
 ### What We Use
 
