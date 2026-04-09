@@ -147,6 +147,10 @@ type Dependencies struct {
 
 	// IdentityHandler handles all HTTP endpoints related to user authentication and management.
 	IdentityHandler *identityHTTP.Handler
+	// SessionHandler handles session management endpoints.
+	SessionHandler *identityHTTP.SessionHandler
+	// PreferencesHandler handles user preferences endpoints.
+	PreferencesHandler *identityHTTP.PreferencesHandler
 	// StatusHandler handles health check and build information endpoints.
 	StatusHandler *statusHTTP.Handler
 	// AuditHandler handles audit log query endpoints.
@@ -253,6 +257,8 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 	// Initialize repositories for the identity context.
 	userRepo := persistence.NewUserRepository(pool)
 	roleRepo := persistence.NewRoleRepository(pool)
+	sessionRepo := persistence.NewSessionRepository(pool)
+	identityPreferencesRepo := persistence.NewPreferencesRepository(pool)
 	// Initialize audit repository (shared across contexts for audit logging).
 	auditRepo := auditPersistence.NewAuditRepository(pool)
 
@@ -270,9 +276,24 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 	logoutHandler := identityCommand.NewLogoutUserHandler(userRepo, bus)
 	assignRoleHandler := identityCommand.NewAssignRoleHandler(userRepo, roleRepo, bus)
 	revokeRoleHandler := identityCommand.NewRevokeRoleHandler(userRepo, roleRepo, bus)
+	// Initialize session command handlers.
+	createSessionHandler := identityCommand.NewCreateSessionHandler(sessionRepo, bus)
+	refreshSessionHandler := identityCommand.NewRefreshSessionHandler(sessionRepo, bus)
+	revokeSessionHandler := identityCommand.NewRevokeSessionHandler(sessionRepo, bus)
+	revokeUserSessionsHandler := identityCommand.NewRevokeUserSessionsHandler(sessionRepo, bus)
+	_ = identityCommand.NewCleanupExpiredSessionsHandler(sessionRepo) // For background cleanup job
+	// Initialize preferences command handlers.
+	identityUpdatePrefsHandler := identityCommand.NewUpdatePreferencesHandler(identityPreferencesRepo, bus)
+	identitySetThemeHandler := identityCommand.NewSetThemeHandler(identityPreferencesRepo)
+	identitySetLanguageHandler := identityCommand.NewSetLanguageHandler(identityPreferencesRepo)
 	// Initialize query handlers for identity use cases.
 	getUserHandler := identityQuery.NewGetUserHandler(userRepo, roleRepo)
 	listUsersHandler := identityQuery.NewListUsersHandler(userRepo, roleRepo)
+	// Initialize session query handlers.
+	getSessionHandler := identityQuery.NewGetSessionHandler(sessionRepo)
+	listUserSessionsHandler := identityQuery.NewListUserSessionsHandler(sessionRepo)
+	// Initialize preferences query handlers.
+	identityGetPrefsHandler := identityQuery.NewGetPreferencesHandler(identityPreferencesRepo)
 
 	// Initialize HTTP handler for identity endpoints.
 	identityHandler := identityHTTP.NewHandler(
@@ -284,6 +305,23 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 		getUserHandler,
 		listUsersHandler,
 		sessionStore,
+	)
+
+	// Initialize HTTP handlers for session and preferences.
+	sessionHandler := identityHTTP.NewSessionHandler(
+		createSessionHandler,
+		refreshSessionHandler,
+		revokeSessionHandler,
+		revokeUserSessionsHandler,
+		getSessionHandler,
+		listUserSessionsHandler,
+	)
+
+	preferencesHandler := identityHTTP.NewPreferencesHandler(
+		identityUpdatePrefsHandler,
+		identitySetThemeHandler,
+		identitySetLanguageHandler,
+		identityGetPrefsHandler,
 	)
 
 	// Initialize authentication and RBAC middlewares for endpoint protection.
@@ -631,6 +669,8 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 		Cache:                         cacheClient,
 		RateLimiter:                   rateLimiter,
 		IdentityHandler:               identityHandler,
+		SessionHandler:                sessionHandler,
+		PreferencesHandler:            preferencesHandler,
 		AuthMiddleware:                authMiddleware,
 		RBACMiddleware:                rbacMiddleware,
 		SessionMiddleware:             sessionMiddleware,
