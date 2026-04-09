@@ -138,14 +138,15 @@ func TestSessionRepository_FindActiveByUserID(t *testing.T) {
 			_ = repo.Save(ctx, session)
 		}
 
+		// Create and immediately expire a session
 		expiredSession, _ := identityDomain.NewSession(userID,
 			identityDomain.NewDeviceInfo("Mozilla/5.0", "mobile", "iOS", "Safari", "iPhone"),
 			net.ParseIP("10.0.0.1"),
-			time.Millisecond,
+			time.Hour,
 		)
 		_ = repo.Save(ctx, expiredSession)
-
-		time.Sleep(10 * time.Millisecond)
+		expiredSession.Expire()
+		_ = repo.Save(ctx, expiredSession)
 
 		sessions, err := repo.FindActiveByUserID(ctx, userID)
 		require.NoError(t, err)
@@ -218,11 +219,11 @@ func TestSessionRepository_DeleteExpired(t *testing.T) {
 	expiredSession, _ := identityDomain.NewSession(userID,
 		identityDomain.NewDeviceInfo("Mozilla/5.0", "mobile", "iOS", "Safari", "iPhone"),
 		net.ParseIP("10.0.0.1"),
-		time.Millisecond,
+		time.Hour,
 	)
 	_ = repo.Save(ctx, expiredSession)
-
-	time.Sleep(10 * time.Millisecond)
+	expiredSession.Expire()
+	_ = repo.Save(ctx, expiredSession)
 
 	t.Run("delete expired sessions", func(t *testing.T) {
 		count, err := repo.DeleteExpired(ctx)

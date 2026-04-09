@@ -42,9 +42,10 @@ type sessionDTO struct {
 }
 
 func (r *SessionRepository) Save(ctx context.Context, session *domain.Session) error {
-	var ipAddress *net.IP
+	var ipAddressStr *string
 	if ip := session.IPAddress(); ip != nil {
-		ipAddress = &ip
+		ipStr := ip.String()
+		ipAddressStr = &ipStr
 	}
 
 	var deviceType, os, browser, deviceName, userAgent *string
@@ -73,9 +74,9 @@ func (r *SessionRepository) Save(ctx context.Context, session *domain.Session) e
 		Columns("id", "user_id", "status", "device_type", "os", "browser", "device_name",
 			"user_agent", "ip_address", "expires_at", "last_activity", "created_at",
 			"revoked_at", "revoked_reason").
-		Values(session.ID(), session.UserID(), session.Status(),
+		Values(session.ID().String(), session.UserID().String(), session.Status(),
 			deviceType, os, browser, deviceName, userAgent,
-			ipAddress, session.ExpiresAt(), session.LastActivity(), session.CreatedAt(),
+			ipAddressStr, session.ExpiresAt(), session.LastActivity(), session.CreatedAt(),
 			session.RevokedAt(), session.RevokedReason()).
 		Suffix("ON CONFLICT(id) DO UPDATE SET status = EXCLUDED.status, last_activity = EXCLUDED.last_activity, revoked_at = EXCLUDED.revoked_at, revoked_reason = EXCLUDED.revoked_reason").
 		ToSql()
@@ -146,7 +147,7 @@ func (r *SessionRepository) DeleteByUserID(ctx context.Context, userID domain.Us
 }
 
 func (r *SessionRepository) DeleteExpired(ctx context.Context) (int64, error) {
-	result, err := r.pool.Exec(ctx, "DELETE FROM sessions WHERE expires_at < NOW()")
+	result, err := r.pool.Exec(ctx, "DELETE FROM sessions WHERE status = 'expired' OR expires_at < NOW()")
 	if err != nil {
 		return 0, fmt.Errorf("delete expired sessions: %w", err)
 	}
