@@ -9,9 +9,9 @@
 ## 📊 Overall Progress
 
 **Total Tasks:** 42  
-**Completed:** 10  
+**Completed:** 11  
 **In Progress:** 0  
-**Pending:** 32
+**Pending:** 31
 
 ---
 
@@ -55,9 +55,9 @@
     - Discrepancy tracking
     - Status management
 
-- [ ] Add hierarchy management to `Account`
+- [x] Add hierarchy management to `Account`
   - File: `internal/accounting/domain/account.go` (modify)
-  - Status: ⬜ Not Started
+  - Status: ✅ Completed
   - Effort: 0.5 day
   - Requires:
     - Parent-child relationships

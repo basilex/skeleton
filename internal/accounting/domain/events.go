@@ -146,3 +146,47 @@ func (e ReconciliationCompleted) EventName() string {
 func (e ReconciliationCompleted) OccurredAt() time.Time {
 	return e.CompletedAt
 }
+
+// AccountParentChanged is published when an account's parent is changed.
+type AccountParentChanged struct {
+	AccountID   AccountID
+	OldParentID *AccountID
+	NewParentID *AccountID
+	OcurredAt   time.Time
+}
+
+func (e AccountParentChanged) EventName() string {
+	return "accounting.account_parent_changed"
+}
+
+func (e AccountParentChanged) OccurredAt() time.Time {
+	return e.OcurredAt
+}
+
+// AccountActivated is published when an account is activated.
+type AccountActivated struct {
+	AccountID AccountID
+	OcurredAt time.Time
+}
+
+func (e AccountActivated) EventName() string {
+	return "accounting.account_activated"
+}
+
+func (e AccountActivated) OccurredAt() time.Time {
+	return e.OcurredAt
+}
+
+// AccountDeactivated is published when an account is deactivated.
+type AccountDeactivated struct {
+	AccountID AccountID
+	OcurredAt time.Time
+}
+
+func (e AccountDeactivated) EventName() string {
+	return "accounting.account_deactivated"
+}
+
+func (e AccountDeactivated) OccurredAt() time.Time {
+	return e.OcurredAt
+}
