@@ -133,9 +133,9 @@ func main() {
 		URL:             cfg.Database.URL,
 		MaxConns:        int32(cfg.Database.MaxOpenConns),
 		MinConns:        int32(cfg.Database.MaxIdleConns),
-		MaxConnLifetime: 5 * time.Minute,
-		MaxConnIdleTime: 10 * time.Minute,
-		HealthCheck:     1 * time.Minute,
+		MaxConnLifetime: cfg.Database.ConnMaxLifetime,
+		MaxConnIdleTime: cfg.Database.ConnMaxIdleTime,
+		HealthCheck:     cfg.Database.HealthCheck,
 	})
 	if err != nil {
 		slog.Error("failed to connect to postgres", "error", err)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -20,11 +21,14 @@ type AppConfig struct {
 
 // DatabaseConfig holds database connection configuration settings.
 type DatabaseConfig struct {
-	Type         string // "sqlite" or "postgres"
-	Path         string // SQLite database file path (for sqlite type)
-	URL          string // Database URL (for postgres type)
-	MaxOpenConns int
-	MaxIdleConns int
+	Type            string // "sqlite" or "postgres"
+	Path            string // SQLite database file path (for sqlite type)
+	URL             string // Database URL (for postgres type)
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+	HealthCheck     time.Duration
 }
 
 // AuthConfig holds authentication and JWT configuration settings.
@@ -112,11 +116,14 @@ func Load() (*Config, error) {
 			Name: getEnv("APP_NAME", "skeleton"),
 		},
 		Database: DatabaseConfig{
-			Type:         getEnv("DATABASE_TYPE", "sqlite"),
-			Path:         getEnv("DATABASE_PATH", "./data/skeleton.db"),
-			URL:          getEnv("DATABASE_URL", ""),
-			MaxOpenConns: getEnvInt("DATABASE_MAX_OPEN_CONNS", 25),
-			MaxIdleConns: getEnvInt("DATABASE_MAX_IDLE_CONNS", 5),
+			Type:            getEnv("DATABASE_TYPE", "sqlite"),
+			Path:            getEnv("DATABASE_PATH", "./data/skeleton.db"),
+			URL:             getEnv("DATABASE_URL", ""),
+			MaxOpenConns:    getEnvInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:    getEnvInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetime: getEnvDuration("DB_CONN_MAX_LIFETIME", 1*time.Hour),
+			ConnMaxIdleTime: getEnvDuration("DB_CONN_MAX_IDLE_TIME", 30*time.Minute),
+			HealthCheck:     getEnvDuration("DB_HEALTH_CHECK", 1*time.Minute),
 		},
 		Auth: AuthConfig{
 			PrivateKeyPath:   getEnv("JWT_PRIVATE_KEY_PATH", "./keys/private.pem"),
@@ -195,4 +202,18 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return s == "true" || s == "1" || s == "yes"
+}
+
+// getEnvDuration retrieves an environment variable as a time.Duration.
+// Supports formats like "30s", "5m", "1h", "24h". Returns fallback if not set or invalid.
+func getEnvDuration(key string, fallback time.Duration) time.Duration {
+	s := getEnv(key, "")
+	if s == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return fallback
+	}
+	return d
 }
