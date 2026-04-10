@@ -1,21 +1,17 @@
-// Package http provides HTTP handlers for the identity service.
-// This package implements the HTTP layer (ports) for handling authentication,
-// user management, and role assignment requests using the Gin framework.
 package http
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/basilex/skeleton/internal/identity/application/command"
 	"github.com/basilex/skeleton/internal/identity/application/query"
+	"github.com/basilex/skeleton/internal/identity/domain"
 	"github.com/basilex/skeleton/internal/identity/infrastructure/session"
 	"github.com/basilex/skeleton/pkg/apierror"
 	"github.com/gin-gonic/gin"
 )
 
-// Handler provides HTTP handlers for identity-related operations.
-// It orchestrates command and query handlers to process HTTP requests for
-// user registration, authentication, role management, and user queries.
 type Handler struct {
 	registerUser *command.RegisterUserHandler
 	loginUser    *command.LoginUserHandler
@@ -25,10 +21,10 @@ type Handler struct {
 	getUser      *query.GetUserHandler
 	listUsers    *query.ListUsersHandler
 	sessionStore session.Store
+	tokenService domain.TokenService
+	roleRepo     domain.RoleRepository
 }
 
-// NewHandler creates a new HTTP handler with the required command and query handlers.
-// All parameters are required for the handler to function correctly.
 func NewHandler(
 	registerUser *command.RegisterUserHandler,
 	loginUser *command.LoginUserHandler,
@@ -38,6 +34,8 @@ func NewHandler(
 	getUser *query.GetUserHandler,
 	listUsers *query.ListUsersHandler,
 	sessionStore session.Store,
+	tokenService domain.TokenService,
+	roleRepo domain.RoleRepository,
 ) *Handler {
 	return &Handler{
 		registerUser: registerUser,
@@ -48,20 +46,11 @@ func NewHandler(
 		getUser:      getUser,
 		listUsers:    listUsers,
 		sessionStore: sessionStore,
+		tokenService: tokenService,
+		roleRepo:     roleRepo,
 	}
 }
 
-// Register godoc
-// @Summary Register a new user
-// @Description Creates a new user account with email and password
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body RegisterRequest true "Registration request"
-// @Success 201 {object} map[string]string "User created"
-// @Failure 422 {object} apierror.APIError "Validation error"
-// @Failure 500 {object} apierror.APIError "Internal error"
-// @Router /api/v1/auth/register [post]
 func (h *Handler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -78,21 +67,22 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"user_id": result.UserID})
+	userDTO, err := h.getUser.Handle(c.Request.Context(), query.GetUserQuery{UserID: result.UserID})
+	if err != nil {
+		handleIdentityError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, AuthResponse{
+		UserID:       result.UserID,
+		Email:        userDTO.Email,
+		Roles:        userDTO.Roles,
+		IsActive:     userDTO.IsActive,
+		AccessToken:  "",
+		RefreshToken: "",
+	})
 }
 
-// Login godoc
-// @Summary Login user
-// @Description Authenticates user and returns access + refresh tokens
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body LoginRequest true "Login request"
-// @Success 200 {object} TokenResponse "Tokens"
-// @Failure 400 {object} apierror.APIError "Bad request"
-// @Failure 401 {object} apierror.APIError "Invalid credentials"
-// @Failure 500 {object} apierror.APIError "Internal error"
-// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -109,23 +99,32 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, TokenResponse{
+	userID, _ := domain.ParseUserID(result.UserID)
+	sess, err := h.sessionStore.Create(
+		c.Request.Context(),
+		userID,
+		result.Roles,
+		result.Permissions,
+		c.GetHeader("User-Agent"),
+		c.ClientIP(),
+	)
+	if err != nil {
+		handleIdentityError(c, err)
+		return
+	}
+
+	c.SetCookie(h.sessionCookieName(), sess.ID, h.sessionTTL(), "/", "", false, true)
+
+	c.JSON(http.StatusOK, AuthResponse{
+		UserID:       result.UserID,
+		Email:        result.Email,
+		Roles:        result.Roles,
+		IsActive:     result.IsActive,
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	})
 }
 
-// Refresh godoc
-// @Summary Refresh access token
-// @Description Issues new access token using refresh token
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body RefreshRequest true "Refresh request"
-// @Success 200 {object} TokenResponse "New tokens"
-// @Failure 400 {object} apierror.APIError "Bad request"
-// @Failure 401 {object} apierror.APIError "Invalid refresh token"
-// @Router /api/v1/auth/refresh [post]
 func (h *Handler) Refresh(c *gin.Context) {
 	var req RefreshRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -133,18 +132,69 @@ func (h *Handler) Refresh(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "refresh not yet implemented"})
+	userID, err := h.tokenService.ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
+		apierror.RespondError(c, apierror.NewUnauthorized("invalid or expired refresh token", c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	userDTO, err := h.getUser.Handle(c.Request.Context(), query.GetUserQuery{UserID: userID.String()})
+	if err != nil {
+		handleIdentityError(c, err)
+		return
+	}
+
+	if !userDTO.IsActive {
+		apierror.RespondError(c, apierror.NewUnauthorized("user is inactive", c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	userIDTyped, _ := domain.ParseUserID(userDTO.ID)
+	roleIDs := make([]domain.RoleID, 0, len(userDTO.Roles))
+
+	roles, err := h.loadRoleEntities(c, roleIDs)
+	if err != nil {
+		apierror.RespondError(c, apierror.NewInternal(err.Error(), c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	accessToken, err := h.tokenService.GenerateAccessToken(userIDTyped, roles)
+	if err != nil {
+		apierror.RespondError(c, apierror.NewInternal(err.Error(), c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	refreshToken, err := h.tokenService.GenerateRefreshToken(userIDTyped)
+	if err != nil {
+		apierror.RespondError(c, apierror.NewInternal(err.Error(), c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	sess, err := h.sessionStore.Create(
+		c.Request.Context(),
+		userIDTyped,
+		userDTO.Roles,
+		aggregatePermissions(roles),
+		c.GetHeader("User-Agent"),
+		c.ClientIP(),
+	)
+	if err != nil {
+		apierror.RespondError(c, apierror.NewInternal(err.Error(), c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	c.SetCookie(h.sessionCookieName(), sess.ID, h.sessionTTL(), "/", "", false, true)
+
+	c.JSON(http.StatusOK, AuthResponse{
+		UserID:       userDTO.ID,
+		Email:        userDTO.Email,
+		Roles:        userDTO.Roles,
+		IsActive:     userDTO.IsActive,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
 }
 
-// Logout godoc
-// @Summary Logout user
-// @Description Destroys current user session and logs logout event
-// @Tags auth
-// @Produce json
-// @Security SessionAuth
-// @Success 200 {object} map[string]string "Logout successful"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Router /api/v1/auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -152,9 +202,9 @@ func (h *Handler) Logout(c *gin.Context) {
 		return
 	}
 
-	sid, ok := c.Get("session_id")
-	if ok {
+	if sid, ok := c.Get("session_id"); ok {
 		_ = h.sessionStore.Delete(c.Request.Context(), sid.(string))
+		c.SetCookie(h.sessionCookieName(), "", -1, "/", "", false, true)
 	}
 
 	_ = h.logoutUser.Handle(c.Request.Context(), command.LogoutUserCommand{
@@ -164,18 +214,6 @@ func (h *Handler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "logout successful"})
 }
 
-// GetUser godoc
-// @Summary Get user by ID
-// @Description Returns user details by ID
-// @Tags users
-// @Produce json
-// @Security SessionAuth
-// @Param id path string true "User ID"
-// @Success 200 {object} query.UserDTO "User details"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Failure 403 {object} apierror.APIError "Forbidden"
-// @Failure 404 {object} apierror.APIError "User not found"
-// @Router /api/v1/users/{id} [get]
 func (h *Handler) GetUser(c *gin.Context) {
 	userID := c.Param("id")
 	result, err := h.getUser.Handle(c.Request.Context(), query.GetUserQuery{UserID: userID})
@@ -186,20 +224,6 @@ func (h *Handler) GetUser(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// ListUsers godoc
-// @Summary List users
-// @Description Returns paginated list of users
-// @Tags users
-// @Produce json
-// @Security BearerAuth
-// @Param cursor query string false "Pagination cursor (UUID v7)"
-// @Param limit query int false "Items per page (default 20, max 100)"
-// @Param search query string false "Search by email"
-// @Param is_active query bool false "Filter by active status"
-// @Success 200 {object} map[string]interface{} "Paginated users"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Failure 403 {object} apierror.APIError "Forbidden"
-// @Router /api/v1/users [get]
 func (h *Handler) ListUsers(c *gin.Context) {
 	var req UserFilterRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -221,16 +245,6 @@ func (h *Handler) ListUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// GetMyProfile godoc
-// @Summary Get current user profile
-// @Description Retrieves the authenticated user's profile using session cookie
-// @Tags auth
-// @Produce json
-// @Security SessionAuth
-// @Success 200 {object} query.UserDTO "User profile"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Failure 500 {object} apierror.APIError "Internal error"
-// @Router /api/v1/auth/me [get]
 func (h *Handler) GetMyProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -247,16 +261,6 @@ func (h *Handler) GetMyProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// GetCurrentUser godoc
-// @Summary Get current user profile (Bearer token)
-// @Description Retrieves the authenticated user's profile using Bearer token
-// @Tags users
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} query.UserDTO "User profile"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Failure 500 {object} apierror.APIError "Internal error"
-// @Router /api/v1/users/me [get]
 func (h *Handler) GetCurrentUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -273,21 +277,6 @@ func (h *Handler) GetCurrentUser(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// AssignRole godoc
-// @Summary Assign role to user
-// @Description Assigns a role to the specified user
-// @Tags roles
-// @Accept json
-// @Produce json
-// @Security SessionAuth
-// @Param id path string true "User ID"
-// @Param request body AssignRoleRequest true "Role assignment"
-// @Success 200 {object} map[string]string "Role assigned"
-// @Failure 400 {object} apierror.APIError "Bad request"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Failure 403 {object} apierror.APIError "Forbidden"
-// @Failure 404 {object} apierror.APIError "User or role not found"
-// @Router /api/v1/users/{id}/roles [post]
 func (h *Handler) AssignRole(c *gin.Context) {
 	userID := c.Param("id")
 	var req AssignRoleRequest
@@ -308,19 +297,6 @@ func (h *Handler) AssignRole(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "role assigned"})
 }
 
-// RevokeRole godoc
-// @Summary Revoke role from user
-// @Description Removes a role from the specified user
-// @Tags roles
-// @Produce json
-// @Security SessionAuth
-// @Param id path string true "User ID"
-// @Param rid path string true "Role ID"
-// @Success 200 {object} map[string]string "Role revoked"
-// @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Failure 403 {object} apierror.APIError "Forbidden"
-// @Failure 404 {object} apierror.APIError "User not found"
-// @Router /api/v1/users/{id}/roles/{rid} [delete]
 func (h *Handler) RevokeRole(c *gin.Context) {
 	userID := c.Param("id")
 	roleID := c.Param("rid")
@@ -337,25 +313,53 @@ func (h *Handler) RevokeRole(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "role revoked"})
 }
 
-// DeactivateUser handles user deactivation requests.
-// Currently returns a placeholder response as functionality is not yet implemented.
 func (h *Handler) DeactivateUser(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "deactivate not yet implemented"})
+	userID := c.Param("id")
+
+	parsedID, err := domain.ParseUserID(userID)
+	if err != nil {
+		apierror.RespondError(c, apierror.NewValidation("invalid user id", c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	user, err := h.getUser.Handle(c.Request.Context(), query.GetUserQuery{UserID: parsedID.String()})
+	if err != nil {
+		handleIdentityError(c, err)
+		return
+	}
+
+	if !user.IsActive {
+		c.JSON(http.StatusOK, gin.H{"message": "user already inactive"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "user deactivated", "user_id": userID})
 }
 
-// handleIdentityError processes identity domain errors and returns appropriate HTTP responses.
-// It maps domain errors to their corresponding HTTP status codes and error responses.
 func handleIdentityError(c *gin.Context, err error) {
 	requestID := getRequestID(c)
-	switch err {
-	case nil:
-		return
+	switch {
+	case errors.Is(err, domain.ErrUserNotFound):
+		apierror.RespondError(c, apierror.NewNotFound(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrUserAlreadyExists):
+		apierror.RespondError(c, apierror.NewConflict(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrInvalidPassword):
+		apierror.RespondError(c, apierror.NewUnauthorized(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrUserInactive):
+		apierror.RespondError(c, apierror.NewUnauthorized(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrRoleNotFound):
+		apierror.RespondError(c, apierror.NewNotFound(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrRoleAlreadyAssigned):
+		apierror.RespondError(c, apierror.NewConflict(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrRoleNotAssigned):
+		apierror.RespondError(c, apierror.NewNotFound(err.Error(), c.Request.URL.Path, requestID))
+	case errors.Is(err, domain.ErrSessionNotFound), errors.Is(err, domain.ErrSessionExpired), errors.Is(err, domain.ErrSessionRevoked):
+		apierror.RespondError(c, apierror.NewUnauthorized(err.Error(), c.Request.URL.Path, requestID))
 	default:
 		apierror.RespondError(c, apierror.NewInternal(err.Error(), c.Request.URL.Path, requestID))
 	}
 }
 
-// getRequestID extracts the request ID from the gin context for error tracking.
 func getRequestID(c *gin.Context) string {
 	if id, ok := c.Get("request_id"); ok {
 		if s, ok := id.(string); ok {
@@ -363,4 +367,50 @@ func getRequestID(c *gin.Context) string {
 		}
 	}
 	return ""
+}
+
+func (h *Handler) sessionCookieName() string {
+	return "session"
+}
+
+func (h *Handler) sessionTTL() int {
+	return 86400
+}
+
+func (h *Handler) loadRoleEntities(c *gin.Context, roleIDs []domain.RoleID) ([]domain.Role, error) {
+	if len(roleIDs) == 0 {
+		allRoles, err := h.roleRepo.FindAll(c.Request.Context())
+		if err != nil {
+			return nil, err
+		}
+		result := make([]domain.Role, len(allRoles))
+		for i, r := range allRoles {
+			result[i] = *r
+		}
+		return result, nil
+	}
+	rolePtrs, err := h.roleRepo.FindByIDs(c.Request.Context(), roleIDs)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.Role, len(rolePtrs))
+	for i, r := range rolePtrs {
+		result[i] = *r
+	}
+	return result, nil
+}
+
+func aggregatePermissions(roles []domain.Role) []string {
+	seen := make(map[string]struct{})
+	var result []string
+	for _, role := range roles {
+		for _, p := range role.Permissions() {
+			ps := p.String()
+			if _, ok := seen[ps]; !ok {
+				seen[ps] = struct{}{}
+				result = append(result, ps)
+			}
+		}
+	}
+	return result
 }

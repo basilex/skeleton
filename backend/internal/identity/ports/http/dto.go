@@ -1,6 +1,3 @@
-// Package http provides HTTP request/response DTOs and context utilities for the identity service.
-// This package contains data transfer objects used by HTTP handlers for serialization and validation,
-// as well as context key constants for storing user information in request contexts.
 package http
 
 import (
@@ -26,11 +23,15 @@ type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required" example:"eyJhbGciOiJSUzI1NiIs..."`
 }
 
-// TokenResponse represents authentication tokens returned after successful login or refresh.
-// It contains both access and refresh tokens for continued authentication.
-type TokenResponse struct {
-	AccessToken  string `json:"access_token" example:"eyJhbGciOiJSUzI1NiIs..."`
-	RefreshToken string `json:"refresh_token" example:"019d65d6-de90-7200-b1cf-4f8745597e0a"`
+// AuthResponse represents the response after successful authentication.
+// It includes user information alongside the authentication tokens.
+type AuthResponse struct {
+	UserID       string   `json:"user_id"`
+	Email        string   `json:"email"`
+	Roles        []string `json:"roles"`
+	IsActive     bool     `json:"is_active"`
+	AccessToken  string   `json:"access_token"`
+	RefreshToken string   `json:"refresh_token"`
 }
 
 // AssignRoleRequest represents role assignment request.

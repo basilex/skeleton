@@ -42,60 +42,83 @@ type LoginUserCommand struct {
 	Password string
 }
 
-// TokenPair contains the access and refresh tokens returned after successful authentication.
-type TokenPair struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+// LoginResult contains the result of a successful login.
+// It includes the tokens and user identity information.
+type LoginResult struct {
+	UserID       string
+	Email        string
+	Roles        []string
+	Permissions  []string
+	IsActive     bool
+	AccessToken  string
+	RefreshToken string
 }
 
 // Handle executes the LoginUserCommand to authenticate a user.
 // It validates credentials, checks the user is active, loads roles,
 // generates tokens, and publishes a login event.
-func (h *LoginUserHandler) Handle(ctx context.Context, cmd LoginUserCommand) (TokenPair, error) {
+func (h *LoginUserHandler) Handle(ctx context.Context, cmd LoginUserCommand) (LoginResult, error) {
 	email, err := domain.NewEmail(cmd.Email)
 	if err != nil {
-		return TokenPair{}, fmt.Errorf("validate email: %w", err)
+		return LoginResult{}, fmt.Errorf("validate email: %w", err)
 	}
 
 	user, err := h.users.FindByEmail(ctx, email)
 	if err != nil {
 		if err == domain.ErrUserNotFound {
-			return TokenPair{}, domain.ErrInvalidPassword
+			return LoginResult{}, domain.ErrInvalidPassword
 		}
-		return TokenPair{}, fmt.Errorf("find user: %w", err)
+		return LoginResult{}, fmt.Errorf("find user: %w", err)
 	}
 
 	if !user.IsActive() {
-		return TokenPair{}, domain.ErrUserInactive
+		return LoginResult{}, domain.ErrUserInactive
 	}
 
 	if !user.CheckPassword(cmd.Password) {
-		return TokenPair{}, domain.ErrInvalidPassword
+		return LoginResult{}, domain.ErrInvalidPassword
 	}
 
 	roles, err := h.loadRoles(ctx, user.Roles())
 	if err != nil {
-		return TokenPair{}, fmt.Errorf("load roles: %w", err)
+		return LoginResult{}, fmt.Errorf("load roles: %w", err)
 	}
 
 	accessToken, err := h.tokenService.GenerateAccessToken(user.ID(), roles)
 	if err != nil {
-		return TokenPair{}, fmt.Errorf("generate access token: %w", err)
+		return LoginResult{}, fmt.Errorf("generate access token: %w", err)
 	}
 
-	refreshToken, err := h.tokenService.GenerateRefreshToken()
+	refreshToken, err := h.tokenService.GenerateRefreshToken(user.ID())
 	if err != nil {
-		return TokenPair{}, fmt.Errorf("generate refresh token: %w", err)
+		return LoginResult{}, fmt.Errorf("generate refresh token: %w", err)
+	}
+
+	roleNames := make([]string, len(roles))
+	for i, r := range roles {
+		roleNames[i] = r.Name()
+	}
+
+	permissions := make([]string, 0)
+	for _, role := range roles {
+		for _, p := range role.Permissions() {
+			permissions = append(permissions, p.String())
+		}
 	}
 
 	if err := h.bus.Publish(ctx, domain.UserLoggedIn{
 		UserID:    user.ID(),
 		OcurredAt: time.Now().UTC(),
 	}); err != nil {
-		return TokenPair{}, fmt.Errorf("publish login event: %w", err)
+		return LoginResult{}, fmt.Errorf("publish login event: %w", err)
 	}
 
-	return TokenPair{
+	return LoginResult{
+		UserID:       user.ID().String(),
+		Email:        user.Email().String(),
+		Roles:        roleNames,
+		Permissions:  permissions,
+		IsActive:     user.IsActive(),
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil

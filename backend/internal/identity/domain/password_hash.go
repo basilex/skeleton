@@ -21,7 +21,7 @@ func NewPasswordHash(plainPassword string) (PasswordHash, error) {
 	if len(plainPassword) < 8 {
 		return "", fmt.Errorf("password: must be at least 8 characters")
 	}
-	hashed, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.MinCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return "", fmt.Errorf("hash password: %w", err)
 	}

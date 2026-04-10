@@ -2,21 +2,20 @@
 
 import { ReactNode } from 'react'
 import { RequireAuth } from '@/lib/auth'
-import { Sidebar } from '@/components/layout/sidebar'
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
+import { AppSidebar } from '@/components/layout/app-sidebar'
+import { SiteHeader } from '@/components/layout/site-header'
 
-export default function AppLayout({
-  children,
-}: {
-  children: ReactNode
-}) {
+export default function AppLayout({ children }: { children: ReactNode }) {
   return (
     <RequireAuth>
-      <div className="flex h-screen bg-background">
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
+      <SidebarProvider>
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
           {children}
-        </main>
-      </div>
+        </SidebarInset>
+      </SidebarProvider>
     </RequireAuth>
   )
 }

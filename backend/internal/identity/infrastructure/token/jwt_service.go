@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
-	"github.com/basilex/skeleton/pkg/uuid"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -97,10 +96,34 @@ func (s *JWTService) GenerateAccessToken(userID domain.UserID, roles []domain.Ro
 	return signed, nil
 }
 
-// GenerateRefreshToken generates a new refresh token using UUID v7.
-// This token is used to obtain new access tokens without re-authentication.
-func (s *JWTService) GenerateRefreshToken() (string, error) {
-	return uuid.NewV7().String(), nil
+// refreshClaims represents the JWT claims structure for refresh tokens.
+type refreshClaims struct {
+	jwt.RegisteredClaims
+	UserID string `json:"user_id"`
+	Kind   string `json:"kind"`
+}
+
+// GenerateRefreshToken generates a new JWT refresh token for the specified user.
+// Refresh tokens have a longer TTL than access tokens and contain a "kind" claim
+// to distinguish them from access tokens.
+func (s *JWTService) GenerateRefreshToken(userID domain.UserID) (string, error) {
+	now := time.Now().UTC()
+	c := refreshClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(s.refreshTTLDays) * 24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+		UserID: userID.String(),
+		Kind:   "refresh",
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, c)
+	signed, err := token.SignedString(s.privateKey)
+	if err != nil {
+		return "", fmt.Errorf("sign refresh token: %w", err)
+	}
+	return signed, nil
 }
 
 // ValidateAccessToken validates an RSA-signed JWT access token and extracts claims.
@@ -134,7 +157,32 @@ func (s *JWTService) ValidateAccessToken(tokenString string) (*domain.TokenClaim
 }
 
 // ValidateRefreshToken validates a refresh token and returns the associated user ID.
-// Current implementation returns empty user ID and no error (placeholder implementation).
-func (s *JWTService) ValidateRefreshToken(_ string) (domain.UserID, error) {
-	return domain.UserID{}, nil
+// It parses the JWT refresh token, verifies the signature, and extracts the user ID.
+// Returns an error if the token is invalid, expired, or not a refresh token.
+func (s *JWTService) ValidateRefreshToken(tokenString string) (domain.UserID, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &refreshClaims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return s.publicKey, nil
+	})
+	if err != nil {
+		return domain.UserID{}, fmt.Errorf("parse refresh token: %w", err)
+	}
+
+	c, ok := token.Claims.(*refreshClaims)
+	if !ok || !token.Valid {
+		return domain.UserID{}, fmt.Errorf("invalid refresh token")
+	}
+
+	if c.Kind != "refresh" {
+		return domain.UserID{}, fmt.Errorf("not a refresh token")
+	}
+
+	userID, err := domain.ParseUserID(c.UserID)
+	if err != nil {
+		return domain.UserID{}, fmt.Errorf("parse user id from refresh token: %w", err)
+	}
+
+	return userID, nil
 }

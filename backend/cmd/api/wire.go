@@ -309,6 +309,8 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 		getUserHandler,
 		listUsersHandler,
 		sessionStore,
+		tokenService,
+		roleRepo,
 	)
 
 	// Initialize HTTP handlers for session and preferences.
@@ -330,7 +332,7 @@ func wireDependencies(cfg *config.Config, pool *pgxpool.Pool, redisClient *redis
 
 	// Initialize authentication and RBAC middlewares for endpoint protection.
 
-	authMiddleware := identityHTTP.NewAuthMiddleware(tokenService)
+	authMiddleware := identityHTTP.NewAuthMiddleware(tokenService, sessionStore)
 	rbacMiddleware := identityHTTP.NewRBACMiddleware()
 
 	// Status Bounded Context
@@ -726,10 +728,6 @@ func newSessionStore(cfg *config.Config) session.Store {
 // Returns a TokenService implementation appropriate for the environment.
 // Panics if JWT key loading fails in production mode.
 func newTokenService(cfg *config.Config) domain.TokenService {
-	if cfg.App.Env == "dev" || cfg.App.Env == "test" {
-		return &token.MockTokenService{}
-	}
-
 	ts, err := token.NewJWTService(
 		cfg.Auth.PrivateKeyPath,
 		cfg.Auth.PublicKeyPath,

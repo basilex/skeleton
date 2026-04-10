@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { AuthIllustration } from '@/components/layout/auth-illustration'
 
 export default function RegisterPage() {
   const [name, setName] = useState('')
@@ -15,7 +17,6 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const { register } = useAuth()
-  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -32,109 +33,105 @@ export default function RegisterPage() {
     }
 
     setIsLoading(true)
-
     try {
       await register({ email, password, name })
-      router.push('/dashboard')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed')
-    } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your information to get started
-          </p>
+    <div className="flex min-h-svh items-center justify-center p-6 md:p-10">
+      <div className="flex w-full max-w-4xl overflow-hidden rounded-xl border">
+        <div className="hidden md:flex md:w-1/2">
+          <AuthIllustration />
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {error && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-              <p className="text-xs text-destructive">{error}</p>
+        <div className="flex w-full items-center justify-center md:w-1/2">
+          <div className="w-full max-w-sm px-4">
+          <div className="mb-8 flex flex-col items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-md bg-foreground text-background">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+                <path d="M12 2v20M2 12h20" />
+              </svg>
             </div>
-          )}
-
-          <div className="space-y-1">
-            <label htmlFor="name" className="text-xs font-medium">
-              Name
-            </label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="John Doe"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              disabled={isLoading}
-              className="h-9"
-            />
+            <h1 className="text-xl font-bold">Skeleton CRM</h1>
           </div>
-
-          <div className="space-y-1">
-            <label htmlFor="email" className="text-xs font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isLoading}
-              className="h-9"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label htmlFor="password" className="text-xs font-medium">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              className="h-9"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label htmlFor="confirmPassword" className="text-xs font-medium">
-              Confirm Password
-            </label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              className="h-9"
-            />
-          </div>
-
-          <Button type="submit" className="h-9 w-full" disabled={isLoading}>
-            {isLoading ? 'Creating account...' : 'Create account'}
-          </Button>
-        </form>
-
-        <p className="text-center text-xs text-muted-foreground">
-          Already have an account?{' '}
-          <Link href="/login" className="underline hover:text-foreground">
-            Sign in
-          </Link>
-        </p>
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Create account</CardTitle>
+              <CardDescription>
+                Enter your details to get started
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                {error && (
+                  <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                    <p className="text-xs text-destructive">{error}</p>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="John Doe"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Creating account...' : 'Create account'}
+                </Button>
+              </form>
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                Already have an account?{' '}
+                <Link href="/login" className="text-foreground underline-offset-4 hover:underline">
+                  Sign in
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        </div>
       </div>
     </div>
   )

@@ -142,23 +142,18 @@ func registerRoutes(r *gin.Engine, di *Dependencies) {
 //   - v1: Router group for /api/v1 endpoints
 //   - di: Dependency container with identity handler and session middleware
 func registerAuthRoutes(v1 *gin.RouterGroup, di *Dependencies) {
-	// Auth endpoints with rate limiting for security
-	// Login: 5 requests per minute per IP to prevent brute force
 	v1.POST("/auth/login",
 		middleware.RateLimit(di.RateLimiter, middleware.ByIP, 5, time.Minute),
 		di.IdentityHandler.Login)
 
-	// Register: 3 requests per hour per IP to prevent spam
 	v1.POST("/auth/register",
 		middleware.RateLimit(di.RateLimiter, middleware.ByIP, 3, time.Hour),
 		di.IdentityHandler.Register)
 
-	// Token refresh - no rate limit needed
 	v1.POST("/auth/refresh", di.IdentityHandler.Refresh)
 
-	// Logout and profile - require authentication
-	v1.POST("/auth/logout", di.SessionMiddleware.Authenticate(), di.IdentityHandler.Logout)
-	v1.GET("/auth/me", di.SessionMiddleware.Authenticate(), di.IdentityHandler.GetMyProfile)
+	v1.POST("/auth/logout", di.AuthMiddleware.Authenticate(), di.IdentityHandler.Logout)
+	v1.GET("/auth/me", di.AuthMiddleware.Authenticate(), di.IdentityHandler.GetMyProfile)
 }
 
 // registerUserRoutes registers user management endpoints.
@@ -797,11 +792,11 @@ func loggerMiddleware() gin.HandlerFunc {
 // Returns a Gin middleware handler function.
 func corsMiddleware() gin.HandlerFunc {
 	return cors.New(cors.Config{
-		AllowOrigins:     []string{"*"},
+		AllowOrigins:     []string{"http://localhost:3000", "http://localhost:3001"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Request-ID"},
 		ExposeHeaders:    []string{"X-Request-ID"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	})
 }

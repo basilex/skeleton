@@ -56,9 +56,18 @@ func (r *UserRepository) FindByID(ctx context.Context, id domain.UserID) (*domai
 		`SELECT id, email, password_hash, is_active, created_at, updated_at FROM users WHERE id = $1`,
 		id)
 	if err != nil {
+		if pgxscan.NotFound(err) {
+			return nil, domain.ErrUserNotFound
+		}
 		return nil, fmt.Errorf("find user by id: %w", err)
 	}
-	return r.dtoToDomain(dto)
+
+	roleIDs, err := r.findRoleIDs(ctx, dto.ID)
+	if err != nil {
+		return nil, fmt.Errorf("find user roles: %w", err)
+	}
+
+	return r.dtoToDomain(dto, roleIDs)
 }
 
 func (r *UserRepository) FindByEmail(ctx context.Context, email domain.Email) (*domain.User, error) {
@@ -67,9 +76,18 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email domain.Email) (*
 		`SELECT id, email, password_hash, is_active, created_at, updated_at FROM users WHERE email = $1`,
 		email.String())
 	if err != nil {
+		if pgxscan.NotFound(err) {
+			return nil, domain.ErrUserNotFound
+		}
 		return nil, fmt.Errorf("find user by email: %w", err)
 	}
-	return r.dtoToDomain(dto)
+
+	roleIDs, err := r.findRoleIDs(ctx, dto.ID)
+	if err != nil {
+		return nil, fmt.Errorf("find user roles: %w", err)
+	}
+
+	return r.dtoToDomain(dto, roleIDs)
 }
 
 func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) (pagination.PageResult[*domain.User], error) {
@@ -105,7 +123,11 @@ func (r *UserRepository) FindAll(ctx context.Context, filter domain.UserFilter) 
 
 	users := make([]*domain.User, 0, len(dtos))
 	for _, dto := range dtos {
-		user, err := r.dtoToDomain(dto)
+		roleIDs, err := r.findRoleIDs(ctx, dto.ID)
+		if err != nil {
+			return pagination.PageResult[*domain.User]{}, fmt.Errorf("find user roles: %w", err)
+		}
+		user, err := r.dtoToDomain(dto, roleIDs)
 		if err != nil {
 			return pagination.PageResult[*domain.User]{}, err
 		}
@@ -126,7 +148,29 @@ func (r *UserRepository) Delete(ctx context.Context, id domain.UserID) error {
 	return nil
 }
 
-func (r *UserRepository) dtoToDomain(dto userDTO) (*domain.User, error) {
+func (r *UserRepository) findRoleIDs(ctx context.Context, userID string) ([]domain.RoleID, error) {
+	rows, err := r.pool.Query(ctx, `SELECT role_id FROM user_roles WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("query user roles: %w", err)
+	}
+	defer rows.Close()
+
+	var roleIDs []domain.RoleID
+	for rows.Next() {
+		var roleID string
+		if err := rows.Scan(&roleID); err != nil {
+			return nil, fmt.Errorf("scan role id: %w", err)
+		}
+		parsed, err := domain.ParseRoleID(roleID)
+		if err != nil {
+			continue
+		}
+		roleIDs = append(roleIDs, parsed)
+	}
+	return roleIDs, nil
+}
+
+func (r *UserRepository) dtoToDomain(dto userDTO, roleIDs []domain.RoleID) (*domain.User, error) {
 	userID, err := domain.ParseUserID(dto.ID)
 	if err != nil {
 		return nil, fmt.Errorf("parse user id: %w", err)
@@ -135,5 +179,8 @@ func (r *UserRepository) dtoToDomain(dto userDTO) (*domain.User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse email: %w", err)
 	}
-	return domain.ReconstituteUser(userID, userEmail, domain.PasswordHash(dto.PasswordHash), []domain.RoleID{}, dto.IsActive, dto.CreatedAt, dto.UpdatedAt)
+	if roleIDs == nil {
+		roleIDs = []domain.RoleID{}
+	}
+	return domain.ReconstituteUser(userID, userEmail, domain.PasswordHash(dto.PasswordHash), roleIDs, dto.IsActive, dto.CreatedAt, dto.UpdatedAt)
 }

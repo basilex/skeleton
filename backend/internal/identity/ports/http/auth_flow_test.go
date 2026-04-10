@@ -40,7 +40,7 @@ func setupAuthTestRouter(t *testing.T) (*gin.Engine, *session.InMemoryStore, *mo
 	getUserH := query.NewGetUserHandler(userRepo, roleRepo)
 	listUsersH := query.NewListUsersHandler(userRepo, roleRepo)
 
-	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store)
+	handler := NewHandler(registerH, loginH, logoutH, assignH, revokeH, getUserH, listUsersH, store, tokenSvc, roleRepo)
 
 	r := gin.New()
 	v1 := r.Group("/api/v1")

@@ -127,7 +127,7 @@ func (m *mockTokenService) GenerateAccessToken(userID domain.UserID, roles []dom
 	return "access-test-token", nil
 }
 
-func (m *mockTokenService) GenerateRefreshToken() (string, error) {
+func (m *mockTokenService) GenerateRefreshToken(userID domain.UserID) (string, error) {
 	return "refresh-test-token", nil
 }
 

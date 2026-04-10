@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { AuthIllustration } from '@/components/layout/auth-illustration'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,20 +15,11 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const { login, isAuthenticated, isLoading: authLoading } = useAuth()
-  const router = useRouter()
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (!authLoading && isAuthenticated) {
-      router.push('/dashboard')
-    }
-  }, [isAuthenticated, authLoading, router])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setIsLoading(true)
-
     try {
       await login({ email, password })
     } catch (err) {
@@ -35,7 +28,6 @@ export default function LoginPage() {
     }
   }
 
-  // Show loading while checking auth
   if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -44,79 +36,80 @@ export default function LoginPage() {
     )
   }
 
-  // Don't render if already authenticated
   if (isAuthenticated) {
     return null
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
-          <p className="text-sm text-muted-foreground">
-            Enter your credentials to access your account
-          </p>
+    <div className="flex min-h-svh items-center justify-center p-6 md:p-10">
+      <div className="flex w-full max-w-4xl overflow-hidden rounded-xl border">
+        <div className="hidden md:flex md:w-1/2">
+          <AuthIllustration />
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {error && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
-              <p className="text-xs text-destructive">{error}</p>
+        <div className="flex w-full items-center justify-center md:w-1/2">
+          <div className="w-full max-w-sm px-4">
+          <div className="mb-8 flex flex-col items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-md bg-foreground text-background">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+                <path d="M12 2v20M2 12h20" />
+              </svg>
             </div>
-          )}
-
-          <div className="space-y-1">
-            <label htmlFor="email" className="text-xs font-medium">
-              Email
-            </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              disabled={isLoading}
-              className="h-9"
-            />
+            <h1 className="text-xl font-bold">Skeleton CRM</h1>
           </div>
-
-          <div className="space-y-1">
-            <label htmlFor="password" className="text-xs font-medium">
-              Password
-            </label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              disabled={isLoading}
-              className="h-9"
-            />
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl">Sign in</CardTitle>
+              <CardDescription>
+                Enter your email and password to access your account
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                {error && (
+                  <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+                    <p className="text-xs text-destructive">{error}</p>
+                  </div>
+                )}
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? 'Signing in...' : 'Sign in'}
+                </Button>
+              </form>
+              <div className="mt-4 text-center text-sm text-muted-foreground">
+                Don&apos;t have an account?{' '}
+                <Link href="/register" className="text-foreground underline-offset-4 hover:underline">
+                  Create one
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+          <div className="mt-4 text-center text-xs text-muted-foreground">
+            Demo: admin@skeleton.local / Admin1234!
           </div>
-
-          <Button type="submit" className="h-9 w-full" disabled={isLoading}>
-            {isLoading ? 'Signing in...' : 'Sign in'}
-          </Button>
-        </form>
-
-        <p className="text-center text-xs text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <Link href="/register" className="underline hover:text-foreground">
-            Create one
-          </Link>
-        </p>
-
-        <div className="border-t border-border pt-4">
-          <p className="text-center text-xs text-muted-foreground">
-            Demo credentials:
-          </p>
-          <p className="text-center text-xs text-muted-foreground">
-            admin@skeleton.local / Admin1234!
-          </p>
+        </div>
         </div>
       </div>
     </div>

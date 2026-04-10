@@ -140,7 +140,12 @@ func TestJWTService_RefreshToken(t *testing.T) {
 	svc, err := NewJWTService(privatePath, publicPath, 15, 7)
 	require.NoError(t, err)
 
-	refreshToken, err := svc.GenerateRefreshToken()
+	userID := domain.NewUserID()
+	refreshToken, err := svc.GenerateRefreshToken(userID)
 	require.NoError(t, err)
 	require.NotEmpty(t, refreshToken)
+
+	parsedUserID, err := svc.ValidateRefreshToken(refreshToken)
+	require.NoError(t, err)
+	require.Equal(t, userID, parsedUserID)
 }

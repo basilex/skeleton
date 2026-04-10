@@ -13,13 +13,10 @@ export function RequireAuth({ children }: RequireAuthProps) {
   const router = useRouter()
 
   useEffect(() => {
-    // Only redirect if we're sure the user is not authenticated
-    // (not loading and definitely not authenticated)
-    if (!isLoading && !isAuthenticated && typeof window !== 'undefined') {
-      // Check if we have a token - if so, auth is still loading
+    if (!isLoading && !isAuthenticated) {
       const hasToken = localStorage.getItem('access_token')
       if (!hasToken) {
-        router.push('/login')
+        router.replace('/login')
       }
     }
   }, [isAuthenticated, isLoading, router])
@@ -46,7 +43,7 @@ interface RequireRoleProps {
 
 export function RequireRole({ role, children }: RequireRoleProps) {
   const { hasRole } = useAuth()
-  
+
   if (!hasRole(role)) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
@@ -71,7 +68,7 @@ interface RequirePermissionProps {
 
 export function RequirePermission({ resource, action, children }: RequirePermissionProps) {
   const { hasPermission } = useAuth()
-  
+
   if (!hasPermission(resource, action)) {
     return null
   }

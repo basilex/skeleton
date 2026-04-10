@@ -38,7 +38,7 @@ type RoleRepository interface {
 // TokenService defines the contract for JWT token generation and validation.
 type TokenService interface {
 	GenerateAccessToken(userID UserID, roles []Role) (string, error)
-	GenerateRefreshToken() (string, error)
+	GenerateRefreshToken(userID UserID) (string, error)
 	ValidateAccessToken(token string) (*TokenClaims, error)
 	ValidateRefreshToken(token string) (UserID, error)
 }

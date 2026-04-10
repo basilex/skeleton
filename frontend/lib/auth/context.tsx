@@ -1,9 +1,9 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react'
+import { useEffect, useState, useContext, createContext, ReactNode, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api/client'
-import type { User, LoginCredentials, RegisterCredentials, AuthResponse } from './types'
+import type { User, LoginCredentials, RegisterCredentials, AuthResponse, UserDTO } from './types'
 
 interface AuthContextType {
   user: User | null
@@ -19,6 +19,30 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+function authResponseToUser(res: AuthResponse): User {
+  return {
+    id: res.user_id,
+    email: res.email,
+    name: res.email.split('@')[0],
+    roles: res.roles || [],
+    permissions: [],
+    active: res.is_active,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+function userDTOToUser(dto: UserDTO): User {
+  return {
+    id: dto.id,
+    email: dto.email,
+    name: dto.email.split('@')[0],
+    roles: dto.roles || [],
+    permissions: [],
+    active: dto.is_active,
+    createdAt: dto.created_at,
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -26,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true
-    
+
     async function checkAuth() {
       try {
         const token = localStorage.getItem('access_token')
@@ -36,22 +60,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         apiClient.setToken(token)
-        
-        // For mock authentication, create mock user from token
-        // In production, you would validate token and fetch user from /api/v1/users/{user_id}
-        const mockUser: User = {
-          id: '00000000-0000-0000-0000-000000000001',
-          email: 'admin@skeleton.local',
-          name: 'Admin User',
-          roles: ['admin'],
-          permissions: ['*:*'],
-          active: true,
-          createdAt: new Date().toISOString(),
-        }
-        
-        if (mounted) setUser(mockUser)
-      } catch (error) {
-        console.error('Auth check failed:', error)
+
+        const dto = await apiClient.get<UserDTO>('/api/v1/users/me')
+        if (mounted) setUser(userDTOToUser(dto))
+      } catch {
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         apiClient.clearToken()
@@ -59,87 +71,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (mounted) setIsLoading(false)
       }
     }
-    
+
     checkAuth()
-    
+
     return () => {
       mounted = false
     }
-  }, []) // Empty deps - only run once
+  }, [])
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    setIsLoading(true)
-    try {
-      const response = await apiClient.post<{ access_token: string; refresh_token: string }>('/api/v1/auth/login', credentials)
-      
-      localStorage.setItem('access_token', response.access_token)
-      localStorage.setItem('refresh_token', response.refresh_token)
-      apiClient.setToken(response.access_token)
-      
-      // For development: Mock user based on login credentials
-      // In production: Fetch user profile from /api/v1/users/me with Bearer token
-      // User ID is extracted from MockTokenService token format: "access-{userID}-{timestamp}"
-      // MockTokenService always returns admin user with ID: 00000000-0000-0000-0000-000000000001
-      const mockUser: User = {
-        id: '00000000-0000-0000-0000-000000000001',
-        email: credentials.email,
-        name: credentials.email.split('@')[0], // Use email username as display name
-        roles: ['admin'],
-        permissions: ['*:*'],
-        active: true,
-        createdAt: new Date().toISOString(),
+    const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', credentials)
+
+    localStorage.setItem('access_token', response.access_token)
+    localStorage.setItem('refresh_token', response.refresh_token)
+    apiClient.setToken(response.access_token)
+
+    if (response.roles && response.roles.length > 0) {
+      setUser(authResponseToUser(response))
+    } else {
+      try {
+        const dto = await apiClient.get<UserDTO>('/api/v1/users/me')
+        setUser(userDTOToUser(dto))
+      } catch {
+        setUser(authResponseToUser(response))
       }
-      
-      setUser(mockUser)
-      setIsLoading(false)
-      router.push('/dashboard')
-    } catch (error) {
-      setIsLoading(false)
-      throw error
     }
+
+    router.push('/dashboard')
   }, [router])
 
   const register = useCallback(async (credentials: RegisterCredentials) => {
-    setIsLoading(true)
+    await apiClient.post<{ user_id: string }>('/api/v1/auth/register', {
+      email: credentials.email,
+      password: credentials.password,
+    })
+
+    const loginResponse = await apiClient.post<AuthResponse>('/api/v1/auth/login', {
+      email: credentials.email,
+      password: credentials.password,
+    })
+
+    localStorage.setItem('access_token', loginResponse.access_token)
+    localStorage.setItem('refresh_token', loginResponse.refresh_token)
+    apiClient.setToken(loginResponse.access_token)
+
     try {
-      const response = await apiClient.post<{ user_id: string }>('/api/v1/auth/register', credentials)
-      
-      // After registration, login the user
-      const loginResponse = await apiClient.post<{ access_token: string; refresh_token: string }>('/api/v1/auth/login', {
-        email: credentials.email,
-        password: credentials.password,
-      })
-      
-      localStorage.setItem('access_token', loginResponse.access_token)
-      localStorage.setItem('refresh_token', loginResponse.refresh_token)
-      apiClient.setToken(loginResponse.access_token)
-      
-      // For development: Mock user based on registration
-      // In production: Fetch user profile from /api/v1/users/me
-      const mockUser: User = {
-        id: response.user_id,
-        email: credentials.email,
-        name: credentials.name,
-        roles: ['user'],
-        permissions: ['users:read', 'users:write'],
-        active: true,
-        createdAt: new Date().toISOString(),
-      }
-      
-      setUser(mockUser)
-      setIsLoading(false)
-      router.push('/dashboard')
-    } catch (error) {
-      setIsLoading(false)
-      throw error
+      const dto = await apiClient.get<UserDTO>('/api/v1/users/me')
+      setUser(userDTOToUser(dto))
+    } catch {
+      setUser(authResponseToUser(loginResponse))
     }
+
+    router.push('/dashboard')
   }, [router])
 
   const logout = useCallback(async () => {
     try {
       await apiClient.post('/api/v1/auth/logout')
-    } catch (error) {
-      console.error('Logout error:', error)
+    } catch {
+      // ignore errors on logout
     } finally {
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
@@ -162,17 +152,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('access_token', response.access_token)
     localStorage.setItem('refresh_token', response.refresh_token)
     apiClient.setToken(response.access_token)
-    
-    setUser(response.user)
+
+    if (response.roles && response.roles.length > 0) {
+      setUser(authResponseToUser(response))
+    } else {
+      try {
+        const dto = await apiClient.get<UserDTO>('/api/v1/users/me')
+        setUser(userDTOToUser(dto))
+      } catch {
+        setUser(authResponseToUser(response))
+      }
+    }
   }, [])
 
   const hasPermission = useCallback((resource: string, action: string): boolean => {
     if (!user) return false
-    
-    // Super admin has all permissions
     if (user.permissions.includes('*:*')) return true
-    
-    // Check specific permission
     return user.permissions.includes(`${resource}:${action}`)
   }, [user])
 

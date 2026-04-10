@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/basilex/skeleton/internal/identity/domain"
-	"github.com/basilex/skeleton/pkg/uuid"
 )
 
 // MockTokenService is a mock implementation of the token service interface.
@@ -28,10 +27,10 @@ func (s *MockTokenService) GenerateAccessToken(userID domain.UserID, roles []dom
 	return fmt.Sprintf("access-%s-%d", userID.String(), time.Now().Unix()), nil
 }
 
-// GenerateRefreshToken generates a mock refresh token using a UUID.
-// Returns a token in the format "refresh-{uuid}".
-func (s *MockTokenService) GenerateRefreshToken() (string, error) {
-	return "refresh-" + uuid.NewV7().String(), nil
+// GenerateRefreshToken generates a mock refresh token containing the user ID.
+// Returns a token in the format "refresh-{userID}-{timestamp}".
+func (s *MockTokenService) GenerateRefreshToken(userID domain.UserID) (string, error) {
+	return fmt.Sprintf("refresh-%s-%d", userID.String(), time.Now().Unix()), nil
 }
 
 // ValidateAccessToken validates a mock access token and returns the claims.
