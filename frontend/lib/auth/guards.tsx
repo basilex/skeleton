@@ -13,8 +13,14 @@ export function RequireAuth({ children }: RequireAuthProps) {
   const router = useRouter()
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
+    // Only redirect if we're sure the user is not authenticated
+    // (not loading and definitely not authenticated)
+    if (!isLoading && !isAuthenticated && typeof window !== 'undefined') {
+      // Check if we have a token - if so, auth is still loading
+      const hasToken = localStorage.getItem('access_token')
+      if (!hasToken) {
+        router.push('/login')
+      }
     }
   }, [isAuthenticated, isLoading, router])
 

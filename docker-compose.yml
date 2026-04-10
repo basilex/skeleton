@@ -34,22 +34,53 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: skeleton-backend
+    environment:
+      # Application
+      APP_ENV: prod
+      APP_PORT: 8080
+      APP_NAME: skeleton
+      
+      # Database (PostgreSQL)
+      DATABASE_URL: postgres://skeleton:skeleton@postgres:5432/skeleton?sslmode=disable
+      
+      # Redis
+      REDIS_URL: redis://redis:6379
+      
+      # JWT Authentication
+      JWT_PRIVATE_KEY_PATH: ./keys/private.pem
+      JWT_PUBLIC_KEY_PATH: ./keys/public.pem
+      JWT_ACCESS_TTL_MINUTES: 15
+      JWT_REFRESH_TTL_DAYS: 7
+      
+      # Session
+      SESSION_COOKIE_NAME: session
+      SESSION_COOKIE_SECURE: "false"
+      SESSION_TTL_MINUTES: 1440
+      
+      # Logging
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+      
+      # Cache
+      CACHE_TYPE: memory
+      CACHE_DEFAULT_TTL: 300
+      
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_GLOBAL_LIMIT: 1000
+      RATE_LIMIT_GLOBAL_WINDOW: 60
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: skeleton
-      DB_PASSWORD: skeleton
-      DB_NAME: skeleton
-      PORT: 8080
+      redis:
+        condition: service_healthy
     ports:
       - "8080:8080"
-    volumes:
-      - ./backend:/app
-      - /app/tmp
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build:
@@ -59,14 +90,10 @@ services:
     depends_on:
       - backend
     environment:
-      NEXT_PUBLIC_API_URL: http://backend:8080
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_APP_NAME: Skeleton CRM
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    restart: unless-stopped
 
 volumes:
   postgres-data:

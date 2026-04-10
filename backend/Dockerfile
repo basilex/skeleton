@@ -1,6 +1,9 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
+
+# Enable Go toolchain auto-download for required version
+ENV GOTOOLCHAIN=auto
 
 RUN apk add --no-cache git
 
@@ -19,6 +22,8 @@ WORKDIR /root/
 
 COPY --from=builder /app/main .
 COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/keys ./keys
+COPY --from=builder /app/configs ./configs
 
 EXPOSE 8080
 

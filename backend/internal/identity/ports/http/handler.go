@@ -223,17 +223,44 @@ func (h *Handler) ListUsers(c *gin.Context) {
 
 // GetMyProfile godoc
 // @Summary Get current user profile
-// @Description Returns authenticated user's profile
-// @Tags users
+// @Description Retrieves the authenticated user's profile using session cookie
+// @Tags auth
 // @Produce json
 // @Security SessionAuth
 // @Success 200 {object} query.UserDTO "User profile"
 // @Failure 401 {object} apierror.APIError "Unauthorized"
-// @Router /api/v1/users/me [get]
+// @Failure 500 {object} apierror.APIError "Internal error"
+// @Router /api/v1/auth/me [get]
 func (h *Handler) GetMyProfile(c *gin.Context) {
-	userID, ok := c.Get(string(ContextKeyUserID))
-	if !ok {
-		apierror.RespondError(c, apierror.NewUnauthorized("missing user context", c.Request.URL.Path, getRequestID(c)))
+	userID, exists := c.Get("user_id")
+	if !exists {
+		apierror.RespondError(c, apierror.NewUnauthorized("user not found in context", c.Request.URL.Path, getRequestID(c)))
+		return
+	}
+
+	result, err := h.getUser.Handle(c.Request.Context(), query.GetUserQuery{UserID: userID.(string)})
+	if err != nil {
+		handleIdentityError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetCurrentUser godoc
+// @Summary Get current user profile (Bearer token)
+// @Description Retrieves the authenticated user's profile using Bearer token
+// @Tags users
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} query.UserDTO "User profile"
+// @Failure 401 {object} apierror.APIError "Unauthorized"
+// @Failure 500 {object} apierror.APIError "Internal error"
+// @Router /api/v1/users/me [get]
+func (h *Handler) GetCurrentUser(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		apierror.RespondError(c, apierror.NewUnauthorized("user not authenticated", c.Request.URL.Path, getRequestID(c)))
 		return
 	}
 

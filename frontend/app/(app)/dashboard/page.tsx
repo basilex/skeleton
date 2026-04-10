@@ -1,10 +1,28 @@
 'use client'
 
 import { useAuth } from '@/lib/auth'
+import { useDashboardStats } from '@/lib/query'
 import Link from 'next/link'
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { stats, isLoading, error, recentInvoices, recentOrders } = useDashboardStats()
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="text-sm text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-sm text-red-600">Failed to load dashboard data</div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6">
@@ -23,8 +41,7 @@ export default function DashboardPage() {
           className="rounded-md border border-border bg-background p-4 hover:bg-secondary/50"
         >
           <h3 className="text-sm font-medium text-muted-foreground">Total Customers</h3>
-          <p className="mt-2 text-2xl font-semibold">248</p>
-          <p className="mt-1 text-xs text-muted-foreground">+12 this month</p>
+          <p className="mt-2 text-2xl font-semibold">{stats.totalCustomers}</p>
         </Link>
 
         <Link
@@ -32,8 +49,8 @@ export default function DashboardPage() {
           className="rounded-md border border-border bg-background p-4 hover:bg-secondary/50"
         >
           <h3 className="text-sm font-medium text-muted-foreground">Pending Invoices</h3>
-          <p className="mt-2 text-2xl font-semibold">23</p>
-          <p className="mt-1 text-xs text-muted-foreground">$45,600 outstanding</p>
+          <p className="mt-2 text-2xl font-semibold">{stats.pendingInvoices}</p>
+          <p className="mt-1 text-xs text-muted-foreground">Action required</p>
         </Link>
 
         <Link
@@ -41,8 +58,7 @@ export default function DashboardPage() {
           className="rounded-md border border-border bg-background p-4 hover:bg-secondary/50"
         >
           <h3 className="text-sm font-medium text-muted-foreground">Active Orders</h3>
-          <p className="mt-2 text-2xl font-semibold">17</p>
-          <p className="mt-1 text-xs text-muted-foreground">5 shipping today</p>
+          <p className="mt-2 text-2xl font-semibold">{stats.activeOrders}</p>
         </Link>
 
         <Link
@@ -50,7 +66,7 @@ export default function DashboardPage() {
           className="rounded-md border border-border bg-background p-4 hover:bg-secondary/50"
         >
           <h3 className="text-sm font-medium text-muted-foreground">Low Stock Items</h3>
-          <p className="mt-2 text-2xl font-semibold">8</p>
+          <p className="mt-2 text-2xl font-semibold">{stats.lowStockItems}</p>
           <p className="mt-1 text-xs text-muted-foreground">Needs attention</p>
         </Link>
       </div>
@@ -94,18 +110,22 @@ export default function DashboardPage() {
             <h3 className="font-medium">Recent Invoices</h3>
           </div>
           <div className="divide-y divide-border">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4">
-                <div>
-                  <p className="text-sm font-medium">INV-2026-{i.toString().padStart(3, '0')}</p>
-                  <p className="text-xs text-muted-foreground">Customer {i}</p>
+            {recentInvoices.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No recent invoices</div>
+            ) : (
+              recentInvoices.map((invoice) => (
+                <div key={invoice.id} className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="text-sm font-medium">{invoice.number}</p>
+                    <p className="text-xs text-muted-foreground">{invoice.customer_name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">${invoice.total.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{invoice.status}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">$1,250</p>
-                  <p className="text-xs text-muted-foreground">Pending</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -115,18 +135,22 @@ export default function DashboardPage() {
             <h3 className="font-medium">Recent Orders</h3>
           </div>
           <div className="divide-y divide-border">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4">
-                <div>
-                  <p className="text-sm font-medium">ORD-2026-{i.toString().padStart(3, '0')}</p>
-                  <p className="text-xs text-muted-foreground">Customer {i}</p>
+            {recentOrders.length === 0 ? (
+              <div className="p-4 text-sm text-muted-foreground">No recent orders</div>
+            ) : (
+              recentOrders.map((order) => (
+                <div key={order.id} className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="text-sm font-medium">{order.number}</p>
+                    <p className="text-xs text-muted-foreground">{order.customer_name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">${order.total.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{order.status}</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-medium">$890</p>
-                  <p className="text-xs text-muted-foreground">Processing</p>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

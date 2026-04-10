@@ -191,6 +191,11 @@ func registerUserRoutes(v1 *gin.RouterGroup, di *Dependencies) {
 		middleware.Cache(di.Cache, 5*time.Minute),
 		di.IdentityHandler.GetUser)
 
+	// Current user profile endpoint (uses Bearer token, no RBAC)
+	v1.GET("/users/me",
+		di.AuthMiddleware.Authenticate(),
+		di.IdentityHandler.GetCurrentUser)
+
 	// User deactivation - no cache for mutations
 	v1.PATCH("/users/:id/deactivate",
 		di.AuthMiddleware.Authenticate(),

@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Inter, Geist } from "next/font/google"
 import { cn } from "@/lib/utils"
 import { AuthProvider } from "@/lib/auth"
+import { QueryProvider } from "@/lib/query"
 import "./globals.css"
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
@@ -18,11 +19,13 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
-      <body className={inter.className}>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={cn("font-sans", geist.variable)}>
+        <QueryProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </QueryProvider>
       </body>
     </html>
   )

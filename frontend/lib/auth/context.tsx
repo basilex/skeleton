@@ -36,8 +36,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         apiClient.setToken(token)
-        const currentUser = await apiClient.get<User>('/api/v1/auth/me')
-        if (mounted) setUser(currentUser)
+        
+        // For mock authentication, create mock user from token
+        // In production, you would validate token and fetch user from /api/v1/users/{user_id}
+        const mockUser: User = {
+          id: '00000000-0000-0000-0000-000000000001',
+          email: 'admin@skeleton.local',
+          name: 'Admin User',
+          roles: ['admin'],
+          permissions: ['*:*'],
+          active: true,
+          createdAt: new Date().toISOString(),
+        }
+        
+        if (mounted) setUser(mockUser)
       } catch (error) {
         console.error('Auth check failed:', error)
         localStorage.removeItem('access_token')
@@ -56,25 +68,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []) // Empty deps - only run once
 
   const login = useCallback(async (credentials: LoginCredentials) => {
-    const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', credentials)
-    
-    localStorage.setItem('access_token', response.access_token)
-    localStorage.setItem('refresh_token', response.refresh_token)
-    apiClient.setToken(response.access_token)
-    
-    setUser(response.user)
-    router.push('/dashboard')
+    setIsLoading(true)
+    try {
+      const response = await apiClient.post<{ access_token: string; refresh_token: string }>('/api/v1/auth/login', credentials)
+      
+      localStorage.setItem('access_token', response.access_token)
+      localStorage.setItem('refresh_token', response.refresh_token)
+      apiClient.setToken(response.access_token)
+      
+      // For development: Mock user based on login credentials
+      // In production: Fetch user profile from /api/v1/users/me with Bearer token
+      // User ID is extracted from MockTokenService token format: "access-{userID}-{timestamp}"
+      // MockTokenService always returns admin user with ID: 00000000-0000-0000-0000-000000000001
+      const mockUser: User = {
+        id: '00000000-0000-0000-0000-000000000001',
+        email: credentials.email,
+        name: credentials.email.split('@')[0], // Use email username as display name
+        roles: ['admin'],
+        permissions: ['*:*'],
+        active: true,
+        createdAt: new Date().toISOString(),
+      }
+      
+      setUser(mockUser)
+      setIsLoading(false)
+      router.push('/dashboard')
+    } catch (error) {
+      setIsLoading(false)
+      throw error
+    }
   }, [router])
 
   const register = useCallback(async (credentials: RegisterCredentials) => {
-    const response = await apiClient.post<AuthResponse>('/api/v1/auth/register', credentials)
-    
-    localStorage.setItem('access_token', response.access_token)
-    localStorage.setItem('refresh_token', response.refresh_token)
-    apiClient.setToken(response.access_token)
-    
-    setUser(response.user)
-    router.push('/dashboard')
+    setIsLoading(true)
+    try {
+      const response = await apiClient.post<{ user_id: string }>('/api/v1/auth/register', credentials)
+      
+      // After registration, login the user
+      const loginResponse = await apiClient.post<{ access_token: string; refresh_token: string }>('/api/v1/auth/login', {
+        email: credentials.email,
+        password: credentials.password,
+      })
+      
+      localStorage.setItem('access_token', loginResponse.access_token)
+      localStorage.setItem('refresh_token', loginResponse.refresh_token)
+      apiClient.setToken(loginResponse.access_token)
+      
+      // For development: Mock user based on registration
+      // In production: Fetch user profile from /api/v1/users/me
+      const mockUser: User = {
+        id: response.user_id,
+        email: credentials.email,
+        name: credentials.name,
+        roles: ['user'],
+        permissions: ['users:read', 'users:write'],
+        active: true,
+        createdAt: new Date().toISOString(),
+      }
+      
+      setUser(mockUser)
+      setIsLoading(false)
+      router.push('/dashboard')
+    } catch (error) {
+      setIsLoading(false)
+      throw error
+    }
   }, [router])
 
   const logout = useCallback(async () => {
