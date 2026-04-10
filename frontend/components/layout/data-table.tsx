@@ -8,7 +8,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 type DataRow = {
@@ -21,14 +20,26 @@ type DataRow = {
   reviewer: string
 }
 
+const statusConfig: Record<string, { dot: string; label: string }> = {
+  'Done': { dot: 'bg-emerald-500', label: 'Done' },
+  'In Process': { dot: 'bg-blue-500', label: 'In Process' },
+}
+
 function StatusBadge({ status }: { status: string }) {
-  if (status === 'Done') {
-    return <Badge variant="default" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/25">{status}</Badge>
+  const config = statusConfig[status]
+  if (!config) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {status}
+      </span>
+    )
   }
-  if (status === 'In Process') {
-    return <Badge variant="default" className="bg-blue-500/15 text-blue-500 border-blue-500/20 hover:bg-blue-500/25">{status}</Badge>
-  }
-  return <Badge variant="secondary">{status}</Badge>
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium">
+      <span className={`size-1.5 rounded-full ${config.dot}`} />
+      {config.label}
+    </span>
+  )
 }
 
 export function DataTable({ data }: { data: DataRow[] }) {

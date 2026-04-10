@@ -49,8 +49,8 @@ export function SectionCards() {
           <CardHeader>
             <CardDescription>{card.title}</CardDescription>
             <CardAction>
-              <Badge variant="outline">
-                <IconTrendingUp className="mr-1 size-3" />
+              <Badge variant="outline" className="gap-1">
+                <IconTrendingUp className="size-3" />
                 {card.trend.value}
               </Badge>
             </CardAction>
